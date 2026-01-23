@@ -15,7 +15,7 @@
 # vendor/
 
 # Local KVolt artifacts
-kvolt
+/kvolt
 example/main
 example/benchmark
 example/load_test
