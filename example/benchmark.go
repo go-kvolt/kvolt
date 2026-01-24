@@ -11,7 +11,7 @@ import (
 func main() {
 	url := "http://localhost:8080/ping"
 	duration := 10 * time.Second
-	concurrency := 200 // Heavy load
+	concurrency := 250 // Increased for higher load
 
 	fmt.Printf("🔥 Starting HEAVY Load Test on %s\n", url)
 	fmt.Printf("   Concurrency: %d workers\n", concurrency)
@@ -33,8 +33,8 @@ func main() {
 			defer wg.Done()
 			client := &http.Client{
 				Transport: &http.Transport{
-					MaxIdleConns:        500,
-					MaxIdleConnsPerHost: 500,
+					MaxIdleConns:        concurrency,
+					MaxIdleConnsPerHost: concurrency,
 					IdleConnTimeout:     30 * time.Second,
 				},
 				Timeout: 5 * time.Second,

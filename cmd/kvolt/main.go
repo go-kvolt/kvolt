@@ -51,7 +51,7 @@ func createProject(name string) {
 	}
 
 	// Create go.mod
-	os.WriteFile(filepath.Join(name, "go.mod"), []byte("module "+name+"\n\ngo 1.25\n\nrequire github.com/go-kvolt/kvolt v0.0.0\n"), 0644)
+	os.WriteFile(filepath.Join(name, "go.mod"), []byte("module "+name+"\n\ngo 1.25\n"), 0644)
 
 	// Create main.go
 	mainContent := `package main
