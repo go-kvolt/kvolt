@@ -1,5 +1,10 @@
 # KVolt ⚡ 
 
+<p align="center">
+  <img src="assets/logo.png" alt="KVolt Logo" width="200">
+</p>
+
+
 **KVolt** is a high-performance, developer-friendly Go web framework built for speed and ease of use. It combines the raw power of `net/http` with a modern API, zero-allocation routing, and a suite of "Batteries Included" utilities.
 
 ## Features 🚀
