@@ -21,31 +21,45 @@
     *   **Authentication** (`pkg/auth` - JWT & Bcrypt)
 *   **Graceful Shutdown**: Native support for OS signals (SIGINT/SIGTERM).
 
-## Installation
+## Getting Started 🛠️
 
-```bash
-go get github.com/go-kvolt/kvolt
-```
+You can start a KVolt project in two ways: using our powerful CLI or the standard Go method.
 
-## CLI Tool 🛠️
+### Option 1: The KVolt Way (Recommended) ⚡
+The CLI scaffolds a production-ready directory structure (`cmd`, `internal`, `pkg`, etc.) for you.
 
-KVolt comes with a powerful CLI to scaffold projects and speed up development.
+1. **Install the CLI**
+   ```bash
+   go install github.com/go-kvolt/kvolt/cmd/kvolt@latest
+   ```
 
-### Install CLI
-```bash
-go install github.com/go-kvolt/kvolt/cmd/kvolt@latest
-```
+2. **Create & Run a New Project**
+   ```bash
+   # Create a new project
+   kvolt new my-app
+   
+   # Run it
+   cd my-app
+   go mod tidy      # Autodetects latest kvolt version
+   go run cmd/api/main.go
+   ```
 
-### Usage
-*   **Create Project**: Generates a production-ready directory structure.
-    ```bash
-    kvolt new my-app
-    ```
-*   **Run Dev Server**: Starts the server with hot-reload (future support).
-    ```bash
-    cd my-app
-    kvolt run
-    ```
+### Option 2: The Standard Go Way 📦
+If you prefer starting from scratch or adding KVolt to an existing project.
+
+1. **Initialize Module**
+   ```bash
+   mkdir my-app && cd my-app
+   go mod init my-app
+   ```
+
+2. **Install Framework**
+   ```bash
+   go get github.com/go-kvolt/kvolt@latest
+   ```
+
+3. **Create `main.go`**
+   (See the Quick Start example below)
 
 ## Quick Start
 
