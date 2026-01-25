@@ -11,9 +11,9 @@ import (
 func main() {
 	url := "http://localhost:8080/ping"
 	duration := 10 * time.Second
-	concurrency := 250 // Increased for higher load
+	concurrency := 500 // Increased for higher load (Target 50k RPS)
 
-	fmt.Printf("🔥 Starting HEAVY Load Test on %s\n", url)
+	fmt.Printf("🔥 Starting EXTREME Load Test on %s (Target: 50k/sec)\n", url)
 	fmt.Printf("   Concurrency: %d workers\n", concurrency)
 	fmt.Printf("   Duration:    %s\n", duration)
 

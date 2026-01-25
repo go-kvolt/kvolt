@@ -1,6 +1,8 @@
 package kvolt
 
 import (
+	"net/http"
+
 	"github.com/go-kvolt/kvolt/context"
 )
 
@@ -25,37 +27,81 @@ func (group *RouterGroup) Use(h ...context.HandlerFunc) {
 	group.middleware = append(group.middleware, h...)
 }
 
+// Route represents a registered route.
+type Route struct {
+	Method string
+	Path   string
+	engine *Engine
+}
+
+// Desc adds a description/summary to the route for documentation.
+func (r *Route) Desc(summary string) *Route {
+	r.engine.router.SetDocumentation(r.Method, r.Path, summary)
+	return r
+}
+
 // GET adds a GET route to the group.
-func (group *RouterGroup) GET(path string, handler context.HandlerFunc) {
-	group.addRoute("GET", path, handler)
+func (group *RouterGroup) GET(path string, handler context.HandlerFunc) *Route {
+	return group.addRoute("GET", path, handler)
 }
 
 // POST adds a POST route to the group.
-func (group *RouterGroup) POST(path string, handler context.HandlerFunc) {
-	group.addRoute("POST", path, handler)
+func (group *RouterGroup) POST(path string, handler context.HandlerFunc) *Route {
+	return group.addRoute("POST", path, handler)
 }
 
-func (group *RouterGroup) addRoute(method, path string, handler context.HandlerFunc) {
+// PUT adds a PUT route to the group.
+func (group *RouterGroup) PUT(path string, handler context.HandlerFunc) *Route {
+	return group.addRoute("PUT", path, handler)
+}
+
+// DELETE adds a DELETE route to the group.
+func (group *RouterGroup) DELETE(path string, handler context.HandlerFunc) *Route {
+	return group.addRoute("DELETE", path, handler)
+}
+
+// Static registers a route to serve static files from the provided root directory.
+// relativePath: The path pattern (e.g. "/assets")
+// root: The file system root (e.g. "./public")
+func (group *RouterGroup) Static(relativePath, root string) *Route {
+	// Construct the full prefix path to strip (e.g. /v1/assets)
+	absolutePrefix := group.prefix + relativePath
+
+	// Create the file server handler
+	fs := http.StripPrefix(absolutePrefix, http.FileServer(http.Dir(root)))
+
+	handler := func(c *context.Context) error {
+		fs.ServeHTTP(c.Writer, c.Request)
+		return nil
+	}
+
+	// Register the route with wildcard suffix
+	// e.g. /assets/*filepath
+	urlPattern := relativePath + "/*filepath"
+	// Also register the exact path (e.g. /assets) to handle root requests
+	group.GET(relativePath, handler)
+	// Register the trailing slash path if it's different from relativePath
+	// e.g. /assets/
+	if relativePath != "/" && len(relativePath) > 0 {
+		group.GET(relativePath+"/", handler)
+	}
+
+	return group.GET(urlPattern, handler)
+}
+
+func (group *RouterGroup) addRoute(method, path string, handler context.HandlerFunc) *Route {
 	fullPath := group.prefix + path
 
 	// Combine middleware: Group Middleware + Route Handler
-	// We do NOT modify the handler itself, we register a closure that runs chain?
-	// OR we register the middleware in the router?
-	// Efficient way: Native middleware support in Engine's ServeHTTP loop logic?
-	// Previous Engine logic copied GLOBAL middleware.
-	// Now we need Group logic.
-	//
-	// Optimization: Merge middlewares into a single slice for this specific route at registration time?
-	// Yes. (group.middleware + handler)
-
-	// Create a chain for this route
 	handlers := make([]context.HandlerFunc, 0, len(group.middleware)+1)
 	handlers = append(handlers, group.middleware...)
 	handlers = append(handlers, handler)
 
-	// We need to tell the Engine's Router to store THIS chain.
-	// BUT the Router currently stores `Handler` (interface/Handle).
-	// If we store []HandlerFunc in the router, Engine.ServeHTTP needs to handle that.
-
 	group.engine.router.AddRoute(method, fullPath, handlers)
+
+	return &Route{
+		Method: method,
+		Path:   fullPath,
+		engine: group.engine,
+	}
 }
