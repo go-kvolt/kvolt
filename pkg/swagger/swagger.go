@@ -5,16 +5,43 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/go-kvolt/kvolt"
 	"github.com/go-kvolt/kvolt/context"
+	"github.com/swaggo/swag"
 )
+
+// ReadDoc is a helper to read the generated Swagger documentation.
+// It wraps swaggo/swag.ReadDoc() so users don't need to import swag directly.
+func ReadDoc() (string, error) {
+	return swag.ReadDoc()
+}
+
+// Adapter returns a RouteProvider that wraps a KVolt engine.
+func Adapter(e *kvolt.Engine) RouteProvider {
+	return &kvoltAdapter{engine: e}
+}
+
+type kvoltAdapter struct {
+	engine *kvolt.Engine
+}
+
+func (a *kvoltAdapter) Routes() []RouteInfo {
+	kvoltRoutes := a.engine.Routes()
+	var routes []RouteInfo
+	for _, r := range kvoltRoutes {
+		routes = append(routes, RouteInfo{
+			Method:  r.Method,
+			Path:    r.Path,
+			Summary: r.Summary,
+		})
+	}
+	return routes
+}
 
 // RouteProvider interface allows decoupling from direct kvolt.Engine dependency if needed,
 // but for simplicity we can define a struct that matches kvolt.RouteInfo
 type RouteProvider interface {
-	Routes() []struct {
-		Method string
-		Path   string
-	}
+	Routes() []RouteInfo
 }
 
 // Config configures the Swagger UI.
@@ -165,61 +192,23 @@ func generateOpenAPI(routes []RouteInfo, title string) []byte {
 	return b
 }
 
-const uiTemplate = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>%s</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" />
-  <style>
-    body { margin: 0; padding: 0; background: #ffffff; } /* Light background */
-    
-    /* Topbar Branding */
-    .swagger-ui .topbar { background-color: #f8fafc; border-bottom: 2px solid #eab308; }
-    .swagger-ui .topbar .link { display: none; } /* Hide default Swagger logo */
-    
-    /* KVolt Logo Replacement */
-    .swagger-ui .topbar .wrapper::before {
-        content: "⚡ KVolt API Docs";
-        color: #eab308; /* Yellow/Gold accent */
-        font-weight: bold;
-        font-size: 24px;
-        font-family: sans-serif;
-    }
-
-    /* Button Colors overrides for brand consistency */
-    .swagger-ui .btn.authorize { color: #eab308; border-color: #eab308; background: transparent; }
-    .swagger-ui .btn.authorize svg { fill: #eab308; }
-  </style>
-</head>
-<body>
-  <div id="swagger-ui"></div>
-  <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" crossorigin></script>
-  <script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js" crossorigin></script>
-  <script>
-    window.onload = () => {
-      window.ui = SwaggerUIBundle({
-        url: 'doc.json',
-        dom_id: '#swagger-ui',
-        deepLinking: true,
-        presets: [
-          SwaggerUIBundle.presets.apis,
-          SwaggerUIStandalonePreset
-        ],
-        layout: "StandaloneLayout",
-        plugins: [
-            function() {
-                return {
-                    components: {
-                        Topbar: function() { return null; } // Completely remove default topbar if CSS isn't enough? No, we used CSS to repurpose it.
-                    }
-                }
-            }
-        ]
-      });
-    };
-  </script>
-</body>
+const uiTemplate = `<!doctype html>
+<html>
+  <head>
+    <title>%s</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <script
+      id="api-reference"
+      data-url="doc.json"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+  </body>
 </html>
 `

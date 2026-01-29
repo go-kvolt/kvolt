@@ -90,42 +90,31 @@ func main() {
 	app.Use(middleware.Logger())
 	app.Use(middleware.Recovery())
 
-    // 3. Define Routes
-	app.GET("/", func(c *context.Context) error {
-		return c.JSON(200, map[string]string{
-			"message": "Welcome to KVolt ⚡",
-		})
+	// 3. Define Routes (with Binding!)
+	app.POST("/users", func(c *context.Context) error {
+        type User struct {
+            Name string `validate:"required"`
+        }
+        var u User
+        if err := c.Bind(&u); err != nil {
+            return c.Status(400).String(400, err.Error())
+        }
+		return c.JSON(201, u)
 	})
     
-    // 4. Route Grouping
-    api := app.Group("/api")
-    {
-        api.GET("/ping", func(c *context.Context) error {
-            return c.String(200, "pong")
-        })
-    }
-    
-    // 5. Serve Static Files
+    // 4. Serve Static Files
     app.Static("/assets", "./public")
     
-    // 6. Auto-Documentation (Swagger)
+    // 5. Auto-Documentation (Scalar UI)
     // Visit http://localhost:8080/swagger/index.html
+    doc, _ := swagger.ReadDoc()
     app.GET("/swagger/*any", swagger.Handler(swagger.Config{
-         RoutesProvider: &kvoltAdapter{engine: app},
-         Title:          "KVolt API Docs",
+          SpecJSON:       doc,
+          RoutesProvider: swagger.Adapter(app),
     }))
 
-	// 7. Start Server
+	// 6. Start Server
 	app.Run(":8080")
-}
-
-// Swagger Adapter
-type kvoltAdapter struct {
-	engine *kvolt.Engine
-}
-
-func (a *kvoltAdapter) Routes() []swagger.RouteInfo {
-	return nil // Simplified for README, see full example in projects/test
 }
 ```
 

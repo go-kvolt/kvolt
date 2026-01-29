@@ -5,8 +5,12 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/go-kvolt/kvolt/router"
+	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/websocket"
 )
+
+// validate holds the global validator instance.
+var validate = validator.New()
 
 // HandlerFunc matches the KVolt handler signature.
 type HandlerFunc func(*Context) error
@@ -53,6 +57,19 @@ func (c *Context) Reset(w http.ResponseWriter, r *http.Request) {
 // Param returns the value of the URL param.
 func (c *Context) Param(key string) string {
 	return c.Params.Get(key)
+}
+
+// Bind decodes the request body into obj and validates it.
+// Currently supports JSON.
+func (c *Context) Bind(obj interface{}) error {
+	// 1. Decode JSON
+	// We assume JSON by default or if Content-Type is application/json
+	if err := sonic.ConfigDefault.NewDecoder(c.Request.Body).Decode(obj); err != nil {
+		return err
+	}
+
+	// 2. Validate
+	return validate.Struct(obj)
 }
 
 // Next executes the next middleware in the chain.
