@@ -3,6 +3,7 @@ package kvolt
 import (
 	stdContext "context"
 	"fmt"
+	"html/template"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,9 +17,10 @@ import (
 
 // Engine is the main framework instance.
 type Engine struct {
-	*RouterGroup // Engine is the root group
-	router       *router.Router
-	pool         sync.Pool
+	*RouterGroup  // Engine is the root group
+	router        *router.Router
+	pool          sync.Pool
+	htmlTemplates *template.Template // Global templates
 }
 
 // New creates a new kvolt Engine.
@@ -42,6 +44,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Get context from pool
 	c := e.pool.Get().(*context.Context)
 	c.Reset(w, r)
+	c.Templates = e.htmlTemplates // Inject templates
 
 	// Route matching
 	val, params, found := e.router.Find(r.Method, r.URL.Path)
@@ -107,6 +110,11 @@ func (e *Engine) Run(addr string) error {
 
 	fmt.Println("Server exiting")
 	return nil
+}
+
+// LoadHTMLGlob loads HTML templates from a directory pattern.
+func (e *Engine) LoadHTMLGlob(pattern string) {
+	e.htmlTemplates = template.Must(template.ParseGlob(pattern))
 }
 
 // RunTLS starts the HTTPS server (enabling HTTP/2 by default).

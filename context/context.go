@@ -1,7 +1,11 @@
 package context
 
 import (
+	"html/template"
+	"io"
+	"mime/multipart"
 	"net/http"
+	"os"
 
 	"github.com/bytedance/sonic"
 	"github.com/go-kvolt/kvolt/router"
@@ -32,6 +36,12 @@ type Context struct {
 
 	// headerWritten ensures we don't write headers twice
 	headerWritten bool
+
+	// Keys is a key/value pair exclusively for the context of each request.
+	Keys map[string]interface{}
+
+	// Templates holds the parsed templates (injected by Engine)
+	Templates *template.Template
 }
 
 // New creates a new Context.
@@ -50,8 +60,36 @@ func (c *Context) Reset(w http.ResponseWriter, r *http.Request) {
 	c.Request = r
 	c.Handlers = nil
 	c.Params = nil
+	c.Keys = nil
+	c.Templates = nil // Reset templates
 	c.index = -1
 	c.headerWritten = false
+}
+
+// Set is used to store a new key/value pair exclusively for this context.
+// It also lazily initializes  c.Keys if it was not used previously.
+func (c *Context) Set(key string, value interface{}) {
+	if c.Keys == nil {
+		c.Keys = make(map[string]interface{})
+	}
+	c.Keys[key] = value
+}
+
+// Get returns the value for the given key, ie: (value, true).
+// If the value does not exist it returns (nil, false)
+func (c *Context) Get(key string) (value interface{}, exists bool) {
+	if c.Keys != nil {
+		value, exists = c.Keys[key]
+	}
+	return
+}
+
+// MustGet returns the value for the given key if it exists, otherwise it panics.
+func (c *Context) MustGet(key string) interface{} {
+	if value, exists := c.Get(key); exists {
+		return value
+	}
+	panic("Key \"" + key + "\" does not exist")
 }
 
 // Param returns the value of the URL param.
@@ -113,7 +151,17 @@ func (c *Context) String(code int, format string, values ...interface{}) error {
 	return err
 }
 
-// HTML sends an HTML response.
+// RenderHTML renders the template with data and sets values content-type to "text/html".
+func (c *Context) RenderHTML(code int, name string, data interface{}) error {
+	c.Status(code)
+	c.Writer.Header().Set("Content-Type", "text/html")
+	if c.Templates == nil {
+		return c.String(500, "Templates not loaded")
+	}
+	return c.Templates.ExecuteTemplate(c.Writer, name, data)
+}
+
+// HTML sends an HTML response (Raw String).
 func (c *Context) HTML(code int, html string) error {
 	c.Writer.Header().Set("Content-Type", "text/html")
 	if !c.headerWritten {
@@ -122,6 +170,44 @@ func (c *Context) HTML(code int, html string) error {
 	}
 	_, err := c.Writer.Write([]byte(html))
 	return err
+}
+
+// FormFile returns the first file for the provided form key.
+func (c *Context) FormFile(name string) (*multipart.FileHeader, error) {
+	if c.Request.MultipartForm == nil {
+		if err := c.Request.ParseMultipartForm(32 << 20); err != nil { // 32MB default
+			return nil, err
+		}
+	}
+	f, fh, err := c.Request.FormFile(name)
+	if err != nil {
+		return nil, err
+	}
+	f.Close()
+	return fh, nil
+}
+
+// SaveUploadedFile uploads the form file to specific dst.
+func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) error {
+	src, err := file.Open()
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, src)
+	return err
+}
+
+// File writes the specified file into the body stream in an efficient way.
+func (c *Context) File(filepath string) {
+	http.ServeFile(c.Writer, c.Request, filepath)
 }
 
 var upgrader = websocket.Upgrader{ // Default upgrader
