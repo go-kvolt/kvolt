@@ -1,54 +1,61 @@
 package config
 
 import (
-	"os"
 	"reflect"
-	"strconv"
+
+	"github.com/joho/godotenv"
+	"github.com/spf13/viper"
 )
 
-// Load reads environment variables into a struct.
-// Supported tag: env:"MY_ENV_VAR"
+// Load reads configuration from .env files, config files, and environment variables into a struct.
+// It supports "mapstructure" tags (standard for viper) and "env" tags (legacy support).
 func Load(target interface{}) error {
+	// 1. Load .env file (optional)
+	// We ignore the error here because .env file might not exist, which is fine.
+	_ = godotenv.Load()
+
+	// 2. Initialize Viper
+	v := viper.New()
+	v.AutomaticEnv() // Read from environment variables
+
+	// 3. Map "env" tags to Viper keys for backward compatibility
 	val := reflect.ValueOf(target)
-	if val.Kind() != reflect.Ptr || val.IsNil() {
-		return nil // or error
-	}
+	if val.Kind() == reflect.Ptr && !val.IsNil() {
+		elem := val.Elem()
+		typ := elem.Type()
+		for i := 0; i < elem.NumField(); i++ {
+			field := typ.Field(i)
 
-	val = val.Elem()
-	typ := val.Type()
+			// Handle "env" tag
+			tag := field.Tag.Get("env")
+			if tag != "" {
+				if err := v.BindEnv(field.Name, tag); err != nil {
+					// In case of error binding, we just continue, but it's unlikely.
+				}
+			}
 
-	for i := 0; i < val.NumField(); i++ {
-		field := typ.Field(i)
-		tag := field.Tag.Get("env")
-		if tag == "" {
-			continue
-		}
-
-		envVal := os.Getenv(tag)
-		if envVal == "" {
-			// Check for default
+			// Handle "default" tag
 			def := field.Tag.Get("default")
 			if def != "" {
-				envVal = def
-			} else {
-				continue
-			}
-		}
-
-		// Set value based on type
-		fieldVal := val.Field(i)
-		switch fieldVal.Kind() {
-		case reflect.String:
-			fieldVal.SetString(envVal)
-		case reflect.Int:
-			if v, err := strconv.Atoi(envVal); err == nil {
-				fieldVal.SetInt(int64(v))
-			}
-		case reflect.Bool:
-			if v, err := strconv.ParseBool(envVal); err == nil {
-				fieldVal.SetBool(v)
+				v.SetDefault(field.Name, def)
 			}
 		}
 	}
-	return nil
+
+	// 4. Set config file search paths
+	v.SetConfigName("config")
+	v.SetConfigType("yaml") // Default to yaml if no extension
+	v.AddConfigPath(".")
+	v.AddConfigPath("./config")
+
+	// 5. Read Config File (optional)
+	if err := v.ReadInConfig(); err != nil {
+		// It's okay if config file is not found
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			return err
+		}
+	}
+
+	// 6. Unmarshal
+	return v.Unmarshal(target)
 }

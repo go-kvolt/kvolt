@@ -148,16 +148,25 @@ func generateOpenAPI(routes []RouteInfo, title string) []byte {
 		if r.Path == "" {
 			continue
 		}
-		// Convert /:id to {id} for OpenAPI?
-		// KVolt uses :id. Swagger uses {id}.
-		// Simple replacement for now.
+
+		// Parse parameters from path (e.g. /users/:id -> {id} and add to param list)
+		var parameters []map[string]interface{}
 		openAPIPath := r.Path
 		segments := strings.Split(r.Path, "/")
 		for i, seg := range segments {
-			if strings.HasPrefix(seg, ":") {
-				segments[i] = "{" + seg[1:] + "}"
-			} else if strings.HasPrefix(seg, "*") {
-				segments[i] = "{" + seg[1:] + "}"
+			if strings.HasPrefix(seg, ":") || strings.HasPrefix(seg, "*") {
+				paramName := seg[1:]
+				segments[i] = "{" + paramName + "}"
+
+				// Create parameter definition
+				parameters = append(parameters, map[string]interface{}{
+					"name":     paramName,
+					"in":       "path",
+					"required": true,
+					"schema": map[string]string{
+						"type": "string", // Default to string for auto-generated
+					},
+				})
 			}
 		}
 		openAPIPath = strings.Join(segments, "/")
@@ -171,12 +180,19 @@ func generateOpenAPI(routes []RouteInfo, title string) []byte {
 		if summary == "" {
 			summary = fmt.Sprintf("%s %s", r.Method, r.Path)
 		}
-		paths[openAPIPath][method] = map[string]interface{}{
+
+		operation := map[string]interface{}{
 			"summary": summary,
 			"responses": map[string]interface{}{
 				"200": map[string]string{"description": "OK"},
 			},
 		}
+
+		if len(parameters) > 0 {
+			operation["parameters"] = parameters
+		}
+
+		paths[openAPIPath][method] = operation
 	}
 
 	spec := map[string]interface{}{

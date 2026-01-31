@@ -2,8 +2,14 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 func main() {
@@ -21,8 +27,7 @@ func main() {
 		}
 		createProject(os.Args[2])
 	case "run":
-		fmt.Println("Starting development server...")
-		// Logic to run generic 'go run .' but maybe with file watcher
+		fmt.Println("Starting development server with hot reload...")
 		runDev()
 	default:
 		printHelp()
@@ -30,13 +35,24 @@ func main() {
 }
 
 func printHelp() {
-	fmt.Println("KVolt CLI")
+	fmt.Println(`
+  _  ____      __   _ _   
+ | |/ /\ \    / /  | | |  
+ | ' /  \ \  / /__ | | |_ 
+ |  <    \ \/ / _ \| | __|
+ | . \    \  / (_) | | |_ 
+ |_|\_\    \/ \___/|_|\__|
+`)
+	fmt.Println("⚡ Welcome to KVolt Framework!")
+	fmt.Println("   Thank you for choosing KVolt for your Go development.")
+	fmt.Println("")
+	fmt.Println("Usage:")
 	fmt.Println("  new <name>    Create a new KVolt project")
-	fmt.Println("  run           Run the project in dev mode")
+	fmt.Println("  run           Run the project in dev mode (hot reload)")
 }
 
 func createProject(name string) {
-	fmt.Printf("Creating project %s...\n", name)
+	fmt.Printf("🚀 Creating project %s...\n", name)
 
 	dirs := []string{
 		"cmd/api",
@@ -47,39 +63,197 @@ func createProject(name string) {
 
 	for _, d := range dirs {
 		path := filepath.Join(name, d)
-		os.MkdirAll(path, 0755)
+		if err := os.MkdirAll(path, 0755); err != nil {
+			fmt.Printf("Error creating directory %s: %v\n", path, err)
+			return
+		}
 	}
 
-	// Create go.mod
-	os.WriteFile(filepath.Join(name, "go.mod"), []byte("module "+name+"\n\ngo 1.25\n"), 0644)
+	// 1. Create go.mod
+	goModContent := fmt.Sprintf("module %s\n\ngo 1.25\n", name)
+	writeFile(filepath.Join(name, "go.mod"), goModContent)
 
-	// Create main.go
+	// 2. Create .env
+	envContent := `APP_NAME="My KVolt App"
+PORT=8080
+DEBUG=true
+`
+	writeFile(filepath.Join(name, ".env"), envContent)
+
+	// 3. Create config.yaml
+	configContent := `app_name: "My KVolt App"
+port: 8080
+debug: true
+`
+	writeFile(filepath.Join(name, "config.yaml"), configContent)
+
+	// 4. Create main.go
 	mainContent := `package main
 
 import (
-    "github.com/go-kvolt/kvolt"
-    "github.com/go-kvolt/kvolt/context"
+	"fmt"
+	"log"
+
+	"github.com/go-kvolt/kvolt"
+	"github.com/go-kvolt/kvolt/context"
+	"github.com/go-kvolt/kvolt/pkg/config"
 )
 
+type Config struct {
+	AppName string ` + "`mapstructure:\"app_name\" env:\"APP_NAME\"`" + `
+	Port    int    ` + "`mapstructure:\"port\"     env:\"PORT\"`" + `
+	Debug   bool   ` + "`mapstructure:\"debug\"    env:\"DEBUG\"`" + `
+}
+
 func main() {
-    app := kvolt.New()
-    
-    app.GET("/", func(c *context.Context) error {
-        return c.JSON(200, map[string]string{"msg": "Hello KVolt"})
-    })
-    
-    app.Run(":8080")
+	// 1. Load Configuration
+	var cfg Config
+	if err := config.Load(&cfg); err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	// 2. Initialize App
+	app := kvolt.New()
+
+	// 3. Define Routes
+	app.GET("/", func(c *context.Context) error {
+		return c.JSON(200, map[string]interface{}{
+			"message": "Welcome to " + cfg.AppName,
+			"port":    cfg.Port,
+			"status":  "running",
+		})
+	})
+
+	// 4. Run Server
+	addr := fmt.Sprintf(":%d", cfg.Port)
+	fmt.Printf("🚀 %s running on %s\n", cfg.AppName, addr)
+	app.Run(addr)
 }
 `
-	os.WriteFile(filepath.Join(name, "cmd/api/main.go"), []byte(mainContent), 0644)
+	writeFile(filepath.Join(name, "cmd/api/main.go"), mainContent)
 
-	fmt.Println("Done! Run:")
+	fmt.Println("\n🎉 Done! To start coding:")
 	fmt.Printf("  cd %s\n", name)
-	fmt.Println("  go mod tidy")
-	fmt.Println("  go run cmd/api/main.go")
+	fmt.Printf("  go mod tidy\n")
+	fmt.Printf("  go run cmd/api/main.go\n")
 }
 
+func writeFile(path, content string) {
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		fmt.Printf("Error writing file %s: %v\n", path, err)
+	}
+}
+
+// ---------------------------------------------------------------------
+// Hot Reload Logic
+// ---------------------------------------------------------------------
+
+var (
+	cmdProcess *exec.Cmd
+)
+
 func runDev() {
-	// Placeholder for hot reload logic
-	fmt.Println("go run cmd/api/main.go")
+	// 1. Start the application initially
+	restartApp()
+
+	// 2. Setup watcher
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer watcher.Close()
+
+	// 3. Walk directories to watch
+	root := "."
+	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			// Skip hidden folders and git
+			if strings.HasPrefix(info.Name(), ".") && info.Name() != "." {
+				return filepath.SkipDir
+			}
+			return watcher.Add(path)
+		}
+		return nil
+	})
+
+	// 4. Process Events
+	debounceTimer := time.NewTimer(time.Millisecond)
+	debounceTimer.Stop()
+
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				// Filter for relevant files
+				ext := filepath.Ext(event.Name)
+				if ext == ".go" || ext == ".yaml" || ext == ".env" || ext == ".html" {
+					if event.Op&fsnotify.Write == fsnotify.Write ||
+						event.Op&fsnotify.Create == fsnotify.Create ||
+						event.Op&fsnotify.Remove == fsnotify.Remove ||
+						event.Op&fsnotify.Rename == fsnotify.Rename {
+
+						// Reset timer for debounce
+						debounceTimer.Reset(500 * time.Millisecond)
+					}
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Println("error:", err)
+			}
+		}
+	}()
+
+	// Debounce handler
+	for {
+		<-debounceTimer.C
+		fmt.Println("🔄 Change detected, restarting...")
+		restartApp()
+	}
+}
+
+func restartApp() {
+	// Kill existing process
+	if cmdProcess != nil && cmdProcess.Process != nil {
+		// Try to kill gracefully or force kill
+		// Using Process.Kill usually sends SIGKILL, which is fine for dev
+		if err := cmdProcess.Process.Kill(); err != nil {
+			// Ignore "process already finished" errors
+			if !strings.Contains(err.Error(), "process already finished") {
+				fmt.Printf("Failed to kill process: %v\n", err)
+			}
+		}
+		cmdProcess.Wait() // Wait for it to die
+	}
+
+	// Start new process
+	// We assume typical struct: go run cmd/api/main.go
+	// Since we are IN the project root (where kvolt run is called)
+
+	entryPoint := "cmd/api/main.go"
+	// Check if entry point exists
+	if _, err := os.Stat(entryPoint); os.IsNotExist(err) {
+		// Fallback for simple projects
+		entryPoint = "main.go"
+		if _, err := os.Stat(entryPoint); os.IsNotExist(err) {
+			fmt.Println("❌ Could not find entry point (cmd/api/main.go or main.go)")
+			return
+		}
+	}
+
+	cmdProcess = exec.Command("go", "run", entryPoint)
+	cmdProcess.Stdout = os.Stdout
+	cmdProcess.Stderr = os.Stderr
+	cmdProcess.Stdin = os.Stdin
+
+	if err := cmdProcess.Start(); err != nil {
+		fmt.Printf("❌ Failed to start app: %v\n", err)
+	}
 }

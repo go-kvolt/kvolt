@@ -14,14 +14,19 @@
 *   **Static Assets**: Built-in support for serving static files (`app.Static()`) with correct prefix handling.
 *   **Protocol Ready**: Native support for **HTTP/2** (`RunTLS`) and **WebSockets** (`c.Upgrade()`).
 *   **Auto-Documentation**:
-    *   Built-in **Swagger UI** integration.
+    *   Built-in **Scalar & Swagger UI** integration.
     *   Automatic route discovery and documentation generation (`app.Routes()`).
+*   **Developer Experience (DX)**:
+    *   **Hot Reload**: CLI support for auto-restart on code changes (`kvolt run`).
+    *   **HTML Templates**: Robust support for layouts and partials.
+    *   **Unit Testing**: Specialized `pkg/testkit` for blazing-fast handler tests.
 *   **Middleware Ecosystem**:
     *   **Logger**: Asynchronous, non-blocking console logging.
     *   **Recovery**: Panic recovery to keep your server alive.
     *   **Gzip**: Automatic response compression.
     *   **CORS**: Configurable Cross-Origin Resource Sharing.
     *   **Rate Limiter**: Token-bucket strategy for API protection.
+    *   **JWT Middleware**: Standard-compliant authentication.
 *   **Batteries Included**:
     *   **Dependency Injection** (`pkg/di`)
     *   **Configuration Loader** (`pkg/config`)
@@ -29,6 +34,23 @@
     *   **Input Validation** (`pkg/validator`)
     *   **Authentication** (`pkg/auth` - JWT & Bcrypt)
 *   **Graceful Shutdown**: Native support for OS signals (SIGINT/SIGTERM).
+*   **Background Jobs**: "Blazing Fast" In-Memory Queue (`pkg/queue`).
+*   **Caching System**: Sharded In-Memory Cache with TTL support (`pkg/cache`).
+*   **Task Scheduler**: Built-in Cron/Interval task runner (`pkg/scheduler`).
+
+
+
+## Documentation 📚
+
+Full documentation is available in the [docs](docs/index.md) folder.
+
+*   **[Getting Started](docs/getting_started.md)**
+*   **[CLI Usage](docs/cli.md)**
+*   **[Routing](docs/router.md)**
+*   **[Middleware](docs/middleware.md)**
+*   **[Context API](docs/context.md)**
+*   ...or view the [Full Index](docs/index.md)
+
 
 ## Getting Started 🛠️
 
@@ -79,44 +101,47 @@ import (
 	"github.com/go-kvolt/kvolt"
 	"github.com/go-kvolt/kvolt/context"
 	"github.com/go-kvolt/kvolt/middleware"
-	"github.com/go-kvolt/kvolt/pkg/swagger"
 )
 
 func main() {
     // 1. Initialize Engine
 	app := kvolt.New()
 
-    // 2. Register Global Middleware
+    // 2. Global Middleware
+    // Logger: Prints request logs to console
+    // Recovery: Prevents server crash on panic
 	app.Use(middleware.Logger())
 	app.Use(middleware.Recovery())
 
-	// 3. Define Routes (with Binding!)
+	// 3. Define a simple route
+	app.GET("/", func(c *context.Context) error {
+		return c.JSON(200, map[string]string{
+            "message": "Welcome to KVolt",
+            "status": "Running",
+        })
+	})
+
+    // 4. Input Binding & Validation
 	app.POST("/users", func(c *context.Context) error {
-        type User struct {
-            Name string `validate:"required"`
+        type CreateUser struct {
+            Name  string `json:"name" validate:"required"`
+            Email string `json:"email" validate:"required,email"`
         }
-        var u User
+        var u CreateUser
+        
+        // Bind() automatically binds JSON and runs Validation
         if err := c.Bind(&u); err != nil {
-            return c.Status(400).String(400, err.Error())
+            return c.Status(400).JSON(400, map[string]string{"error": err.Error()})
         }
+        
 		return c.JSON(201, u)
 	})
     
-    // 4. Serve Static Files
-    app.Static("/assets", "./public")
-    
-    // 5. Auto-Documentation (Scalar UI)
-    // Visit http://localhost:8080/swagger/index.html
-    doc, _ := swagger.ReadDoc()
-    app.GET("/swagger/*any", swagger.Handler(swagger.Config{
-          SpecJSON:       doc,
-          RoutesProvider: swagger.Adapter(app),
-    }))
-
-	// 6. Start Server
+	// 5. Start Server
 	app.Run(":8080")
 }
 ```
+
 
 ## Benchmarks 📊
 

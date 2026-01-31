@@ -27,6 +27,7 @@ Compresses responses using Gzip if the client supports it.
 app.Use(middleware.Gzip())
 ```
 
+
 ### 4. CORS
 Configures Cross-Origin Resource Sharing.
 
@@ -34,17 +35,44 @@ Configures Cross-Origin Resource Sharing.
 app.Use(middleware.CORS())
 ```
 
+### 5. Rate Limiter
+Protect your API from abuse using the Token Bucket rate limiter.
+
+```go
+// Allow 100 requests per second with a burst of 200
+app.Use(middleware.Limiter(100, 200))
+```
+
+### 6. JWT Authentication
+Secure your routes with JSON Web Tokens.
+
+```go
+app.Use(middleware.JWT(middleware.JWTConfig{
+    SigningKey:  "secret-key",
+    TokenLookup: "header:Authorization", // or "query:token", "cookie:auth"
+}))
+```
+
 ## Creating Custom Middleware
 
 ```go
-func MyMiddleware() func(c *context.Context) error {
-    return func(c *context.Context) error {
-        fmt.Println("Before Request")
+// RequestTimer measures the duration of each request
+func RequestTimer() func(c *kvolt.Context) error {
+    return func(c *kvolt.Context) error {
+        start := time.Now()
         
-        c.Next() // Continue to next handler
+        // Process request
+        c.Next()
         
-        fmt.Println("After Request")
+        // Calculate duration and log
+        latency := time.Since(start)
+        log.Printf("[%s] %s | %v", c.Request.Method, c.Request.URL.Path, latency)
+        
+        // Optional: Add to response header
+        c.Writer.Header().Set("X-Response-Time", latency.String())
         return nil
     }
 }
 ```
+
+

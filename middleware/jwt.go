@@ -17,6 +17,19 @@ type JWTConfig struct {
 	// ContextKey is the key used to store claims in context (Default: "user").
 	ContextKey string
 
+	// TokenLookup is a string in the form of "<source>:<name>" that is used
+	// to extract token from the request.
+	// Optional. Default value "header:Authorization".
+	// Possible values:
+	// - "header:<name>"
+	// - "query:<name>"
+	// - "cookie:<name>"
+	TokenLookup string
+
+	// AuthScheme to be used in the Authorization header.
+	// Optional. Default value "Bearer".
+	AuthScheme string
+
 	// ErrorHandler handles errors during token validation (Optional).
 	ErrorHandler func(c *context.Context, err error) error
 }
@@ -34,22 +47,66 @@ func JWT(config JWTConfig) context.HandlerFunc {
 			})
 		}
 	}
+	if config.TokenLookup == "" {
+		config.TokenLookup = "header:Authorization"
+	}
+	if config.AuthScheme == "" && strings.HasPrefix(config.TokenLookup, "header:") {
+		config.AuthScheme = "Bearer"
+	}
+
+	// Pre-parse TokenLookup to avoid overhead on every request
+	parts := strings.Split(config.TokenLookup, ":")
+	extractor := func(c *context.Context) (string, error) {
+		return "", errors.New("invalid token lookup config")
+	}
+
+	switch parts[0] {
+	case "header":
+		headerName := parts[1]
+		authScheme := config.AuthScheme
+		lenAuthScheme := len(authScheme)
+		extractor = func(c *context.Context) (string, error) {
+			auth := c.Request.Header.Get(headerName)
+			if auth == "" {
+				return "", errors.New("missing auth header")
+			}
+			if lenAuthScheme > 0 {
+				if len(auth) > lenAuthScheme+1 && auth[:lenAuthScheme] == authScheme && auth[lenAuthScheme] == ' ' {
+					return auth[lenAuthScheme+1:], nil
+				}
+				return "", errors.New("invalid auth header format")
+			}
+			return auth, nil
+		}
+	case "query":
+		queryParam := parts[1]
+		extractor = func(c *context.Context) (string, error) {
+			token := c.Request.URL.Query().Get(queryParam)
+			if token == "" {
+				return "", errors.New("missing token in query")
+			}
+			return token, nil
+		}
+	case "cookie":
+		cookieName := parts[1]
+		extractor = func(c *context.Context) (string, error) {
+			cookie, err := c.Request.Cookie(cookieName)
+			if err != nil {
+				return "", errors.New("missing token cookie")
+			}
+			return cookie.Value, nil
+		}
+	}
 
 	// Pre-convert to byte slice for performance
 	keyBytes := []byte(config.SigningKey)
 
 	return func(c *context.Context) error {
-		authHeader := c.Request.Header.Get("Authorization")
-		if authHeader == "" {
-			return config.ErrorHandler(c, errors.New("missing auth header"))
+		tokenString, err := extractor(c)
+		if err != nil {
+			return config.ErrorHandler(c, err)
 		}
 
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			return config.ErrorHandler(c, errors.New("invalid auth header"))
-		}
-
-		tokenString := parts[1]
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, errors.New("unexpected signing method")
