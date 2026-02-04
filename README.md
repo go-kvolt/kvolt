@@ -160,3 +160,7 @@ KVolt is optimized for raw speed. By utilizing `sync.Pool` for Context recycling
 ## License
 
 MIT
+
+---
+
+Created & maintained by Kaviraj Mani
