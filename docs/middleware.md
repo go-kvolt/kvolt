@@ -43,6 +43,23 @@ Protect your API from abuse using the Token Bucket rate limiter.
 app.Use(middleware.Limiter(100, 200))
 ```
 
+### 6. Secure Headers
+Protects your application from common web vulnerabilities by setting standard HTTP headers (HSTS, X-Frame-Options, CSP, etc.).
+
+```go
+app.Use(middleware.Secure())
+```
+
+#### Configuration
+You can customize the security headers using `SecureWithConfig`:
+
+```go
+app.Use(middleware.SecureWithConfig(middleware.SecureConfig{
+    XFrameOptions: "SAMEORIGIN",
+    HSTSMaxAge:    31536000,
+}))
+```
+
 ### 6. JWT Authentication
 Secure your routes with JSON Web Tokens.
 

@@ -35,7 +35,7 @@ func main() {
 }
 
 func printHelp() {
-	fmt.Println(`
+	fmt.Print(`
   _  ____      __   _ _   
  | |/ /\ \    / /  | | |  
  | ' /  \ \  / /__ | | |_ 

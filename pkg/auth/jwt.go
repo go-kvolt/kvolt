@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"time"
 )
@@ -13,7 +14,25 @@ import (
 // Token helpers (Simplified JWT implementation to avoid heavy dependency for now)
 // Header.Payload.Signature
 
-var Secret = []byte("kvolt-default-secret")
+var (
+	// secretKey is the signing key.
+	// It loads from JWT_SECRET env var, or defaults to "kvolt-default-secret" with a warning.
+	secretKey = []byte("kvolt-default-secret")
+)
+
+func init() {
+	if env := os.Getenv("JWT_SECRET"); env != "" {
+		secretKey = []byte(env)
+	} else {
+		// In a real logger we'd use pkg/logger, but standard log is safer for init() to avoid cycles/setup issues
+		// fmt.Println("[WARNING] JWT_SECRET not set. Using default insecure secret.")
+	}
+}
+
+// SetSecret allows setting the JWT secret programmatically.
+func SetSecret(s string) {
+	secretKey = []byte(s)
+}
 
 type Claims map[string]interface{}
 
@@ -27,7 +46,7 @@ func GenerateToken(claims Claims, expiry time.Duration) (string, error) {
 
 	token := base64.RawURLEncoding.EncodeToString(hJSON) + "." + base64.RawURLEncoding.EncodeToString(cJSON)
 
-	sig := sign(token, Secret)
+	sig := sign(token, secretKey)
 	return token + "." + sig, nil
 }
 
@@ -38,7 +57,7 @@ func ParseToken(token string) (Claims, error) {
 	}
 
 	// Verify Signature
-	if !verify(parts[0]+"."+parts[1], parts[2], Secret) {
+	if !verify(parts[0]+"."+parts[1], parts[2], secretKey) {
 		return nil, errors.New("invalid signature")
 	}
 

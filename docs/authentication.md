@@ -45,11 +45,11 @@ import (
 func main() {
     app := kvolt.New()
     
-    // Shared Secret
+    // Shared Secret (Optional: KVolt automatically loads JWT_SECRET from environment)
     secret := "super-secret-key"
     
-    // Update pkg/auth secret so generated tokens match the middleware's expectation
-    auth.Secret = []byte(secret)
+    // Update pkg/auth secret programmatically
+    auth.SetSecret(secret)
 
     // 1. Login Endpoint (Public)
     app.POST("/login", func(c *context.Context) error {

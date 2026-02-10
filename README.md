@@ -26,13 +26,14 @@
     *   **Gzip**: Automatic response compression.
     *   **CORS**: Configurable Cross-Origin Resource Sharing.
     *   **Rate Limiter**: Token-bucket strategy for API protection.
+    *   **Secure Headers**: Protection against XSS, Clickjacking, and MIME sniffing (`middleware.Secure()`).
     *   **JWT Middleware**: Standard-compliant authentication.
 *   **Batteries Included**:
     *   **Dependency Injection** (`pkg/di`)
     *   **Configuration Loader** (`pkg/config`)
     *   **Structured Logging** (`pkg/logger`)
     *   **Input Validation** (`pkg/validator`)
-    *   **Authentication** (`pkg/auth` - JWT & Bcrypt)
+    *   **Authentication** (`pkg/auth` - Bcrypt)
 *   **Graceful Shutdown**: Native support for OS signals (SIGINT/SIGTERM).
 *   **Background Jobs**: "Blazing Fast" In-Memory Queue (`pkg/queue`).
 *   **Caching System**: Sharded In-Memory Cache with TTL support (`pkg/cache`).
@@ -113,10 +114,9 @@ func main() {
 	app := kvolt.New()
 
     // 2. Global Middleware
-    // Logger: Prints request logs to console
-    // Recovery: Prevents server crash on panic
 	app.Use(middleware.Logger())
 	app.Use(middleware.Recovery())
+    app.Use(middleware.Secure())
 
 	// 3. Define a simple route
 	app.GET("/", func(c *context.Context) error {
@@ -126,7 +126,7 @@ func main() {
         })
 	})
 
-    // 4. Input Binding & Validation
+	// 5. Input Binding & Validation
 	app.POST("/users", func(c *context.Context) error {
         type CreateUser struct {
             Name  string `json:"name" validate:"required"`

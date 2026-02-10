@@ -9,7 +9,7 @@ Welcome to the official documentation for KVolt.
 -   **[Context API](context.md)**: The heart of every request.
 
 ## Core Features
--   **[Middleware](middleware.md)**: Logger, Recovery, JWT, Rate Limiter, CORS.
+-   **[Middleware](middleware.md)**: Logger, Recovery, JWT, Rate Limiter, CORS, Secure.
 -   **[Configuration](configuration.md)**: Manage secrets and settings.
 -   **[Caching](caching.md)**: High-performance in-memory cache.
 -   **[Validation](validation.md)**: Struct validation requests.

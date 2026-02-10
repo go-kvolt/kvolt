@@ -71,11 +71,18 @@ If you prefer to start from scratch or integrate KVolt into an existing project:
     import (
         "github.com/go-kvolt/kvolt"
         "github.com/go-kvolt/kvolt/context"
+        "github.com/go-kvolt/kvolt/middleware"
     )
 
     func main() {
         app := kvolt.New()
 
+        // 1. Standard Middleware
+        app.Use(middleware.Logger())
+        app.Use(middleware.Recovery())
+        app.Use(middleware.Secure())
+
+        // 2. Define route
         app.GET("/", func(c *context.Context) error {
             return c.String(200, "Hello, KVolt!")
         })
