@@ -14,6 +14,7 @@ Welcome to the official documentation for KVolt.
 -   **[Caching](caching.md)**: High-performance in-memory cache.
 -   **[Validation](validation.md)**: Struct validation requests.
 -   **[Authentication](authentication.md)**: JWT helpers and middleware.
+-   **[Session Authentication](session.md)**: Stateful session management.
 -   **[Templates](templates.md)**: HTML rendering.
 -   **[WebSockets](websockets.md)**: Real-time communication.
 -   **[Background Jobs](queue.md)**: Async task processing.
