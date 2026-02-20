@@ -262,54 +262,18 @@ walk: // Outer loop for walking the tree
 				n = n.children[0]
 				switch n.nType {
 				case param:
-					// Find param end (either '/' or end of path)
-					end := 0
-					for end < len(path) && path[end] != '/' {
-						end++
-					}
-
-					// Add param value
-					if p == nil {
-						// Lazy allocation
-						p = make(Params, 0, 4)
-					}
-					i := len(p)
-					p = p[:i+1] // expand slice
-					p[i].Key = n.path[1:]
-					p[i].Value = path[:end]
-
-					// We need to go deeper!
-					if end < len(path) {
-						if len(n.children) > 0 {
-							path = path[end:]
-							n = n.children[0]
-							continue walk
-						}
-						// ... but we can't
-						return nil, nil, false
-					}
-
-					if handle = n.handle; handle != nil {
+					handle, p, pathLeft, nextN, returnNow := n.getValueParam(path, p)
+					if returnNow {
 						return handle, p, false
 					}
-
-				case catchAll:
-					// Variable is everything left
-					if p == nil {
-						p = make(Params, 0, 4)
+					if nextN == nil {
+						return nil, nil, false
 					}
-					i := len(p)
-					p = p[:i+1]
-					p[i].Key = n.path[1:] // remove "*"
-					// Verify this... normally catch all is "*name" or "/*name" ?
-					// n.path is whatever we stored during insert.
-					p[i].Value = path
-					// assuming catch all is *name
-					// Actually let's assume wildcard syntax is *name
-
-					handle = n.handle
+					path, n = pathLeft, nextN
+					continue walk
+				case catchAll:
+					handle, p = n.getValueCatchAll(path, p)
 					return handle, p, false
-
 				default:
 					panic("invalid node type")
 				}
@@ -324,6 +288,45 @@ walk: // Outer loop for walking the tree
 		}
 		return nil, nil, false
 	}
+}
+
+// getValueParam handles a param node: extracts segment, appends to p, and returns either
+// (handle, p, "", nil, true) to return, or ("", p, pathRest, nextNode, false) to continue.
+func (n *Node) getValueParam(path string, p Params) (handle Handler, outP Params, pathRest string, nextNode *Node, returnNow bool) {
+	end := 0
+	for end < len(path) && path[end] != '/' {
+		end++
+	}
+	if p == nil {
+		p = make(Params, 0, 4)
+	}
+	i := len(p)
+	p = p[:i+1]
+	p[i].Key = n.path[1:]
+	p[i].Value = path[:end]
+
+	if end < len(path) {
+		if len(n.children) > 0 {
+			return nil, p, path[end:], n.children[0], false
+		}
+		return nil, nil, "", nil, true // no child to go to
+	}
+	if n.handle != nil {
+		return n.handle, p, "", nil, true
+	}
+	return nil, nil, "", nil, true // path consumed but no handle
+}
+
+// getValueCatchAll handles a catchAll node: the rest of path is the param value.
+func (n *Node) getValueCatchAll(path string, p Params) (handle Handler, outP Params) {
+	if p == nil {
+		p = make(Params, 0, 4)
+	}
+	i := len(p)
+	p = p[:i+1]
+	p[i].Key = n.path[1:]
+	p[i].Value = path
+	return n.handle, p
 }
 
 // Helpers

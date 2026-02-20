@@ -14,7 +14,7 @@
 *   **Static Assets**: Built-in support for serving static files (`app.Static()`) with correct prefix handling.
 *   **Protocol Ready**: Native support for **HTTP/2** (`RunTLS`) and **WebSockets** (`c.Upgrade()`).
 *   **Auto-Documentation**:
-    *   Built-in **Scalar & Swagger UI** integration.
+    *   Built-in **Scalar** API reference UI (OpenAPI/Swagger spec).
     *   Automatic route discovery and documentation generation (`app.Routes()`).
 *   **Developer Experience (DX)**:
     *   **Hot Reload**: CLI support for auto-restart on code changes (`kvolt run`).

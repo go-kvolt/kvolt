@@ -26,7 +26,7 @@ func main() {
     // 1. Read Generated Spec (optional, if using swaggo)
     // doc, _ := swagger.ReadDoc()
 
-    // 2. serve Swagger UI
+    // 2. Serve API docs (Scalar UI)
     // Visits http://localhost:8080/swagger/index.html
     app.GET("/swagger/*any", swagger.Handler(swagger.Config{
           Title:          "My API Docs",

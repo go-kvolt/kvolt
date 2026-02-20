@@ -34,9 +34,58 @@ type JWTConfig struct {
 	ErrorHandler func(c *context.Context, err error) error
 }
 
+// jwtExtractor extracts the token string from the request.
+type jwtExtractor func(c *context.Context) (string, error)
+
+func buildJWTExtractor(lookup, authScheme string) jwtExtractor {
+	parts := strings.SplitN(lookup, ":", 2)
+	if len(parts) != 2 {
+		return func(c *context.Context) (string, error) {
+			return "", errors.New("invalid token lookup config")
+		}
+	}
+	source, name := parts[0], parts[1]
+	switch source {
+	case "header":
+		lenAuth := len(authScheme)
+		return func(c *context.Context) (string, error) {
+			auth := c.Request.Header.Get(name)
+			if auth == "" {
+				return "", errors.New("missing auth header")
+			}
+			if lenAuth > 0 {
+				if len(auth) > lenAuth+1 && auth[:lenAuth] == authScheme && auth[lenAuth] == ' ' {
+					return auth[lenAuth+1:], nil
+				}
+				return "", errors.New("invalid auth header format")
+			}
+			return auth, nil
+		}
+	case "query":
+		return func(c *context.Context) (string, error) {
+			token := c.Request.URL.Query().Get(name)
+			if token == "" {
+				return "", errors.New("missing token in query")
+			}
+			return token, nil
+		}
+	case "cookie":
+		return func(c *context.Context) (string, error) {
+			cookie, err := c.Request.Cookie(name)
+			if err != nil {
+				return "", errors.New("missing token cookie")
+			}
+			return cookie.Value, nil
+		}
+	default:
+		return func(c *context.Context) (string, error) {
+			return "", errors.New("invalid token lookup config")
+		}
+	}
+}
+
 // JWT returns a JWT authentication middleware.
 func JWT(config JWTConfig) context.HandlerFunc {
-	// Defaults
 	if config.ContextKey == "" {
 		config.ContextKey = "user"
 	}
@@ -54,51 +103,7 @@ func JWT(config JWTConfig) context.HandlerFunc {
 		config.AuthScheme = "Bearer"
 	}
 
-	// Pre-parse TokenLookup to avoid overhead on every request
-	parts := strings.Split(config.TokenLookup, ":")
-	extractor := func(c *context.Context) (string, error) {
-		return "", errors.New("invalid token lookup config")
-	}
-
-	switch parts[0] {
-	case "header":
-		headerName := parts[1]
-		authScheme := config.AuthScheme
-		lenAuthScheme := len(authScheme)
-		extractor = func(c *context.Context) (string, error) {
-			auth := c.Request.Header.Get(headerName)
-			if auth == "" {
-				return "", errors.New("missing auth header")
-			}
-			if lenAuthScheme > 0 {
-				if len(auth) > lenAuthScheme+1 && auth[:lenAuthScheme] == authScheme && auth[lenAuthScheme] == ' ' {
-					return auth[lenAuthScheme+1:], nil
-				}
-				return "", errors.New("invalid auth header format")
-			}
-			return auth, nil
-		}
-	case "query":
-		queryParam := parts[1]
-		extractor = func(c *context.Context) (string, error) {
-			token := c.Request.URL.Query().Get(queryParam)
-			if token == "" {
-				return "", errors.New("missing token in query")
-			}
-			return token, nil
-		}
-	case "cookie":
-		cookieName := parts[1]
-		extractor = func(c *context.Context) (string, error) {
-			cookie, err := c.Request.Cookie(cookieName)
-			if err != nil {
-				return "", errors.New("missing token cookie")
-			}
-			return cookie.Value, nil
-		}
-	}
-
-	// Pre-convert to byte slice for performance
+	extractor := buildJWTExtractor(config.TokenLookup, config.AuthScheme)
 	keyBytes := []byte(config.SigningKey)
 
 	return func(c *context.Context) error {

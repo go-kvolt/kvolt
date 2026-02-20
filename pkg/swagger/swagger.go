@@ -151,7 +151,6 @@ func generateOpenAPI(routes []RouteInfo, title string) []byte {
 
 		// Parse parameters from path (e.g. /users/:id -> {id} and add to param list)
 		var parameters []map[string]interface{}
-		openAPIPath := r.Path
 		segments := strings.Split(r.Path, "/")
 		for i, seg := range segments {
 			if strings.HasPrefix(seg, ":") || strings.HasPrefix(seg, "*") {
@@ -169,7 +168,7 @@ func generateOpenAPI(routes []RouteInfo, title string) []byte {
 				})
 			}
 		}
-		openAPIPath = strings.Join(segments, "/")
+		openAPIPath := strings.Join(segments, "/")
 
 		if paths[openAPIPath] == nil {
 			paths[openAPIPath] = make(map[string]interface{})
