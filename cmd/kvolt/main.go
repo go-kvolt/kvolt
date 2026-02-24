@@ -153,24 +153,20 @@ var (
 )
 
 func runDev() {
-	// 1. Start the application initially
 	restartApp()
 
-	// 2. Setup watcher
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer watcher.Close()
 
-	// 3. Walk directories to watch
 	root := "."
 	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if info.IsDir() {
-			// Skip hidden folders and git
 			if strings.HasPrefix(info.Name(), ".") && info.Name() != "." {
 				return filepath.SkipDir
 			}
@@ -179,44 +175,47 @@ func runDev() {
 		return nil
 	})
 
-	// 4. Process Events
 	debounceTimer := time.NewTimer(time.Millisecond)
 	debounceTimer.Stop()
 
-	go func() {
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				// Filter for relevant files
-				ext := filepath.Ext(event.Name)
-				if ext == ".go" || ext == ".yaml" || ext == ".env" || ext == ".html" {
-					if event.Op&fsnotify.Write == fsnotify.Write ||
-						event.Op&fsnotify.Create == fsnotify.Create ||
-						event.Op&fsnotify.Remove == fsnotify.Remove ||
-						event.Op&fsnotify.Rename == fsnotify.Rename {
+	go runWatcherLoop(watcher, debounceTimer)
 
-						// Reset timer for debounce
-						debounceTimer.Reset(500 * time.Millisecond)
-					}
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				log.Println("error:", err)
-			}
-		}
-	}()
-
-	// Debounce handler
 	for {
 		<-debounceTimer.C
 		fmt.Println("🔄 Change detected, restarting...")
 		restartApp()
 	}
+}
+
+func runWatcherLoop(watcher *fsnotify.Watcher, debounceTimer *time.Timer) {
+	for {
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+			if shouldRestartOnEvent(event) {
+				debounceTimer.Reset(500 * time.Millisecond)
+			}
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+			log.Println("error:", err)
+		}
+	}
+}
+
+func shouldRestartOnEvent(event fsnotify.Event) bool {
+	ext := filepath.Ext(event.Name)
+	if ext != ".go" && ext != ".yaml" && ext != ".env" && ext != ".html" {
+		return false
+	}
+	op := event.Op
+	return op&fsnotify.Write == fsnotify.Write ||
+		op&fsnotify.Create == fsnotify.Create ||
+		op&fsnotify.Remove == fsnotify.Remove ||
+		op&fsnotify.Rename == fsnotify.Rename
 }
 
 func restartApp() {
