@@ -4,6 +4,15 @@
   <img src="assets/logo.png" alt="KVolt Logo" width="200">
 </p>
 
+<p align="center">
+  <a href="https://github.com/go-kvolt/kvolt/actions/workflows/ci.yml"><img src="https://github.com/go-kvolt/kvolt/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://pkg.go.dev/github.com/go-kvolt/kvolt"><img src="https://pkg.go.dev/badge/github.com/go-kvolt/kvolt.svg" alt="Go Reference"></a>
+  <a href="https://goreportcard.com/report/github.com/go-kvolt/kvolt"><img src="https://goreportcard.com/badge/github.com/go-kvolt/kvolt" alt="Go Report Card"></a>
+  <a href="https://github.com/go-kvolt/kvolt/blob/main/LICENSE"><img src="https://img.shields.io/github/license/go-kvolt/kvolt" alt="License"></a>
+  <a href="https://github.com/go-kvolt/kvolt"><img src="https://img.shields.io/github/go-mod/go-version/go-kvolt/kvolt" alt="Go Version"></a>
+  <a href="https://github.com/go-kvolt/kvolt"><img src="https://img.shields.io/github/v/release/go-kvolt/kvolt?include_prereleases" alt="Release"></a>
+</p>
+
 
 **KVolt** is a high-performance, developer-friendly Go web framework built for speed and ease of use. It combines the raw power of `net/http` with a modern API, zero-allocation routing, and a suite of "Batteries Included" utilities.
 
