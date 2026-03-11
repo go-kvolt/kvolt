@@ -23,8 +23,10 @@ Welcome to the official documentation for KVolt.
 -   **[Logging](logging.md)**: Structured JSON logging.
 -   **[Swagger Docs](swagger.md)**: OpenAPI auto-generation.
 
-## Testing
--   **[Testing Guide](testing.md)**: Unit testing with `testkit`.
+## Testing & Quality
+-   **[Testing Guide](testing.md)**: Unit testing with `pkg/test` and `pkg/testkit`.
+-   **[Developer Workflow](developer_workflow.md)**: Lint, test, and run your app (fmt, vet, test helpers, CLI).
+-   **[Go Report Card locally](report_card.md)**: Run Report Card–style checks (fmt, vet, lint) on your machine.
 
 ## Packages
 -   `pkg/config`: Configuration loader.

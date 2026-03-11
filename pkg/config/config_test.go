@@ -18,4 +18,3 @@ func TestLoad_ValidStruct(t *testing.T) {
 	_ = cfg.AppName
 	_ = cfg.Port
 }
-

@@ -1,10 +1,26 @@
 # Testing 🧪
 
-KVolt is designed with testability in mind. The `pkg/testkit` package provides utilities to easily test your handlers and routes.
+KVolt is designed with testability in mind. You can use **`pkg/test`** (fluent request/response API) or **`pkg/testkit`** (simple Get/Post + assertions) to test handlers and routes without a real server.
+
+## Using `pkg/test` (recommended for most tests)
+
+Import as `kvtest "github.com/go-kvolt/kvolt/pkg/test"`. Build a request, call `Do()`, then chain assertions.
+
+```go
+test := kvtest.New(t, app)
+test.GET("/health").Do().
+    ExpectStatus(200).
+    ExpectBodyContains("ok")
+test.POST("/echo").WithJSON(map[string]string{"msg": "hi"}).Do().
+    ExpectStatus(201).
+    ExpectJSON(map[string]string{"echo": "received"})
+```
+
+Available: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `WithHeader`, `WithJSON`, `WithBody`, `Do`, `ExpectStatus`, `ExpectBody`, `ExpectBodyContains`, `ExpectHeader`, `ExpectJSON`.
 
 ## Using `testkit`
 
-The `testkit` allows you to spin up a test instance of your app and make requests against it without spawning a real network server.
+The `pkg/testkit` package lets you spin up a test instance of your app and make requests without a real network server.
 
 ### Example
 
@@ -61,10 +77,11 @@ func TestUserValidation(t *testing.T) {
 
 ## Features
 
--   **TestServer**: Wraps your KVolt app.
--   **Fluent assertions**: `AssertStatus`, `AssertBody`.
--   **Methods**: `Get`, `Post` (with auto-JSON marshalling).
+| Package | Features |
+|--------|----------|
+| **pkg/test** | Fluent API: `GET/POST/...`, `WithJSON`, `Do()`, `ExpectStatus`, `ExpectBody`, `ExpectBodyContains`, `ExpectHeader`, `ExpectJSON`. |
+| **pkg/testkit** | `TestServer`, `Get(t, path)`, `Post(t, path, body)`, `AssertStatus`, `AssertBody`. |
 
 ## Integration Testing
 
-For end-to-end integration tests, you can also run your server in a separate goroutine and use standard `net/http` clients, but `testkit` is faster and simpler for handler verification.
+For end-to-end integration tests, you can run your server in a separate goroutine and use standard `net/http` clients; for handler-level checks, `pkg/test` or `testkit` is faster and simpler.

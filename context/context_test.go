@@ -1,6 +1,8 @@
 package context
 
 import (
+	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -82,5 +84,23 @@ func TestContext_Param(t *testing.T) {
 	}
 	if c.Param("missing") != "" {
 		t.Error("Param(missing) should return empty")
+	}
+}
+
+func TestContext_Next_HandlerError(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/", nil)
+	c := New(w, r)
+	c.Handlers = []HandlerFunc{
+		func(c *Context) error {
+			return fmt.Errorf("something went wrong")
+		},
+	}
+	c.Next()
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Next handler error: want status %d, got %d", http.StatusInternalServerError, w.Code)
+	}
+	if w.Header().Get("Content-Type") != "application/json" {
+		t.Errorf("Next handler error: want application/json, got %s", w.Header().Get("Content-Type"))
 	}
 }

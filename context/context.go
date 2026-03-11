@@ -3,6 +3,7 @@ package context
 import (
 	"html/template"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -51,6 +52,12 @@ func New(w http.ResponseWriter, r *http.Request) *Context {
 		Request: r,
 		index:   -1,
 	}
+}
+
+// HeaderWritten reports whether the response headers have been sent.
+// Used by middleware (e.g. Recovery) to avoid writing after response started.
+func (c *Context) HeaderWritten() bool {
+	return c.headerWritten
 }
 
 // Reset re-initializes the context for a new request.
@@ -111,12 +118,23 @@ func (c *Context) Bind(obj interface{}) error {
 }
 
 // Next executes the next middleware in the chain.
+// If a handler returns an error and no response has been written yet,
+// a 500 Internal Server Error is sent and the chain is stopped.
 func (c *Context) Next() {
 	c.index++
 	if c.index < len(c.Handlers) {
 		handler := c.Handlers[c.index]
 		if err := handler(c); err != nil {
-			// Error handling stub
+			log.Printf("[KVolt] handler error: %v", err)
+			if !c.headerWritten {
+				c.Writer.Header().Set("Content-Type", "application/json")
+				c.Writer.WriteHeader(http.StatusInternalServerError)
+				c.headerWritten = true
+				// Safe JSON error message; do not expose internal details
+				body := map[string]string{"error": "Internal Server Error"}
+				_ = sonic.ConfigDefault.NewEncoder(c.Writer).Encode(body)
+			}
+			return
 		}
 	}
 }

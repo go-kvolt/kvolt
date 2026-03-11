@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -12,6 +15,9 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
+// Version is set at build time: go build -ldflags "-X main.Version=1.0.0"
+var Version = "dev"
+
 func main() {
 	if len(os.Args) < 2 {
 		printHelp()
@@ -19,16 +25,34 @@ func main() {
 	}
 
 	cmd := os.Args[1]
+	if cmd == "-h" || cmd == "--help" || cmd == "-v" || cmd == "--version" {
+		if cmd == "-v" || cmd == "--version" {
+			fmt.Println("kvolt version", Version)
+		} else {
+			printHelp()
+		}
+		return
+	}
+
 	switch cmd {
 	case "new":
-		if len(os.Args) < 3 {
-			fmt.Println("Usage: kvolt new <project_name>")
-			return
-		}
-		createProject(os.Args[2])
+		runNew()
 	case "run":
-		fmt.Println("Starting development server with hot reload...")
-		runDev()
+		runRun()
+	case "build":
+		runBuild()
+	case "test":
+		runTest()
+	case "fmt":
+		runFmt()
+	case "key":
+		runKey()
+	case "generate":
+		runGenerate()
+	case "docker":
+		runDocker()
+	case "version":
+		fmt.Println("kvolt version", Version)
 	default:
 		printHelp()
 	}
@@ -44,11 +68,237 @@ func printHelp() {
  |_|\_\    \/ \___/|_|\__|
 `)
 	fmt.Println("⚡ Welcome to KVolt Framework!")
-	fmt.Println("   Thank you for choosing KVolt for your Go development.")
 	fmt.Println("")
 	fmt.Println("Usage:")
-	fmt.Println("  new <name>    Create a new KVolt project")
-	fmt.Println("  run           Run the project in dev mode (hot reload)")
+	fmt.Println("  kvolt new <project_name>     Create a new KVolt project")
+	fmt.Println("  kvolt run [-e entry]        Run with hot reload")
+	fmt.Println("  kvolt build [-o bin/app]     Build binary (default: bin/app)")
+	fmt.Println("  kvolt test [-cover]          Run tests")
+	fmt.Println("  kvolt fmt                    Format code (go fmt)")
+	fmt.Println("  kvolt key                    Generate a random secret key")
+	fmt.Println("  kvolt generate handler <n>   Create handler stub")
+	fmt.Println("  kvolt generate middleware <n>  Create middleware stub")
+	fmt.Println("  kvolt docker                 Generate Dockerfile")
+	fmt.Println("  kvolt version                Show version")
+	fmt.Println("  kvolt -h, --help             Show this help")
+	fmt.Println("  kvolt -v, --version          Show version")
+}
+
+func runNew() {
+	fs := flag.NewFlagSet("new", flag.ExitOnError)
+	fs.Usage = func() {
+		fmt.Println("Usage: kvolt new <project_name>")
+		fmt.Println("  Creates a new KVolt project with recommended layout (cmd/api, internal, config).")
+	}
+	_ = fs.Parse(os.Args[2:])
+	if fs.NArg() < 1 {
+		fs.Usage()
+		return
+	}
+	createProject(fs.Arg(0))
+}
+
+func runRun() {
+	fs := flag.NewFlagSet("run", flag.ExitOnError)
+	entry := fs.String("e", "", "Entry point (default: cmd/api/main.go or main.go)")
+	fs.Usage = func() {
+		fmt.Println("Usage: kvolt run [-e entry]")
+		fmt.Println("  Starts the app with hot reload. Watches .go, .yaml, .env, .html files.")
+		fmt.Println("  -e  Entry point path (e.g. cmd/api/main.go or ./cmd/server)")
+	}
+	_ = fs.Parse(os.Args[2:])
+	fmt.Println("Starting development server with hot reload...")
+	runDev(*entry)
+}
+
+func runBuild() {
+	fs := flag.NewFlagSet("build", flag.ExitOnError)
+	out := fs.String("o", "bin/app", "Output binary path")
+	entry := fs.String("e", "", "Entry point (default: cmd/api/main.go or main.go)")
+	fs.Usage = func() {
+		fmt.Println("Usage: kvolt build [-o output] [-e entry]")
+		fmt.Println("  Builds the app to a binary. Default output: bin/app")
+	}
+	_ = fs.Parse(os.Args[2:])
+	entryPoint := *entry
+	if entryPoint == "" {
+		entryPoint = "cmd/api/main.go"
+		if _, err := os.Stat(entryPoint); os.IsNotExist(err) {
+			entryPoint = "main.go"
+		}
+	}
+	if _, err := os.Stat(entryPoint); os.IsNotExist(err) {
+		fmt.Println("❌ Entry point not found:", entryPoint)
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(*out), 0755); err != nil {
+		fmt.Printf("❌ Failed to create output dir: %v\n", err)
+		return
+	}
+	cmd := exec.Command("go", "build", "-o", *out, entryPoint)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		os.Exit(1)
+	}
+	fmt.Printf("✅ Built %s\n", *out)
+}
+
+func runTest() {
+	fs := flag.NewFlagSet("test", flag.ExitOnError)
+	cover := fs.Bool("cover", false, "Enable coverage")
+	fs.Usage = func() {
+		fmt.Println("Usage: kvolt test [-cover]")
+		fmt.Println("  Runs go test ./... Use -cover for coverage.")
+	}
+	_ = fs.Parse(os.Args[2:])
+	args := []string{"test", "./..."}
+	if *cover {
+		args = append(args, "-cover")
+	}
+	cmd := exec.Command("go", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		os.Exit(1)
+	}
+}
+
+func runFmt() {
+	cmd := exec.Command("go", "fmt", "./...")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		os.Exit(1)
+	}
+	fmt.Println("✅ Formatted")
+}
+
+func toExportName(s string) string {
+	if s == "" {
+		return ""
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+func runKey() {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		fmt.Printf("❌ %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(hex.EncodeToString(b))
+}
+
+func runGenerate() {
+	if len(os.Args) < 3 {
+		fmt.Println("Usage: kvolt generate <handler|middleware> <name>")
+		return
+	}
+	sub := os.Args[2]
+	name := ""
+	if len(os.Args) >= 4 {
+		name = os.Args[3]
+	}
+	switch sub {
+	case "handler":
+		if name == "" {
+			fmt.Println("Usage: kvolt generate handler <name>")
+			return
+		}
+		generateHandler(name)
+	case "middleware":
+		if name == "" {
+			fmt.Println("Usage: kvolt generate middleware <name>")
+			return
+		}
+		generateMiddleware(name)
+	default:
+		fmt.Println("Usage: kvolt generate <handler|middleware> <name>")
+	}
+}
+
+func generateHandler(name string) {
+	dir := "internal/handler"
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		fmt.Printf("❌ %v\n", err)
+		os.Exit(1)
+	}
+	fileName := strings.ToLower(name) + ".go"
+	path := filepath.Join(dir, fileName)
+	exportName := toExportName(name)
+	content := fmt.Sprintf(`package %s
+
+import (
+	"github.com/go-kvolt/kvolt/context"
+)
+
+// %s handles requests for %s.
+func %s(c *context.Context) error {
+	return c.JSON(200, map[string]string{"message": "ok"})
+}
+`, "handler", exportName, name, exportName)
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		fmt.Printf("❌ %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("✅ Created %s\n", path)
+}
+
+func generateMiddleware(name string) {
+	dir := "internal/middleware"
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		fmt.Printf("❌ %v\n", err)
+		os.Exit(1)
+	}
+	fileName := strings.ToLower(name) + ".go"
+	path := filepath.Join(dir, fileName)
+	exportName := toExportName(name)
+	content := fmt.Sprintf(`package middleware
+
+import (
+	"github.com/go-kvolt/kvolt/context"
+)
+
+// %s returns a middleware for %s.
+func %s() func(c *context.Context) error {
+	return func(c *context.Context) error {
+		// TODO: your logic before
+		c.Next()
+		// TODO: your logic after
+		return nil
+	}
+}
+`, exportName, name, exportName)
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		fmt.Printf("❌ %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("✅ Created %s\n", path)
+}
+
+func runDocker() {
+	const dockerfile = `# Build stage
+FROM golang:1.22-alpine AS builder
+WORKDIR /app
+COPY go.mod ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -o /app/bin/server ./cmd/api
+
+# Run stage
+FROM alpine:3.19
+RUN apk --no-cache add ca-certificates
+WORKDIR /app
+COPY --from=builder /app/bin/server .
+EXPOSE 8080
+CMD ["./server"]
+`
+	if err := os.WriteFile("Dockerfile", []byte(dockerfile), 0644); err != nil {
+		fmt.Printf("❌ %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("✅ Created Dockerfile")
 }
 
 func createProject(name string) {
@@ -152,8 +402,13 @@ var (
 	cmdProcess *exec.Cmd
 )
 
-func runDev() {
-	restartApp()
+// dirs to exclude from watch (reduces noise and CPU)
+var watchSkipDirs = map[string]bool{
+	".git": true, "vendor": true, "node_modules": true,
+}
+
+func runDev(entryPoint string) {
+	restartApp(entryPoint)
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -167,7 +422,11 @@ func runDev() {
 			return err
 		}
 		if info.IsDir() {
-			if strings.HasPrefix(info.Name(), ".") && info.Name() != "." {
+			name := info.Name()
+			if strings.HasPrefix(name, ".") && name != "." {
+				return filepath.SkipDir
+			}
+			if watchSkipDirs[name] {
 				return filepath.SkipDir
 			}
 			return watcher.Add(path)
@@ -183,7 +442,7 @@ func runDev() {
 	for {
 		<-debounceTimer.C
 		fmt.Println("🔄 Change detected, restarting...")
-		restartApp()
+		restartApp(entryPoint)
 	}
 }
 
@@ -218,33 +477,27 @@ func shouldRestartOnEvent(event fsnotify.Event) bool {
 		op&fsnotify.Rename == fsnotify.Rename
 }
 
-func restartApp() {
+func restartApp(entryPoint string) {
 	// Kill existing process
 	if cmdProcess != nil && cmdProcess.Process != nil {
-		// Try to kill gracefully or force kill
-		// Using Process.Kill usually sends SIGKILL, which is fine for dev
 		if err := cmdProcess.Process.Kill(); err != nil {
-			// Ignore "process already finished" errors
 			if !strings.Contains(err.Error(), "process already finished") {
 				fmt.Printf("Failed to kill process: %v\n", err)
 			}
 		}
-		cmdProcess.Wait() // Wait for it to die
+		cmdProcess.Wait()
 	}
 
-	// Start new process
-	// We assume typical struct: go run cmd/api/main.go
-	// Since we are IN the project root (where kvolt run is called)
-
-	entryPoint := "cmd/api/main.go"
-	// Check if entry point exists
-	if _, err := os.Stat(entryPoint); os.IsNotExist(err) {
-		// Fallback for simple projects
-		entryPoint = "main.go"
+	// Resolve entry point: flag > default cmd/api/main.go > main.go
+	if entryPoint == "" {
+		entryPoint = "cmd/api/main.go"
 		if _, err := os.Stat(entryPoint); os.IsNotExist(err) {
-			fmt.Println("❌ Could not find entry point (cmd/api/main.go or main.go)")
-			return
+			entryPoint = "main.go"
 		}
+	}
+	if _, err := os.Stat(entryPoint); os.IsNotExist(err) {
+		fmt.Println("❌ Entry point not found:", entryPoint)
+		return
 	}
 
 	cmdProcess = exec.Command("go", "run", entryPoint)
