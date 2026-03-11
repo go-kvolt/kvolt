@@ -13,6 +13,7 @@
   <a href="https://github.com/go-kvolt/kvolt"><img src="https://img.shields.io/github/v/release/go-kvolt/kvolt?include_prereleases" alt="Release"></a>
 </p>
 
+**Stable v1** — Param routes like `GET /auth/:provider` and `GET /auth/:provider/callback` correctly match `/auth/twitter` and `/auth/twitter/callback` (routing issue fixed).
 
 **KVolt** is a high-performance, developer-friendly Go web framework built for speed and ease of use. It combines the raw power of `net/http` with a modern API, zero-allocation routing, and a suite of "Batteries Included" utilities.
 
@@ -72,6 +73,7 @@ The CLI scaffolds a production-ready directory structure (`cmd`, `internal`, `pk
 1. **Install the CLI**
    ```bash
    go install github.com/go-kvolt/kvolt/cmd/kvolt@latest
+   # Or pin to v1: go install github.com/go-kvolt/kvolt/cmd/kvolt@v1.0.0
    ```
 
    > **Note (Linux/macOS)**: If the `kvolt` command is not found after installation, add the Go bin directory to your PATH:
