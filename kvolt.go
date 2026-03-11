@@ -76,11 +76,23 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	e.pool.Put(c)
 }
 
-// Run starts the HTTP server with Graceful Shutdown.
+// Default server timeouts for production (slowloris protection and connection hygiene).
+const (
+	DefaultReadHeaderTimeout = 10 * time.Second
+	DefaultReadTimeout       = 30 * time.Second
+	DefaultWriteTimeout      = 30 * time.Second
+	DefaultIdleTimeout       = 120 * time.Second
+)
+
+// Run starts the HTTP server with Graceful Shutdown and production timeouts.
 func (e *Engine) Run(addr string) error {
 	srv := &http.Server{
-		Addr:    addr,
-		Handler: e,
+		Addr:              addr,
+		Handler:           e,
+		ReadHeaderTimeout: DefaultReadHeaderTimeout,
+		ReadTimeout:       DefaultReadTimeout,
+		WriteTimeout:      DefaultWriteTimeout,
+		IdleTimeout:       DefaultIdleTimeout,
 	}
 
 	fmt.Println("⚡ KVolt is running on http://localhost" + addr)
@@ -117,11 +129,15 @@ func (e *Engine) LoadHTMLGlob(pattern string) {
 	e.htmlTemplates = template.Must(template.ParseGlob(pattern))
 }
 
-// RunTLS starts the HTTPS server (enabling HTTP/2 by default).
+// RunTLS starts the HTTPS server (enabling HTTP/2 by default) with production timeouts.
 func (e *Engine) RunTLS(addr, certFile, keyFile string) error {
 	srv := &http.Server{
-		Addr:    addr,
-		Handler: e,
+		Addr:              addr,
+		Handler:           e,
+		ReadHeaderTimeout: DefaultReadHeaderTimeout,
+		ReadTimeout:       DefaultReadTimeout,
+		WriteTimeout:      DefaultWriteTimeout,
+		IdleTimeout:       DefaultIdleTimeout,
 	}
 
 	fmt.Println("⚡ KVolt (HTTPS) is running on https://localhost" + addr)

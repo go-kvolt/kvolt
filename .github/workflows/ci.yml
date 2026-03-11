@@ -27,6 +27,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
+      - name: Verify formatting
+        run: |
+          go fmt ./...
+          git diff --exit-code
+
+      - name: Vet
+        run: go vet ./...
+
       - name: Build
         run: go build -v ./...
 

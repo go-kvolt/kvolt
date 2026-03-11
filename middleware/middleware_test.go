@@ -35,7 +35,7 @@ func TestSecureWithConfig(t *testing.T) {
 
 	SecureWithConfig(SecureConfig{
 		XFrameOptions:      "SAMEORIGIN",
-		ContentTypeNosniff:  "nosniff",
+		ContentTypeNosniff: "nosniff",
 		XSSProtection:      "1; mode=block",
 	})(c)
 
@@ -62,5 +62,28 @@ func TestRecovery(t *testing.T) {
 	}
 	if w.Body.String() != "Internal Server Error" {
 		t.Errorf("Recovery: body want Internal Server Error, got %s", w.Body.String())
+	}
+}
+
+func TestMaxBodySize(t *testing.T) {
+	// Request with no body: middleware should not affect behavior
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/", nil)
+	c := context.New(w, r)
+	c.Handlers = []context.HandlerFunc{func(c *context.Context) error { return c.String(200, "OK") }}
+	MaxBodySize(1024)(c)
+	if w.Code != 200 {
+		t.Errorf("MaxBodySize: want 200, got %d", w.Code)
+	}
+}
+
+func TestMaxBodySizeBytes(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/", nil)
+	c := context.New(w, r)
+	c.Handlers = []context.HandlerFunc{func(c *context.Context) error { return c.String(200, "OK") }}
+	MaxBodySizeBytes(1024)(c)
+	if w.Code != 200 {
+		t.Errorf("MaxBodySizeBytes: want 200, got %d", w.Code)
 	}
 }
