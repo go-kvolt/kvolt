@@ -34,6 +34,7 @@ First stable release. Production-ready with full CLI, docs, and quality tooling.
 
 ### Fixed
 
+- **Router**: Param routes such as `GET /auth/:provider` and `GET /auth/:provider/callback` now correctly match URLs like `/auth/twitter` and `/auth/twitter/callback` (404 issue fixed in stable v1).
 - **ineffassign** in `pkg/swagger/swagger.go`: removed ineffectual assignment to `openAPIPath`.
 - Test project: **TestSwaggerUI** now expects `doc.json` in the response (Scalar UI) instead of `swagger-ui`.
 - Handler-returned errors were previously ignored in `context.Next()`; they are now logged and result in a 500 response when no response has been written.

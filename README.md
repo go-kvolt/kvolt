@@ -13,6 +13,7 @@
   <a href="https://github.com/go-kvolt/kvolt"><img src="https://img.shields.io/github/v/release/go-kvolt/kvolt?include_prereleases" alt="Release"></a>
 </p>
 
+**Stable v1** — Param routes like `GET /auth/:provider` and `GET /auth/:provider/callback` correctly match `/auth/twitter` and `/auth/twitter/callback` (routing issue fixed).
 
 **KVolt** is a high-performance, developer-friendly Go web framework built for speed and ease of use. It combines the raw power of `net/http` with a modern API, zero-allocation routing, and a suite of "Batteries Included" utilities.
 
