@@ -68,7 +68,7 @@ app.Use(middleware.SecureWithConfig(middleware.SecureConfig{
 }))
 ```
 
-### 6. Max Body Size
+### 7. Max Body Size
 Limit request body size to prevent large-payload attacks. Reads beyond the limit fail (e.g. in `Bind()`); handle the error and respond with 413 if desired.
 
 ```go
@@ -76,7 +76,7 @@ app.Use(middleware.MaxBodySize(1 << 20)) // 1MB
 // or: middleware.MaxBodySizeBytes(10 * 1024 * 1024)
 ```
 
-### 7. JWT Authentication
+### 8. JWT Authentication
 Secure your routes with JSON Web Tokens.
 
 ```go

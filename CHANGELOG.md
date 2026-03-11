@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+_No changes yet._
+
+---
+
+## [v1.0.0] - 2025-03-03
+
+First stable release. Production-ready with full CLI, docs, and quality tooling.
+
 ### Added
 
 - **Session middleware** (`middleware.Session`) and **pkg/session** for stateful session management (cookie/header/query lookup, TTL, sliding window).
@@ -16,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`Context.HeaderWritten()`** method so middleware (e.g. Recovery) can check if the response has already been written.
 - **RecoveryWithConfig** (`middleware.RecoveryConfig` with `LogStackTrace bool`) to optionally disable stack trace logging in production.
 - **CLI**: `kvolt build` (with `-o`, `-e`), `kvolt test` (with `-cover`), `kvolt fmt`, `kvolt key`, `kvolt generate handler <name>`, `kvolt generate middleware <name>`, `kvolt docker` (generate Dockerfile). Global `-h`/`--help` and `-v`/`--version`. `kvolt run -e` for custom entry point; watch excludes `.git`, `vendor`, `node_modules`.
+- **Docs**: Developer workflow, Go Report Card locally, testing (`pkg/test` + `pkg/testkit`), CLI reference. **CI**: `go fmt` and `go vet` in workflow. **Makefile**: `make report` for local quality checks.
 
 ### Changed
 

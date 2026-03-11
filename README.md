@@ -72,6 +72,7 @@ The CLI scaffolds a production-ready directory structure (`cmd`, `internal`, `pk
 1. **Install the CLI**
    ```bash
    go install github.com/go-kvolt/kvolt/cmd/kvolt@latest
+   # Or pin to v1: go install github.com/go-kvolt/kvolt/cmd/kvolt@v1.0.0
    ```
 
    > **Note (Linux/macOS)**: If the `kvolt` command is not found after installation, add the Go bin directory to your PATH:
