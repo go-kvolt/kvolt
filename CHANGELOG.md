@@ -10,6 +10,41 @@ _No changes yet._
 
 ---
 
+## [v2.0.0] - 2026-08-27
+
+Production release. Safe JSON under load, a production `Default()` engine, and middleware/cache fixes from real API benches.
+
+### Added
+
+- **`kvolt.Default()`**: Engine with Recovery, RequestID, and MaxBodySize (1MB). Logger and Gzip stay opt-in.
+- **`BindJSON`**: JSON decode without validation. `Bind` still decodes then validates.
+- **`Engine.ListenAndServe`**: stdlib listen (no extra timeouts). `Run()` still uses production timeouts and graceful shutdown.
+- **`Context.Query`**, **`Context.StatusCode`**, **`Context.FlushHeaders`**, **`Engine.NoRoute`**.
+- **`middleware.RequestID`** (`X-Request-ID`) and **`middleware.Timeout`**.
+- **`GzipWithConfig`**: min size (1KB) and skip `application/json` by default; gzip writers are pooled.
+- **`cache.NewMemoryStoreSized`**: LRU cap (`DefaultMaxKeys` = 50_000). `Len()`.
+- **`SetWebsocketCheckOrigin`**: WebSocket origin check defaults to same-origin.
+
+### Fixed
+
+- **`Status()`** no longer calls `WriteHeader` immediately, so `Status().JSON()` can still set `Content-Type`.
+- **Listen banner**: `Run("127.0.0.1:8080")` no longer prints `http://localhost127.0.0.1:8080`.
+- **404**: reused handler chain (no per-miss allocation).
+- **Router params**: more than 4 path params no longer panics; params buffer is reused from the context pool.
+- **Rate limiter**: keys on IP host (not `ip:ephemeral-port`) and does not hold the mutex during `Next()`.
+- **Logger**: logs the real status code (was always 200).
+- **`String`**: applies `fmt.Sprintf` when extra args are passed.
+- **Memory cache**: expired keys are deleted on Get; cache cannot grow without bound.
+
+### Changed
+
+- JSON / text / HTML responses set `charset=utf-8`.
+- Gzip no longer compresses JSON or tiny bodies (use `GzipWithConfig` to override).
+- JSON encode uses sonic fastest options with a pooled buffer. `BindJSON` streams the body (no pooled request buffer — that aliased strings under load).
+- Single-handler routes skip the middleware `Next()` loop.
+
+---
+
 ## [v1.1.0] - 2026-05-17
 
 ### Added

@@ -27,7 +27,7 @@ q := c.Query("q")
 ## Status Codes
 
 ```go
-c.Status(404).String(404, "Not Found")
+c.JSON(404, map[string]string{"error": "Not Found"})
 ```
 
 ## Request Binding
@@ -41,12 +41,13 @@ type User struct {
 }
 
 var u User
-// Bind() parses JSON body AND runs validation automatically
+// Fast path (ERP invoice, checkout): decode only
+if err := c.BindJSON(&u); err != nil {
+    return c.JSON(400, map[string]string{"error": err.Error()})
+}
+// Bind() parses JSON AND runs validation (`validate` tags)
 if err := c.Bind(&u); err != nil {
-    // If error is due to validation, it returns "Field validation for..."
-    return c.Status(400).JSON(400, map[string]string{
-        "error": err.Error(),
-    })
+    return c.JSON(400, map[string]string{"error": err.Error()})
 }
 // Use 'u' safely here...
 ```

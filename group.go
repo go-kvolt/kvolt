@@ -26,6 +26,9 @@ func (group *RouterGroup) Group(prefix string) *RouterGroup {
 // Use adds middleware to the group.
 func (group *RouterGroup) Use(h ...context.HandlerFunc) {
 	group.middleware = append(group.middleware, h...)
+	if group.engine != nil && group.engine.RouterGroup == group {
+		group.engine.noRouteDirty = true
+	}
 }
 
 // Route represents a registered route.

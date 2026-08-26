@@ -2,6 +2,7 @@ package kvolt
 
 import (
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-kvolt/kvolt/context"
@@ -42,6 +43,22 @@ func TestEngine_ServeHTTP_404(t *testing.T) {
 	app.ServeHTTP(w, r)
 	if w.Code != 404 {
 		t.Errorf("ServeHTTP 404: want 404, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "Not Found") {
+		t.Errorf("ServeHTTP 404 body: %s", w.Body.String())
+	}
+}
+
+func TestDefault_RequestID(t *testing.T) {
+	app := Default()
+	app.GET("/ok", func(c *context.Context) error {
+		return c.String(200, "OK")
+	})
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/ok", nil)
+	app.ServeHTTP(w, r)
+	if w.Header().Get("X-Request-ID") == "" {
+		t.Error("Default: missing X-Request-ID")
 	}
 }
 

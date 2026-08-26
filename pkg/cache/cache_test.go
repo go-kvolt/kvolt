@@ -23,6 +23,16 @@ func TestCache(t *testing.T) {
 	}
 }
 
+func TestCacheEviction(t *testing.T) {
+	c := NewMemoryStoreSized(0, 64)
+	for i := 0; i < 400; i++ {
+		c.Set(string(rune('a'+i%26))+string(rune(i)), i, 0)
+	}
+	if c.Len() > 64 {
+		t.Fatalf("LRU cap: len %d want <= 64", c.Len())
+	}
+}
+
 func BenchmarkCacheSet(b *testing.B) {
 	c := NewMemoryStore(0)
 	b.RunParallel(func(pb *testing.PB) {

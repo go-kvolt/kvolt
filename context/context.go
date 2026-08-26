@@ -1,14 +1,16 @@
 package context
 
 import (
+	"fmt"
 	"html/template"
 	"io"
 	"log"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 
-	"github.com/bytedance/sonic"
 	"github.com/go-kvolt/kvolt/router"
 	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/websocket"
@@ -35,6 +37,9 @@ type Context struct {
 	// index is the current middleware index
 	index int
 
+	// status is the HTTP status to write. 0 means unset (defaults to 200 on first write).
+	status int
+
 	// headerWritten ensures we don't write headers twice
 	headerWritten bool
 
@@ -60,16 +65,30 @@ func (c *Context) HeaderWritten() bool {
 	return c.headerWritten
 }
 
+// StatusCode returns the status that will be / was written. 0 if nothing was set yet.
+func (c *Context) StatusCode() int {
+	if c.status != 0 {
+		return c.status
+	}
+	if c.headerWritten {
+		return http.StatusOK
+	}
+	return 0
+}
+
 // Reset re-initializes the context for a new request.
-// Crucial for sync.Pool reuse.
+// Params backing array and Keys map are kept to cut allocations.
 func (c *Context) Reset(w http.ResponseWriter, r *http.Request) {
 	c.Writer = w
 	c.Request = r
 	c.Handlers = nil
-	c.Params = nil
-	c.Keys = nil
-	c.Templates = nil // Reset templates
+	c.Params = c.Params[:0]
+	if c.Keys != nil {
+		clear(c.Keys)
+	}
+	c.Templates = nil
 	c.index = -1
+	c.status = 0
 	c.headerWritten = false
 }
 
@@ -104,16 +123,19 @@ func (c *Context) Param(key string) string {
 	return c.Params.Get(key)
 }
 
-// Bind decodes the request body into obj and validates it.
-// Currently supports JSON.
+// Query returns the first query string value for key (e.g. /search?q=foo).
+func (c *Context) Query(key string) string {
+	if c.Request == nil || c.Request.URL == nil {
+		return ""
+	}
+	return c.Request.URL.Query().Get(key)
+}
+
+// Bind decodes the JSON body into obj and then validates it (go-playground tags).
 func (c *Context) Bind(obj interface{}) error {
-	// 1. Decode JSON
-	// We assume JSON by default or if Content-Type is application/json
-	if err := sonic.ConfigDefault.NewDecoder(c.Request.Body).Decode(obj); err != nil {
+	if err := c.BindJSON(obj); err != nil {
 		return err
 	}
-
-	// 2. Validate
 	return validate.Struct(obj)
 }
 
@@ -127,43 +149,51 @@ func (c *Context) Next() {
 		if err := handler(c); err != nil {
 			log.Printf("[KVolt] handler error: %v", err)
 			if !c.headerWritten {
-				c.Writer.Header().Set("Content-Type", "application/json")
-				c.Writer.WriteHeader(http.StatusInternalServerError)
-				c.headerWritten = true
-				// Safe JSON error message; do not expose internal details
-				body := map[string]string{"error": "Internal Server Error"}
-				_ = sonic.ConfigDefault.NewEncoder(c.Writer).Encode(body)
+				c.writeJSONBytes(http.StatusInternalServerError, errInternalJSON)
 			}
 			return
 		}
 	}
 }
 
-// Status sets the HTTP status code.
+// Status stores the HTTP status code. Headers are not written until the body is sent,
+// so Content-Type can still be set afterward (Gin/Echo behavior).
 func (c *Context) Status(code int) *Context {
 	if !c.headerWritten {
-		c.Writer.WriteHeader(code)
-		c.headerWritten = true
+		c.status = code
 	}
 	return c
 }
 
-// JSON sends a JSON response.
-func (c *Context) JSON(code int, obj interface{}) error {
-	c.Writer.Header().Set("Content-Type", "application/json")
-	if !c.headerWritten {
-		c.Writer.WriteHeader(code)
-		c.headerWritten = true
+// FlushHeaders writes a pending Status() when the handler sent no body.
+func (c *Context) FlushHeaders() {
+	if !c.headerWritten && c.status != 0 {
+		c.writeHeader(c.status)
 	}
-	return sonic.ConfigDefault.NewEncoder(c.Writer).Encode(obj)
 }
 
-// String sends a plain text response.
+func (c *Context) writeHeader(code int) {
+	if c.headerWritten {
+		return
+	}
+	if code == 0 {
+		if c.status != 0 {
+			code = c.status
+		} else {
+			code = http.StatusOK
+		}
+	}
+	c.status = code
+	c.Writer.WriteHeader(code)
+	c.headerWritten = true
+}
+
+// String sends a plain text response. Extra args are fmt.Sprintf'd into format.
 func (c *Context) String(code int, format string, values ...interface{}) error {
-	c.Writer.Header().Set("Content-Type", "text/plain")
-	if !c.headerWritten {
-		c.Writer.WriteHeader(code)
-		c.headerWritten = true
+	c.Writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	c.writeHeader(code)
+	if len(values) > 0 {
+		format = fmt.Sprintf(format, values...)
 	}
 	_, err := c.Writer.Write([]byte(format))
 	return err
@@ -171,21 +201,18 @@ func (c *Context) String(code int, format string, values ...interface{}) error {
 
 // RenderHTML renders the template with data and sets values content-type to "text/html".
 func (c *Context) RenderHTML(code int, name string, data interface{}) error {
-	c.Status(code)
-	c.Writer.Header().Set("Content-Type", "text/html")
+	c.Writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if c.Templates == nil {
-		return c.String(500, "Templates not loaded")
+		return c.String(http.StatusInternalServerError, "Templates not loaded")
 	}
+	c.writeHeader(code)
 	return c.Templates.ExecuteTemplate(c.Writer, name, data)
 }
 
 // HTML sends an HTML response (Raw String).
 func (c *Context) HTML(code int, html string) error {
-	c.Writer.Header().Set("Content-Type", "text/html")
-	if !c.headerWritten {
-		c.Writer.WriteHeader(code)
-		c.headerWritten = true
-	}
+	c.Writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+	c.writeHeader(code)
 	_, err := c.Writer.Write([]byte(html))
 	return err
 }
@@ -228,12 +255,32 @@ func (c *Context) File(filepath string) {
 	http.ServeFile(c.Writer, c.Request, filepath)
 }
 
-var upgrader = websocket.Upgrader{ // Default upgrader
+func sameOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(u.Host, r.Host)
+}
+
+var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for simplicity
-	},
+	CheckOrigin:     sameOrigin,
+}
+
+// SetWebsocketCheckOrigin sets the WebSocket origin check.
+// Pass nil to restore same-origin (production default).
+func SetWebsocketCheckOrigin(fn func(*http.Request) bool) {
+	if fn == nil {
+		upgrader.CheckOrigin = sameOrigin
+		return
+	}
+	upgrader.CheckOrigin = fn
 }
 
 // Upgrade upgrades the HTTP connection to a WebSocket connection.

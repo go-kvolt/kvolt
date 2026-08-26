@@ -87,3 +87,51 @@ func TestMaxBodySizeBytes(t *testing.T) {
 		t.Errorf("MaxBodySizeBytes: want 200, got %d", w.Code)
 	}
 }
+
+func TestRequestID(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("X-Request-ID", "abc-123")
+	c := context.New(w, r)
+	c.Handlers = []context.HandlerFunc{func(c *context.Context) error { return c.String(200, "OK") }}
+	RequestID()(c)
+	if w.Header().Get("X-Request-ID") != "abc-123" {
+		t.Errorf("RequestID: want abc-123, got %s", w.Header().Get("X-Request-ID"))
+	}
+}
+
+func TestLimiter_SameHostDifferentPorts(t *testing.T) {
+	lim := Limiter(1, 1)
+	hit429 := false
+	for _, addr := range []string{"1.2.3.4:1111", "1.2.3.4:2222"} {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", "/", nil)
+		r.RemoteAddr = addr
+		c := context.New(w, r)
+		c.Handlers = []context.HandlerFunc{func(c *context.Context) error { return c.String(200, "OK") }}
+		lim(c)
+		if w.Code == 429 {
+			hit429 = true
+		}
+	}
+	if !hit429 {
+		t.Fatal("Limiter should key on IP host, not port")
+	}
+}
+
+func TestGzip_SkipsJSON(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("Accept-Encoding", "gzip")
+	c := context.New(w, r)
+	c.Handlers = []context.HandlerFunc{
+		Gzip(),
+		func(c *context.Context) error {
+			return c.JSON(200, map[string]string{"ok": "yes"})
+		},
+	}
+	c.Next()
+	if w.Header().Get("Content-Encoding") == "gzip" {
+		t.Fatal("Gzip should skip application/json")
+	}
+}

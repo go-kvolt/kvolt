@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net"
 	"sync"
 	"time"
 
@@ -12,18 +13,26 @@ type client struct {
 	lastRefill time.Time
 }
 
-// Limiter implements a simple Token Bucket rate limiter.
+func clientIP(remoteAddr string) string {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		return remoteAddr
+	}
+	return host
+}
+
+// Limiter implements a token-bucket rate limiter keyed by client IP (host only, not port).
 func Limiter(rps int, burst int) func(c *context.Context) error {
 	var mu sync.Mutex
 	clients := make(map[string]*client)
 
-	// Cleanup routine (leak prevention)
 	go func() {
-		for {
-			time.Sleep(time.Minute)
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
 			mu.Lock()
-			for ip, c := range clients {
-				if time.Since(c.lastRefill) > time.Minute {
+			for ip, cl := range clients {
+				if time.Since(cl.lastRefill) > time.Minute {
 					delete(clients, ip)
 				}
 			}
@@ -32,22 +41,18 @@ func Limiter(rps int, burst int) func(c *context.Context) error {
 	}()
 
 	return func(c *context.Context) error {
-		ip := c.Request.RemoteAddr // basic IP extraction
+		ip := clientIP(c.Request.RemoteAddr)
 
 		mu.Lock()
-		defer mu.Unlock()
-
 		lim, exists := clients[ip]
 		if !exists {
-			clients[ip] = &client{tokens: burst, lastRefill: time.Now()}
-			lim = clients[ip]
+			lim = &client{tokens: burst, lastRefill: time.Now()}
+			clients[ip] = lim
 		}
 
-		// Refill
 		now := time.Now()
 		elapsed := now.Sub(lim.lastRefill).Seconds()
 		refill := int(elapsed * float64(rps))
-
 		if refill > 0 {
 			lim.tokens += refill
 			if lim.tokens > burst {
@@ -56,13 +61,17 @@ func Limiter(rps int, burst int) func(c *context.Context) error {
 			lim.lastRefill = now
 		}
 
-		if lim.tokens > 0 {
+		allowed := lim.tokens > 0
+		if allowed {
 			lim.tokens--
+		}
+		mu.Unlock()
+
+		if allowed {
 			c.Next()
 			return nil
 		}
 
-		c.Status(429).String(429, "Too Many Requests")
-		return nil // Stop chain
+		return c.JSON(429, map[string]string{"error": "Too Many Requests"})
 	}
 }

@@ -29,10 +29,15 @@ app.Use(middleware.RecoveryWithConfig(middleware.RecoveryConfig{
 ```
 
 ### 3. Gzip Compression
-Compresses responses using Gzip if the client supports it.
+Compresses **large non-JSON** responses when the client sends `Accept-Encoding: gzip`.
+JSON APIs and bodies under 1KB are skipped (CPU cost for tiny invoice/product JSON).
 
 ```go
 app.Use(middleware.Gzip())
+app.Use(middleware.GzipWithConfig(middleware.GzipConfig{
+    MinSize:          2048,
+    SkipContentTypes: nil, // compress JSON too
+}))
 ```
 
 
@@ -76,7 +81,24 @@ app.Use(middleware.MaxBodySize(1 << 20)) // 1MB
 // or: middleware.MaxBodySizeBytes(10 * 1024 * 1024)
 ```
 
-### 8. JWT Authentication
+`kvolt.Default()` already includes a 1MB limit.
+
+### 8. Request ID
+Sets `X-Request-ID` on every response. Reuses the incoming header when present.
+
+```go
+app.Use(middleware.RequestID())
+id, _ := c.Get(middleware.RequestIDKey)
+```
+
+### 9. Timeout
+Puts a deadline on `c.Request.Context()`. Slow invoice/DB handlers should honor cancel.
+
+```go
+app.Use(middleware.Timeout(15 * time.Second))
+```
+
+### 10. JWT Authentication
 Secure your routes with JSON Web Tokens.
 
 ```go

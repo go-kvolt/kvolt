@@ -243,7 +243,7 @@ func (n *Node) insertChild(path, fullPath string, handle Handler) {
 
 // getValue returns the handle registered with the given path (key). The values of
 // wildcards are saved to a slice.
-func (n *Node) getValue(path string) (handle Handler, p Params, tsr bool) {
+func (n *Node) getValue(path string, p Params) (handle Handler, outP Params, tsr bool) {
 walk: // Outer loop for walking the tree
 	for {
 		prefix := n.path
@@ -255,16 +255,13 @@ walk: // Outer loop for walking the tree
 				// child,  we must look up the next child node
 				if !n.wildChild {
 					idxc := path[0]
-					for i, c := range []byte(n.indices) {
-						if c == idxc {
+					for i := 0; i < len(n.indices); i++ {
+						if n.indices[i] == idxc {
 							n = n.children[i]
 							continue walk
 						}
 					}
-					// Nothing found.
-					// TSR: If the path is equal to prefix + '/', return TSR=true?
-					// For now, no.
-					return nil, nil, false
+					return nil, p, false
 				}
 
 				// Handle wildcard child
@@ -279,7 +276,7 @@ walk: // Outer loop for walking the tree
 						return handle, p, false
 					}
 					if nextN == nil {
-						return nil, nil, false
+						return nil, p, false
 					}
 					path, n = pathLeft, nextN
 					continue walk
@@ -291,14 +288,11 @@ walk: // Outer loop for walking the tree
 				}
 			}
 		} else if path == prefix {
-			// specific handler
 			if handle = n.handle; handle != nil {
 				return handle, p, false
 			}
-			// If not found, and path == prefix, and we have wildChild...
-			// e.g. /users matches /users/:id ? No.
 		}
-		return nil, nil, false
+		return nil, p, false
 	}
 }
 
@@ -309,13 +303,7 @@ func (n *Node) getValueParam(path string, p Params) (handle Handler, outP Params
 	for end < len(path) && path[end] != '/' {
 		end++
 	}
-	if p == nil {
-		p = make(Params, 0, 4)
-	}
-	i := len(p)
-	p = p[:i+1]
-	p[i].Key = n.path[1:]
-	p[i].Value = path[:end]
+	p = append(p, Param{Key: n.path[1:], Value: path[:end]})
 
 	if end < len(path) {
 		if len(n.children) > 0 {
@@ -331,13 +319,7 @@ func (n *Node) getValueParam(path string, p Params) (handle Handler, outP Params
 
 // getValueCatchAll handles a catchAll node: the rest of path is the param value.
 func (n *Node) getValueCatchAll(path string, p Params) (handle Handler, outP Params) {
-	if p == nil {
-		p = make(Params, 0, 4)
-	}
-	i := len(p)
-	p = p[:i+1]
-	p[i].Key = n.path[1:]
-	p[i].Value = path
+	p = append(p, Param{Key: n.path[1:], Value: path})
 	return n.handle, p
 }
 

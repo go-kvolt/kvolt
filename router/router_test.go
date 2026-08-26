@@ -35,3 +35,15 @@ func TestRouter_Basic(t *testing.T) {
 	r.AddRoute("GET", "/users/:id", func(c any) error { return nil })
 	// Not testing param logic yet, just static matching of /ping vs /
 }
+
+func TestRouter_FiveParams(t *testing.T) {
+	r := New()
+	r.AddRoute("GET", "/a/:p1/:p2/:p3/:p4/:p5", func(c any) error { return nil })
+	h, ps, found := r.Find("GET", "/a/1/2/3/4/5")
+	if !found || h == nil {
+		t.Fatal("five params: route not found")
+	}
+	if ps.Get("p5") != "5" {
+		t.Errorf("p5 want 5, got %s (len=%d)", ps.Get("p5"), len(ps))
+	}
+}

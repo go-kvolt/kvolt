@@ -7,74 +7,109 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/go-kvolt/kvolt/context"
 	kvgrpc "github.com/go-kvolt/kvolt/grpc"
+	"github.com/go-kvolt/kvolt/middleware"
 	"github.com/go-kvolt/kvolt/router"
 )
 
 // Engine is the main framework instance.
 type Engine struct {
-	*RouterGroup  // Engine is the root group
-	router        *router.Router
-	pool          sync.Pool
-	htmlTemplates *template.Template // Global templates
-	grpcServer    *kvgrpc.Server     // Optional gRPC server
+	*RouterGroup    // Engine is the root group
+	router          *router.Router
+	pool            sync.Pool
+	htmlTemplates   *template.Template
+	grpcServer      *kvgrpc.Server
+	noRoute         []context.HandlerFunc
+	notFoundHandler context.HandlerFunc
+	noRouteDirty    bool
 }
 
-// New creates a new kvolt Engine.
+// New creates a new kvolt Engine with no middleware.
 func New() *Engine {
 	engine := &Engine{
 		router: router.New(),
+		notFoundHandler: func(c *context.Context) error {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "Not Found"})
+		},
+		noRouteDirty: true,
 	}
 	engine.RouterGroup = &RouterGroup{
 		engine:     engine,
 		middleware: make([]context.HandlerFunc, 0),
 	}
-	// Initialize Sync.Pool
 	engine.pool.New = func() interface{} {
 		return context.New(nil, nil)
 	}
 	return engine
 }
 
+// Default returns an Engine with production middleware: Recovery, RequestID, MaxBodySize (1MB).
+// Logger and Gzip are opt-in — they cost CPU on every request.
+func Default() *Engine {
+	e := New()
+	e.Use(
+		middleware.Recovery(),
+		middleware.RequestID(),
+		middleware.MaxBodySize(middleware.DefaultMaxBodyBytes),
+	)
+	return e
+}
+
+// NoRoute sets the handler used when no route matches.
+func (e *Engine) NoRoute(h context.HandlerFunc) {
+	if h != nil {
+		e.notFoundHandler = h
+	}
+	e.noRouteDirty = true
+}
+
+func (e *Engine) handlers404() []context.HandlerFunc {
+	if e.noRoute == nil || e.noRouteDirty {
+		h := make([]context.HandlerFunc, 0, len(e.RouterGroup.middleware)+1)
+		h = append(h, e.RouterGroup.middleware...)
+		h = append(h, e.notFoundHandler)
+		e.noRoute = h
+		e.noRouteDirty = false
+	}
+	return e.noRoute
+}
+
 // ServeHTTP implements the http.Handler interface.
 func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Get context from pool
 	c := e.pool.Get().(*context.Context)
 	c.Reset(w, r)
-	c.Templates = e.htmlTemplates // Inject templates
+	if e.htmlTemplates != nil {
+		c.Templates = e.htmlTemplates
+	}
 
-	// Route matching
-	val, params, found := e.router.Find(r.Method, r.URL.Path)
+	val, params, found := e.router.FindInto(r.Method, r.URL.Path, c.Params)
+	c.Params = params
 	if found {
 		if handlers, ok := val.([]context.HandlerFunc); ok {
 			c.Handlers = handlers
-			c.Params = params
 		} else {
-			// This path should ideally not be reached if AddRoute type checks or strict typing is used
-			// But for now keeping compatible with current structure where handle is interface{}
-			// If handle is NOT []HandlerFunc (e.g. single handler), we might need to wrap it?
-			// The current AddRoute in router.go takes `Handler any`.
-			// In kvolt.go, we seem to treat it as []context.HandlerFunc?
-			// Let's check AddRoute usage in RouterGroup (not visible here but inferred).
-			// If matching logic passes, we assume it's correct type.
-			c.Handlers = []context.HandlerFunc{}
+			c.Handlers = e.handlers404()
 		}
 	} else {
-		// 404 Handler - Append to global middleware
-		c.Handlers = append(e.RouterGroup.middleware, func(c *context.Context) error {
-			return c.Status(404).String(404, "Not Found")
-		})
+		c.Handlers = e.handlers404()
 	}
 
-	// Start the chain
-	c.Next()
-
-	// Put context back to pool
+	if len(c.Handlers) == 1 {
+		if err := c.Handlers[0](c); err != nil {
+			c.InternalError()
+		}
+	} else {
+		c.Next()
+	}
+	if !c.HeaderWritten() {
+		c.FlushHeaders()
+	}
 	e.pool.Put(c)
 }
 
@@ -97,7 +132,7 @@ func (e *Engine) Run(addr string) error {
 		IdleTimeout:       DefaultIdleTimeout,
 	}
 
-	fmt.Println("⚡ KVolt is running on http://localhost" + addr)
+	fmt.Println("⚡ KVolt is running on " + formatListenURL("http", addr))
 	fmt.Println("Press Ctrl+C to stop")
 
 	// Non-blocking start
@@ -126,6 +161,13 @@ func (e *Engine) Run(addr string) error {
 	return nil
 }
 
+// ListenAndServe starts HTTP with net/http defaults (no extra timeouts).
+// Use Run() in production for slowloris timeouts and graceful shutdown.
+func (e *Engine) ListenAndServe(addr string) error {
+	fmt.Println("⚡ KVolt is running on " + formatListenURL("http", addr))
+	return http.ListenAndServe(addr, e)
+}
+
 // LoadHTMLGlob loads HTML templates from a directory pattern.
 func (e *Engine) LoadHTMLGlob(pattern string) {
 	e.htmlTemplates = template.Must(template.ParseGlob(pattern))
@@ -142,7 +184,7 @@ func (e *Engine) RunTLS(addr, certFile, keyFile string) error {
 		IdleTimeout:       DefaultIdleTimeout,
 	}
 
-	fmt.Println("⚡ KVolt (HTTPS) is running on https://localhost" + addr)
+	fmt.Println("⚡ KVolt (HTTPS) is running on " + formatListenURL("https", addr))
 	fmt.Println("Press Ctrl+C to stop")
 
 	// Non-blocking start
@@ -251,8 +293,8 @@ func (e *Engine) RunAll(httpAddr, grpcAddr string) error {
 		IdleTimeout:       DefaultIdleTimeout,
 	}
 
-	fmt.Println("⚡ KVolt HTTP  server on http://localhost" + httpAddr)
-	fmt.Println("⚡ KVolt gRPC  server on" + grpcAddr)
+	fmt.Println("⚡ KVolt HTTP  server on " + formatListenURL("http", httpAddr))
+	fmt.Println("⚡ KVolt gRPC  server on " + grpcAddr)
 	fmt.Println("Press Ctrl+C to stop")
 
 	errCh := make(chan error, 2)
@@ -294,4 +336,11 @@ func (e *Engine) RunAll(httpAddr, grpcAddr string) error {
 
 	fmt.Println("All servers exited")
 	return shutdownErr
+}
+
+func formatListenURL(scheme, addr string) string {
+	if strings.HasPrefix(addr, ":") {
+		return scheme + "://localhost" + addr
+	}
+	return scheme + "://" + addr
 }

@@ -26,15 +26,20 @@ func (r *Router) AddRoute(method, path string, handle Handler) {
 
 // Find lookup a handler given a method and path.
 func (r *Router) Find(method, path string) (Handler, Params, bool) {
+	return r.FindInto(method, path, nil)
+}
+
+// FindInto is Find with a reusable Params buffer (pass c.Params[:0] from the context pool).
+func (r *Router) FindInto(method, path string, p Params) (Handler, Params, bool) {
 	root := r.trees[method]
 	if root == nil {
-		return nil, nil, false
+		return nil, p[:0], false
 	}
-	handle, ps, _ := root.getValue(path)
+	handle, ps, _ := root.getValue(path, p[:0])
 	if handle != nil {
 		return handle, ps, true
 	}
-	return nil, nil, false
+	return nil, ps, false
 }
 
 // SetDocumentation adds a description for a registered route.

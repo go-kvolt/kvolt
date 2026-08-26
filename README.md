@@ -13,7 +13,7 @@
   <a href="https://github.com/go-kvolt/kvolt"><img src="https://img.shields.io/github/v/release/go-kvolt/kvolt?include_prereleases" alt="Release"></a>
 </p>
 
-**Stable v1** — Param routes like `GET /auth/:provider` and `GET /auth/:provider/callback` correctly match `/auth/twitter` and `/auth/twitter/callback` (routing issue fixed).
+**v2.0 production** — Safe JSON under load, `kvolt.Default()` (Recovery + Request-ID + 1MB body limit), and production middleware/cache. See [CHANGELOG](CHANGELOG.md).
 
 **KVolt** is a high-performance, developer-friendly Go web framework built for speed and ease of use. It combines the raw power of `net/http` with a modern API, zero-allocation routing, and a suite of "Batteries Included" utilities.
 
@@ -73,7 +73,7 @@ The CLI scaffolds a production-ready directory structure (`cmd`, `internal`, `pk
 1. **Install the CLI**
    ```bash
    go install github.com/go-kvolt/kvolt/cmd/kvolt@latest
-   # Or pin to v1: go install github.com/go-kvolt/kvolt/cmd/kvolt@v1.0.0
+   # Or pin to v2: go install github.com/go-kvolt/kvolt/cmd/kvolt@v2.0.0
    ```
 
    > **Note (Linux/macOS)**: If the `kvolt` command is not found after installation, add the Go bin directory to your PATH:
@@ -121,13 +121,10 @@ import (
 )
 
 func main() {
-    // 1. Initialize Engine
-	app := kvolt.New()
-
-    // 2. Global Middleware
+    // Production defaults: Recovery, Request-ID, 1MB body limit
+	app := kvolt.Default()
 	app.Use(middleware.Logger())
-	app.Use(middleware.Recovery())
-    app.Use(middleware.Secure())
+	app.Use(middleware.Secure())
 
 	// 3. Define a simple route
 	app.GET("/", func(c *context.Context) error {
@@ -147,7 +144,7 @@ func main() {
         
         // Bind() automatically binds JSON and runs Validation
         if err := c.Bind(&u); err != nil {
-            return c.Status(400).JSON(400, map[string]string{"error": err.Error()})
+            return c.JSON(400, map[string]string{"error": err.Error()})
         }
         
 		return c.JSON(201, u)
