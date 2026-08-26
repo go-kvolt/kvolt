@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	app := kvolt.New()
+	app := kvolt.Default()
 	app.Use(middleware.Logger())
 
 	app.GET("/", func(c *context.Context) error {

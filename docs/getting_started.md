@@ -1,6 +1,6 @@
 # Getting Started with KVolt ⚡
 
-KVolt is a high-performance, developer-friendly Go web framework designed for building fast and scalable web applications.
+KVolt is a high-performance, developer-friendly Go web framework designed for building fast and scalable web applications. **v2.0** is the production release.
 
 ## Installation
 
@@ -15,8 +15,11 @@ The KVolt CLI is the easiest way to start a new project. It scaffolds a producti
 1.  **Install the CLI:**
 
     ```bash
-    go install github.com/go-kvolt/kvolt/cmd/kvolt@latest
+    go install github.com/go-kvolt/kvolt/cmd/kvolt@main
+    kvolt version
     ```
+
+    Use `@main` for v2.0 code. Go rejects `@v2.0.0` until the module path is `github.com/go-kvolt/kvolt/v2`. `@latest` may still be v1.1.0.
 
 2.  **Verify Installation:**
 
@@ -60,7 +63,7 @@ If you prefer to start from scratch or integrate KVolt into an existing project:
 2.  **Install KVolt:**
 
     ```bash
-    go get github.com/go-kvolt/kvolt@latest
+    go get github.com/go-kvolt/kvolt@main
     ```
 
 3.  **Create `main.go`:**
@@ -75,14 +78,10 @@ If you prefer to start from scratch or integrate KVolt into an existing project:
     )
 
     func main() {
-        app := kvolt.New()
-
-        // 1. Standard Middleware
+        app := kvolt.Default()
         app.Use(middleware.Logger())
-        app.Use(middleware.Recovery())
         app.Use(middleware.Secure())
 
-        // 2. Define route
         app.GET("/", func(c *context.Context) error {
             return c.String(200, "Hello, KVolt!")
         })
@@ -94,16 +93,14 @@ If you prefer to start from scratch or integrate KVolt into an existing project:
 4.  **Run:**
 
     ```bash
-
     go run main.go
     ```
 
 ## HTTPS & HTTP/2 🔒
 
-KVolt supports HTTPS and HTTP/2 out of the box with `RunTLS`.
+KVolt supports HTTPS and HTTP/2 out of the box with `RunTLS`. `Run()` adds production timeouts and graceful shutdown. `ListenAndServe` is stdlib listen with no extra timeouts.
 
 ```go
-// RunTLS(addr, certFile, keyFile)
 app.RunTLS(":443", "cert.pem", "key.pem")
 ```
 
@@ -112,4 +109,3 @@ app.RunTLS(":443", "cert.pem", "key.pem")
 -   [Routing Guide](router.md)
 -   [Middleware Guide](middleware.md)
 -   [CLI Usage](cli.md)
-

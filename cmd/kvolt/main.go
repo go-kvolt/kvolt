@@ -363,7 +363,7 @@ func main() {
 	}
 
 	// 2. Initialize App
-	app := kvolt.New()
+	app := kvolt.Default()
 
 	// 3. Define Routes
 	app.GET("/", func(c *context.Context) error {

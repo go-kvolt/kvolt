@@ -1,17 +1,18 @@
 # KVolt Documentation ⚡
 
-Welcome to the official documentation for KVolt.
+Welcome to the official documentation for KVolt **v2.0** (production).
 
 ## Basics
--   **[Getting Started](getting_started.md)**: Installation, Quick Start, and HTTPS.
+-   **[Getting Started](getting_started.md)**: Installation, Quick Start, and HTTPS. Use `kvolt.Default()`.
 -   **[CLI Guide](cli.md)**: Use the `kvolt` command line tool.
 -   **[Routing](router.md)**: Radix tree router, Groups, and Static files.
--   **[Context API](context.md)**: The heart of every request.
+-   **[Context API](context.md)**: The heart of every request (`BindJSON`, `Query`).
 
 ## Core Features
--   **[Middleware](middleware.md)**: Logger, Recovery, JWT, Rate Limiter, CORS, Secure.
+-   **[Middleware](middleware.md)**: Logger, Recovery, RequestID, Timeout, JWT, Rate Limiter, CORS, Secure, Gzip.
+-   **[gRPC](grpc.md)**: HTTP + gRPC in one process.
 -   **[Configuration](configuration.md)**: Manage secrets and settings.
--   **[Caching](caching.md)**: High-performance in-memory cache.
+-   **[Caching](caching.md)**: High-performance in-memory cache (LRU cap).
 -   **[Validation](validation.md)**: Struct validation requests.
 -   **[Authentication](authentication.md)**: JWT helpers and middleware.
 -   **[Session Authentication](session.md)**: Stateful session management.

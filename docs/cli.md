@@ -5,8 +5,11 @@ The KVolt Command Line Interface (CLI) speeds up your development workflow.
 ## Installation
 
 ```bash
-go install github.com/go-kvolt/kvolt/cmd/kvolt@latest
+go install github.com/go-kvolt/kvolt/cmd/kvolt@main
+kvolt version
 ```
+
+Use `@main` for v2.0. Go rejects `cmd/kvolt@v2.0.0` until the module path is `github.com/go-kvolt/kvolt/v2`.
 
 ## Commands
 

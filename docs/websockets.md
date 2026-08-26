@@ -4,7 +4,9 @@ KVolt provides native support for WebSockets via `gorilla/websocket` integration
 
 ## Usage
 
-Use `c.Upgrade()` to promote an HTTP request to a WebSocket connection.
+Use `c.Upgrade()` to promote an HTTP request to a WebSocket connection. Origin checks default to **same-origin**. Override with `SetWebsocketCheckOrigin` if you must allow other hosts.
+
+## Usage
 
 
 ## Real-World Example: Simple Chat Hub

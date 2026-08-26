@@ -5,7 +5,8 @@ KVolt includes a "blazing fast" sharded in-memory cache system. It allows you to
 ## Features
 
 -   **Sharded Map**: Uses 64 shards to minimize lock contention, allowing high concurrency.
--   **TTL Support**: Automatic expiration of keys.
+-   **TTL Support**: Automatic expiration of keys. Expired entries are also dropped on `Get`.
+-   **LRU cap**: Default 50,000 keys (`NewMemoryStoreSized` to change). `Len()` returns the live count.
 -   **Janitor Cleanups**: Background goroutine handles clearing expired items.
 -   **Simple Interface**: Clean API for `Get`, `Set`, `Delete`, and `Flush`.
 
@@ -27,6 +28,7 @@ import (
 func main() {
     // 1. Create a Memory Store (Cleanup every 5 minutes)
     c := cache.NewMemoryStore(5 * time.Minute)
+    // or: cache.NewMemoryStoreSized(5*time.Minute, 100_000)
 
     // 2. Set a value with 1 hour expiration
     c.Set("user_123", map[string]string{"name": "Admin"}, 1 * time.Hour)

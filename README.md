@@ -72,8 +72,8 @@ The CLI scaffolds a production-ready directory structure (`cmd`, `internal`, `pk
 
 1. **Install the CLI**
    ```bash
-   go install github.com/go-kvolt/kvolt/cmd/kvolt@latest
-   # Or pin to v2: go install github.com/go-kvolt/kvolt/cmd/kvolt@v2.0.0
+   go install github.com/go-kvolt/kvolt/cmd/kvolt@main
+   # v2.0.0 tag exists on GitHub; Go needs module path .../kvolt/v2 before @v2.0.0 works
    ```
 
    > **Note (Linux/macOS)**: If the `kvolt` command is not found after installation, add the Go bin directory to your PATH:
@@ -103,7 +103,7 @@ If you prefer starting from scratch or adding KVolt to an existing project.
 
 2. **Install Framework**
    ```bash
-   go get github.com/go-kvolt/kvolt@latest
+   go get github.com/go-kvolt/kvolt@main
    ```
 
 3. **Create `main.go`**
