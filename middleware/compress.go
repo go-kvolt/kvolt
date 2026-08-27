@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/go-kvolt/kvolt/context"
+	"github.com/go-kvolt/kvolt/v2/context"
 )
 
 const defaultGzipMinSize = 1024

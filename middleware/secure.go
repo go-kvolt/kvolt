@@ -3,7 +3,7 @@ package middleware
 import (
 	"fmt"
 
-	"github.com/go-kvolt/kvolt/context"
+	"github.com/go-kvolt/kvolt/v2/context"
 )
 
 // SecureConfig defines the config for Secure middleware.

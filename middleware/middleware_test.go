@@ -4,7 +4,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/go-kvolt/kvolt/context"
+	"github.com/go-kvolt/kvolt/v2/context"
 )
 
 func TestSecure(t *testing.T) {

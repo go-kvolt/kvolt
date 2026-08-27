@@ -19,10 +19,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-kvolt/kvolt"
-	kvctx "github.com/go-kvolt/kvolt/context"
-	kvgrpc "github.com/go-kvolt/kvolt/grpc"
-	"github.com/go-kvolt/kvolt/middleware"
+	"github.com/go-kvolt/kvolt/v2"
+	kvctx "github.com/go-kvolt/kvolt/v2/context"
+	kvgrpc "github.com/go-kvolt/kvolt/v2/grpc"
+	"github.com/go-kvolt/kvolt/v2/middleware"
 
 	"google.golang.org/grpc"
 )

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/go-kvolt/kvolt/context"
+	"github.com/go-kvolt/kvolt/v2/context"
 	"github.com/golang-jwt/jwt/v5"
 )
 

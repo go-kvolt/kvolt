@@ -3,8 +3,8 @@ package test
 import (
 	"testing"
 
-	"github.com/go-kvolt/kvolt"
-	"github.com/go-kvolt/kvolt/context"
+	"github.com/go-kvolt/kvolt/v2"
+	"github.com/go-kvolt/kvolt/v2/context"
 )
 
 func TestTester_GET(t *testing.T) {

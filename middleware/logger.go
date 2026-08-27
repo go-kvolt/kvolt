@@ -4,11 +4,17 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-kvolt/kvolt/context"
+	"github.com/go-kvolt/kvolt/v2/context"
 )
 
 var (
 	logChan = make(chan string, 10000)
+	emitLog = func(msg string) {
+		select {
+		case logChan <- msg:
+		default:
+		}
+	}
 )
 
 func init() {
@@ -48,11 +54,7 @@ func Logger() func(c *context.Context) error {
 			c.Request.URL.Path,
 		)
 
-		select {
-		case logChan <- msg:
-		default:
-		}
-
+		emitLog(msg)
 		return nil
 	}
 }

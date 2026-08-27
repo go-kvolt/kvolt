@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/go-kvolt/kvolt"
+	"github.com/go-kvolt/kvolt/v2"
 )
 
 // Tester is the main entry point for KVolt testing.

@@ -10,6 +10,24 @@ _No changes yet._
 
 ---
 
+## [v2.0.1] - 2026-08-27
+
+Local production bar: valid Go v2 module path, regression tests, fuzz, soak harness.
+
+### Added
+
+- Module path **`github.com/go-kvolt/kvolt/v2`** so `go get github.com/go-kvolt/kvolt/v2@v2.0.1` works after this tag. `v2.0.0` is not a valid Go module.
+- Production regression tests: concurrent `BindJSON`/`JSON`, logger real status, gzip skip tiny bodies, max-body 413, five-param routes, concurrent ping/invoice.
+- Fuzz tests: `BindJSON`, `Query`, router `Find`.
+- Soak: `KVOLT_SOAK=1 KVOLT_SOAK_SEC=120 go test -count=1 -timeout 5m -run TestSoak .`
+- `scripts/local10.ps1` — gofmt, vet, **`-race`**, 2-minute soak, fuzz, install CLI. Requires gcc (WinLibs MinGW on this machine).
+
+### Fixed
+
+- Logger log emit is injectable so tests can assert the status line.
+
+---
+
 ## [v2.0.0] - 2026-08-27
 
 Production release. Safe JSON under load, a production `Default()` engine, and middleware/cache fixes from real API benches.

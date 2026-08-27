@@ -3,7 +3,7 @@ package kvolt
 import (
 	"net/http"
 
-	"github.com/go-kvolt/kvolt/context"
+	"github.com/go-kvolt/kvolt/v2/context"
 )
 
 // RouterGroup is a wrapper to group routes with a common prefix and middleware.

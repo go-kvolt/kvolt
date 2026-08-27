@@ -4,7 +4,7 @@ import (
 	"log"
 	"runtime"
 
-	"github.com/go-kvolt/kvolt/context"
+	"github.com/go-kvolt/kvolt/v2/context"
 )
 
 // RecoveryConfig configures the Recovery middleware.

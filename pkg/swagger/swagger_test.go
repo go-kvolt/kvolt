@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-kvolt/kvolt/context"
-	"github.com/go-kvolt/kvolt/router"
+	"github.com/go-kvolt/kvolt/v2/context"
+	"github.com/go-kvolt/kvolt/v2/router"
 )
 
 func TestHandler_Disabled(t *testing.T) {

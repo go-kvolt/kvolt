@@ -11,7 +11,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-kvolt/kvolt/router"
+	"github.com/go-kvolt/kvolt/v2/router"
 	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/websocket"
 )

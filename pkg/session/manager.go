@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/go-kvolt/kvolt/pkg/cache"
+	"github.com/go-kvolt/kvolt/v2/pkg/cache"
 	"github.com/google/uuid"
 )
 

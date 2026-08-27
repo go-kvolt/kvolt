@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/go-kvolt/kvolt/context"
+	"github.com/go-kvolt/kvolt/v2/context"
 )
 
 // DefaultMaxBodyBytes is 1MB. Use MaxBodySize or MaxBodySizeBytes to override.

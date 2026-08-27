@@ -20,3 +20,6 @@ example/main
 example/benchmark
 example/load_test
 *.log
+
+# Fuzz working cache (seeds stay in source)
+**/testdata/fuzz/

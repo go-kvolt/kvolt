@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-kvolt/kvolt"
-	"github.com/go-kvolt/kvolt/context"
+	"github.com/go-kvolt/kvolt/v2"
+	"github.com/go-kvolt/kvolt/v2/context"
 	"github.com/swaggo/swag"
 )
 
@@ -55,7 +55,7 @@ type Config struct {
 	// We use an interface to avoid circular import if kvolt imports swagger.
 	// However, usually user imports both.
 	// But kvolt package already exists. Let's try to import kvolt if possible.
-	// Wait, if we import "github.com/go-kvolt/kvolt" here, and user uses it, it works.
+	// Wait, if we import "github.com/go-kvolt/kvolt/v2" here, and user uses it, it works.
 	// But if kvolt package itself imported swagger, it would be circular.
 	// KVolt core does NOT import swagger. So we are safe.
 	// But to be generic, let's use a closure or interface.

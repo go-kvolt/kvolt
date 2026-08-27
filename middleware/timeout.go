@@ -4,7 +4,7 @@ import (
 	stdctx "context"
 	"time"
 
-	"github.com/go-kvolt/kvolt/context"
+	"github.com/go-kvolt/kvolt/v2/context"
 )
 
 // Timeout attaches a deadline to the request context.

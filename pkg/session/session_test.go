@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-kvolt/kvolt/pkg/cache"
+	"github.com/go-kvolt/kvolt/v2/pkg/cache"
 )
 
 func TestManager_CreateGetDestroy(t *testing.T) {

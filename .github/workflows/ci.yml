@@ -8,8 +8,12 @@ on:
 
 jobs:
   test:
-    name: Test
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,17 +21,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
-
-      - name: Cache go modules
-        uses: actions/cache@v4
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+          go-version-file: go.mod
+          cache: true
 
       - name: Verify formatting
+        if: runner.os != 'Windows'
         run: |
           go fmt ./...
           git diff --exit-code
@@ -39,4 +37,25 @@ jobs:
         run: go build -v ./...
 
       - name: Test
-        run: go test -v -race -count=1 ./...
+        if: runner.os != 'Windows'
+        run: go test -race -count=1 ./...
+
+      - name: Test
+        if: runner.os == 'Windows'
+        run: go test -count=1 ./...
+
+  fuzz:
+    name: Fuzz
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Fuzz BindJSON
+        run: go test -fuzz=FuzzBindJSON -fuzztime=20s ./context
+      - name: Fuzz Query
+        run: go test -fuzz=FuzzQuery -fuzztime=10s ./context
+      - name: Fuzz router
+        run: go test -fuzz=FuzzRouterFind -fuzztime=20s ./router

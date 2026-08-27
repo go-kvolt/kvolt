@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/go-kvolt/kvolt"
+	"github.com/go-kvolt/kvolt/v2"
 )
 
 // Request is a builder for HTTP requests.

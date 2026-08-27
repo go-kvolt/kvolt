@@ -15,8 +15,8 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// Version is set at build time: go build -ldflags "-X main.Version=v2.0.0"
-var Version = "2.0.0"
+// Version is set at build time: go build -ldflags "-X main.Version=v2.0.1"
+var Version = "2.0.1"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -230,7 +230,7 @@ func generateHandler(name string) {
 	content := fmt.Sprintf(`package %s
 
 import (
-	"github.com/go-kvolt/kvolt/context"
+	"github.com/go-kvolt/kvolt/v2/context"
 )
 
 // %s handles requests for %s.
@@ -257,7 +257,7 @@ func generateMiddleware(name string) {
 	content := fmt.Sprintf(`package middleware
 
 import (
-	"github.com/go-kvolt/kvolt/context"
+	"github.com/go-kvolt/kvolt/v2/context"
 )
 
 // %s returns a middleware for %s.
@@ -344,9 +344,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/go-kvolt/kvolt"
-	"github.com/go-kvolt/kvolt/context"
-	"github.com/go-kvolt/kvolt/pkg/config"
+	"github.com/go-kvolt/kvolt/v2"
+	"github.com/go-kvolt/kvolt/v2/context"
+	"github.com/go-kvolt/kvolt/v2/pkg/config"
 )
 
 type Config struct {

@@ -6,14 +6,14 @@
 
 <p align="center">
   <a href="https://github.com/go-kvolt/kvolt/actions/workflows/ci.yml"><img src="https://github.com/go-kvolt/kvolt/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://pkg.go.dev/github.com/go-kvolt/kvolt"><img src="https://pkg.go.dev/badge/github.com/go-kvolt/kvolt.svg" alt="Go Reference"></a>
+  <a href="https://pkg.go.dev/github.com/go-kvolt/kvolt/v2"><img src="https://pkg.go.dev/badge/github.com/go-kvolt/kvolt/v2.svg" alt="Go Reference"></a>
   <a href="https://goreportcard.com/report/github.com/go-kvolt/kvolt"><img src="https://goreportcard.com/badge/github.com/go-kvolt/kvolt" alt="Go Report Card"></a>
   <a href="https://github.com/go-kvolt/kvolt/blob/main/LICENSE"><img src="https://img.shields.io/github/license/go-kvolt/kvolt" alt="License"></a>
   <a href="https://github.com/go-kvolt/kvolt"><img src="https://img.shields.io/github/go-mod/go-version/go-kvolt/kvolt" alt="Go Version"></a>
   <a href="https://github.com/go-kvolt/kvolt"><img src="https://img.shields.io/github/v/release/go-kvolt/kvolt?include_prereleases" alt="Release"></a>
 </p>
 
-**v2.0 production** — Safe JSON under load, `kvolt.Default()` (Recovery + Request-ID + 1MB body limit), and production middleware/cache. See [CHANGELOG](CHANGELOG.md).
+**v2.0.1** — Module path `github.com/go-kvolt/kvolt/v2`. Safe JSON, `kvolt.Default()`, production tests. See [CHANGELOG](CHANGELOG.md).
 
 **KVolt** is a high-performance, developer-friendly Go web framework built for speed and ease of use. It combines the raw power of `net/http` with a modern API, zero-allocation routing, and a suite of "Batteries Included" utilities.
 
@@ -72,8 +72,8 @@ The CLI scaffolds a production-ready directory structure (`cmd`, `internal`, `pk
 
 1. **Install the CLI**
    ```bash
-   go install github.com/go-kvolt/kvolt/cmd/kvolt@main
-   # v2.0.0 tag exists on GitHub; Go needs module path .../kvolt/v2 before @v2.0.0 works
+   go install github.com/go-kvolt/kvolt/v2/cmd/kvolt@v2.0.1
+   # From this clone: go install ./cmd/kvolt
    ```
 
    > **Note (Linux/macOS)**: If the `kvolt` command is not found after installation, add the Go bin directory to your PATH:
@@ -103,7 +103,7 @@ If you prefer starting from scratch or adding KVolt to an existing project.
 
 2. **Install Framework**
    ```bash
-   go get github.com/go-kvolt/kvolt@main
+   go get github.com/go-kvolt/kvolt/v2@v2.0.1
    ```
 
 3. **Create `main.go`**
@@ -115,9 +115,9 @@ If you prefer starting from scratch or adding KVolt to an existing project.
 package main
 
 import (
-	"github.com/go-kvolt/kvolt"
-	"github.com/go-kvolt/kvolt/context"
-	"github.com/go-kvolt/kvolt/middleware"
+	"github.com/go-kvolt/kvolt/v2"
+	"github.com/go-kvolt/kvolt/v2/context"
+	"github.com/go-kvolt/kvolt/v2/middleware"
 )
 
 func main() {
@@ -155,6 +155,13 @@ func main() {
 }
 ```
 
+
+## Tests
+
+```bash
+# Full local 10/10 (needs gcc on Windows — WinLibs MinGW):
+./scripts/local10.ps1
+```
 
 ## Benchmarks 📊
 

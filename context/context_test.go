@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-kvolt/kvolt/router"
+	"github.com/go-kvolt/kvolt/v2/router"
 )
 
 func TestContext_New(t *testing.T) {

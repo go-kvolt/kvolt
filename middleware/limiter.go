@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-kvolt/kvolt/context"
+	"github.com/go-kvolt/kvolt/v2/context"
 )
 
 type client struct {

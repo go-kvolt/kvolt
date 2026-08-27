@@ -1,4 +1,4 @@
-module github.com/go-kvolt/kvolt
+module github.com/go-kvolt/kvolt/v2
 
 go 1.25.6
 

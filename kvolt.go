@@ -12,10 +12,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-kvolt/kvolt/context"
-	kvgrpc "github.com/go-kvolt/kvolt/grpc"
-	"github.com/go-kvolt/kvolt/middleware"
-	"github.com/go-kvolt/kvolt/router"
+	"github.com/go-kvolt/kvolt/v2/context"
+	kvgrpc "github.com/go-kvolt/kvolt/v2/grpc"
+	"github.com/go-kvolt/kvolt/v2/middleware"
+	"github.com/go-kvolt/kvolt/v2/router"
 )
 
 // Engine is the main framework instance.

@@ -3,8 +3,8 @@ package middleware
 import (
 	"strings"
 
-	"github.com/go-kvolt/kvolt/context"
-	"github.com/go-kvolt/kvolt/pkg/session"
+	"github.com/go-kvolt/kvolt/v2/context"
+	"github.com/go-kvolt/kvolt/v2/pkg/session"
 )
 
 // SessionConfig defines configuration for Session middleware.

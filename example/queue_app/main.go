@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-kvolt/kvolt"
-	"github.com/go-kvolt/kvolt/context"
-	"github.com/go-kvolt/kvolt/pkg/queue"
+	"github.com/go-kvolt/kvolt/v2"
+	"github.com/go-kvolt/kvolt/v2/context"
+	"github.com/go-kvolt/kvolt/v2/pkg/queue"
 )
 
 func main() {
