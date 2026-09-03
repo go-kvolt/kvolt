@@ -2,8 +2,10 @@ package kvolt
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/go-kvolt/kvolt/v2/context"
+	"github.com/go-kvolt/kvolt/v2/router"
 )
 
 // RouterGroup is a wrapper to group routes with a common prefix and middleware.
@@ -44,6 +46,41 @@ func (r *Route) Desc(summary string) *Route {
 	return r
 }
 
+// Tags sets OpenAPI tags for the route.
+func (r *Route) Tags(tags ...string) *Route {
+	r.engine.router.UpdateDoc(r.Method, r.Path, func(doc *router.RouteDoc) {
+		doc.Tags = append([]string(nil), tags...)
+	})
+	return r
+}
+
+// Request sets a sample request body used to generate an OpenAPI schema.
+func (r *Route) Request(sample interface{}) *Route {
+	r.engine.router.UpdateDoc(r.Method, r.Path, func(doc *router.RouteDoc) {
+		doc.Request = sample
+	})
+	return r
+}
+
+// Response sets a sample response body for the given status code.
+func (r *Route) Response(code int, sample interface{}) *Route {
+	r.engine.router.UpdateDoc(r.Method, r.Path, func(doc *router.RouteDoc) {
+		if doc.Responses == nil {
+			doc.Responses = make(map[int]interface{})
+		}
+		doc.Responses[code] = sample
+	})
+	return r
+}
+
+// Security sets OpenAPI security requirement names (e.g. "bearer").
+func (r *Route) Security(schemes ...string) *Route {
+	r.engine.router.UpdateDoc(r.Method, r.Path, func(doc *router.RouteDoc) {
+		doc.Security = append([]string(nil), schemes...)
+	})
+	return r
+}
+
 // GET adds a GET route to the group.
 func (group *RouterGroup) GET(path string, handler context.HandlerFunc) *Route {
 	return group.addRoute("GET", path, handler)
@@ -62,6 +99,36 @@ func (group *RouterGroup) PUT(path string, handler context.HandlerFunc) *Route {
 // DELETE adds a DELETE route to the group.
 func (group *RouterGroup) DELETE(path string, handler context.HandlerFunc) *Route {
 	return group.addRoute("DELETE", path, handler)
+}
+
+// PATCH adds a PATCH route to the group.
+func (group *RouterGroup) PATCH(path string, handler context.HandlerFunc) *Route {
+	return group.addRoute("PATCH", path, handler)
+}
+
+// HEAD adds a HEAD route to the group.
+func (group *RouterGroup) HEAD(path string, handler context.HandlerFunc) *Route {
+	return group.addRoute("HEAD", path, handler)
+}
+
+// OPTIONS adds an OPTIONS route to the group.
+func (group *RouterGroup) OPTIONS(path string, handler context.HandlerFunc) *Route {
+	return group.addRoute("OPTIONS", path, handler)
+}
+
+// Handle registers a handler for an arbitrary HTTP method.
+func (group *RouterGroup) Handle(method, path string, handler context.HandlerFunc) *Route {
+	return group.addRoute(strings.ToUpper(method), path, handler)
+}
+
+// Any registers the handler for GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS.
+func (group *RouterGroup) Any(path string, handler context.HandlerFunc) []*Route {
+	methods := []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
+	out := make([]*Route, 0, len(methods))
+	for _, m := range methods {
+		out = append(out, group.addRoute(m, path, handler))
+	}
+	return out
 }
 
 // Static registers a route to serve static files from the provided root directory.
