@@ -47,3 +47,15 @@ func TestRouter_FiveParams(t *testing.T) {
 		t.Errorf("p5 want 5, got %s (len=%d)", ps.Get("p5"), len(ps))
 	}
 }
+
+func TestFindEx_PatternStable(t *testing.T) {
+	r := New()
+	r.AddRoute("GET", "/users/:id", func(c any) error { return nil })
+	res := r.FindEx("GET", "/users/42", nil)
+	if !res.Found {
+		t.Fatal("not found")
+	}
+	if res.Pattern != "/users/:id" {
+		t.Fatalf("pattern=%q", res.Pattern)
+	}
+}

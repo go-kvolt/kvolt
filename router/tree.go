@@ -35,6 +35,7 @@ const (
 
 type Node struct {
 	path      string
+	fullPath  string // registered pattern when handle is set (stable metrics label)
 	wildChild bool
 	nType     nodeType
 	indices   string
@@ -154,6 +155,7 @@ walk:
 			panic("handlers are already registered for path '" + fullPath + "'")
 		}
 		n.handle = handle
+		n.fullPath = fullPath
 		return
 	}
 }
@@ -208,16 +210,20 @@ func (n *Node) insertChild(path, fullPath string, handle Handler) {
 			}
 			// Otherwise we're done. Insert the handle in the new leaf
 			n.handle = handle
+			n.fullPath = fullPath
 			return
 
 		} else { // catchAll
 			if i+len(wildcard) != len(path) {
 				panic("catch-all routes are only allowed at the end of the path in path '" + fullPath + "'")
 			}
-			// if len(n.path) > 0 && n.path[len(n.path)-1] == '/' {
-			// 	panic("catch-all conflicts with existing handle for the path segment root in path '" + fullPath + "'")
-			// }
-			// Currently fixed prefix required currently (TODO: fix)
+			if len(n.children) > 0 {
+				for _, ch := range n.children {
+					if ch.nType == catchAll && ch.path != wildcard {
+						panic("catch-all conflict: '" + ch.path + "' vs '" + wildcard + "' in path '" + fullPath + "'")
+					}
+				}
+			}
 			if i > 0 {
 				n.path = path[:i]
 				path = path[i:]
@@ -232,6 +238,7 @@ func (n *Node) insertChild(path, fullPath string, handle Handler) {
 			n = child
 			n.priority++
 			n.handle = handle
+			n.fullPath = fullPath
 			return
 		}
 	}
@@ -239,11 +246,12 @@ func (n *Node) insertChild(path, fullPath string, handle Handler) {
 	// If no wildcard, simple insertion
 	n.path = path
 	n.handle = handle
+	n.fullPath = fullPath
 }
 
 // getValue returns the handle registered with the given path (key). The values of
-// wildcards are saved to a slice.
-func (n *Node) getValue(path string, p Params) (handle Handler, outP Params, tsr bool) {
+// wildcards are saved to a slice. pattern is the registered route path when found.
+func (n *Node) getValue(path string, p Params) (handle Handler, outP Params, tsr bool, pattern string) {
 walk: // Outer loop for walking the tree
 	for {
 		prefix := n.path
@@ -261,7 +269,7 @@ walk: // Outer loop for walking the tree
 							continue walk
 						}
 					}
-					return nil, p, false
+					return nil, p, false, ""
 				}
 
 				// Handle wildcard child
@@ -273,26 +281,46 @@ walk: // Outer loop for walking the tree
 					var returnNow bool
 					handle, p, pathLeft, nextN, returnNow = n.getValueParam(path, p)
 					if returnNow {
-						return handle, p, false
+						if handle != nil {
+							return handle, p, false, n.fullPath
+						}
+						return nil, p, false, ""
 					}
 					if nextN == nil {
-						return nil, p, false
+						return nil, p, false, ""
 					}
 					path, n = pathLeft, nextN
 					continue walk
 				case catchAll:
 					handle, p = n.getValueCatchAll(path, p)
-					return handle, p, false
+					return handle, p, false, n.fullPath
 				default:
 					panic("invalid node type")
 				}
 			}
 		} else if path == prefix {
 			if handle = n.handle; handle != nil {
-				return handle, p, false
+				return handle, p, false, n.fullPath
+			}
+			// Path matches a node without a handle — trailing slash redirect?
+			if path != "/" && len(path) > 0 && path[len(path)-1] != '/' {
+				for _, child := range n.children {
+					if child.path == "/" && child.handle != nil {
+						return nil, p, true, ""
+					}
+				}
+			}
+		} else if len(path)+1 == len(prefix) && prefix[len(path)] == '/' && path == prefix[:len(path)] {
+			// Request missing trailing slash that node has
+			if n.handle != nil {
+				return nil, p, true, ""
+			}
+		} else if len(prefix)+1 == len(path) && path[len(prefix)] == '/' && prefix == path[:len(prefix)] {
+			if n.handle != nil {
+				return nil, p, true, ""
 			}
 		}
-		return nil, p, false
+		return nil, p, false, ""
 	}
 }
 
