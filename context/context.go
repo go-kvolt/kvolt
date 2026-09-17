@@ -1,6 +1,8 @@
 package context
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -9,12 +11,16 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/go-kvolt/kvolt/v2/pkg/httperr"
 	"github.com/go-kvolt/kvolt/v2/router"
 	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/websocket"
 )
+
+const rawBodyKey = "_kvolt_raw_body"
 
 // validate holds the global validator instance.
 var validate = validator.New()
@@ -48,6 +54,14 @@ type Context struct {
 
 	// Templates holds the parsed templates (injected by Engine)
 	Templates *template.Template
+
+	// TrustedProxies is set by the Engine for ClientIP (CIDRs or IPs).
+	TrustedProxies []string
+
+	// RoutePath is an optional metrics/debug label set by the Engine.
+	RoutePath string
+
+	aborted bool
 }
 
 // New creates a new Context.
@@ -87,9 +101,12 @@ func (c *Context) Reset(w http.ResponseWriter, r *http.Request) {
 		clear(c.Keys)
 	}
 	c.Templates = nil
+	c.TrustedProxies = nil
+	c.RoutePath = ""
 	c.index = -1
 	c.status = 0
 	c.headerWritten = false
+	c.aborted = false
 }
 
 // Set is used to store a new key/value pair exclusively for this context.
@@ -141,19 +158,61 @@ func (c *Context) Bind(obj interface{}) error {
 
 // Next executes the next middleware in the chain.
 // If a handler returns an error and no response has been written yet,
-// a 500 Internal Server Error is sent and the chain is stopped.
+// httperr.Error is mapped to JSON; other errors become a generic 500.
 func (c *Context) Next() {
+	if c.aborted {
+		return
+	}
 	c.index++
 	if c.index < len(c.Handlers) {
 		handler := c.Handlers[c.index]
 		if err := handler(c); err != nil {
-			log.Printf("[KVolt] handler error: %v", err)
-			if !c.headerWritten {
-				c.writeJSONBytes(http.StatusInternalServerError, errInternalJSON)
-			}
+			c.WriteHandlerError(err)
 			return
 		}
 	}
+}
+
+// Abort stops the remaining middleware/handler chain.
+func (c *Context) Abort() {
+	c.aborted = true
+	c.index = len(c.Handlers)
+}
+
+// IsAborted reports whether Abort was called.
+func (c *Context) IsAborted() bool {
+	return c.aborted
+}
+
+// WriteHandlerError maps handler errors to JSON responses when headers are not written yet.
+func (c *Context) WriteHandlerError(err error) {
+	if c.headerWritten {
+		log.Printf("[KVolt] handler error after write: %v", err)
+		return
+	}
+	if he, ok := httperr.As(err); ok {
+		_ = c.JSON(he.Status, he)
+		return
+	}
+	var maxBytes *http.MaxBytesError
+	if errors.As(err, &maxBytes) || strings.Contains(err.Error(), "http: request body too large") {
+		_ = c.JSON(http.StatusRequestEntityTooLarge, httperr.PayloadTooLarge(""))
+		return
+	}
+	log.Printf("[KVolt] handler error: %v", err)
+	c.writeJSONBytes(http.StatusInternalServerError, errInternalJSON)
+}
+
+// AbortWithError stops the chain and writes an httperr JSON response (no double-write log).
+func (c *Context) AbortWithError(err *httperr.Error) error {
+	c.Abort()
+	if err == nil {
+		return nil
+	}
+	if !c.headerWritten {
+		_ = c.JSON(err.Status, err)
+	}
+	return nil
 }
 
 // Status stores the HTTP status code. Headers are not written until the body is sent,
@@ -217,10 +276,39 @@ func (c *Context) HTML(code int, html string) error {
 	return err
 }
 
-// FormFile returns the first file for the provided form key.
+// RawBody reads the full request body once and restores Request.Body so Bind/BindJSON still work.
+// Useful for webhook signature verification (Razorpay, Stripe, couriers).
+func (c *Context) RawBody() ([]byte, error) {
+	if v, ok := c.Get(rawBodyKey); ok {
+		if b, ok := v.([]byte); ok {
+			return b, nil
+		}
+	}
+	if c.Request == nil || c.Request.Body == nil {
+		return nil, io.EOF
+	}
+	b, err := io.ReadAll(c.Request.Body)
+	_ = c.Request.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	c.Request.Body = io.NopCloser(bytes.NewReader(b))
+	c.Set(rawBodyKey, b)
+	return b, nil
+}
+
+// FormFile returns the first file for the provided form key (32MB memory max for multipart).
 func (c *Context) FormFile(name string) (*multipart.FileHeader, error) {
+	return c.FormFileMax(name, 32<<20)
+}
+
+// FormFileMax is like FormFile but lets you set ParseMultipartForm maxMemory.
+func (c *Context) FormFileMax(name string, maxMemory int64) (*multipart.FileHeader, error) {
+	if maxMemory <= 0 {
+		maxMemory = 32 << 20
+	}
 	if c.Request.MultipartForm == nil {
-		if err := c.Request.ParseMultipartForm(32 << 20); err != nil { // 32MB default
+		if err := c.Request.ParseMultipartForm(maxMemory); err != nil {
 			return nil, err
 		}
 	}
@@ -232,8 +320,33 @@ func (c *Context) FormFile(name string) (*multipart.FileHeader, error) {
 	return fh, nil
 }
 
-// SaveUploadedFile uploads the form file to specific dst.
+// FormFileAllowed returns the file only when its extension is in allowedExts (e.g. ".jpg", ".png").
+// Comparison is case-insensitive. Empty allowedExts means any extension.
+func (c *Context) FormFileAllowed(name string, maxMemory int64, allowedExts ...string) (*multipart.FileHeader, error) {
+	fh, err := c.FormFileMax(name, maxMemory)
+	if err != nil {
+		return nil, err
+	}
+	if len(allowedExts) == 0 {
+		return fh, nil
+	}
+	ext := strings.ToLower(filepath.Ext(fh.Filename))
+	for _, a := range allowedExts {
+		if ext == strings.ToLower(a) {
+			return fh, nil
+		}
+	}
+	return nil, httperr.BadRequest("invalid_file_type", "file extension not allowed")
+}
+
+// SaveUploadedFile uploads the form file to dst.
+// dst must be a local path (filepath.IsLocal); ".." escapes are rejected.
+// Prefer SafeUploadPath(dir, file.Filename) when using the client-provided name.
 func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) error {
+	dst = filepath.Clean(dst)
+	if dst == "." || !filepath.IsLocal(dst) {
+		return httperr.BadRequest("invalid_path", "upload destination must be a local non-escaping path")
+	}
 	src, err := file.Open()
 	if err != nil {
 		return err
@@ -250,9 +363,171 @@ func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) error
 	return err
 }
 
+// SafeUploadPath joins dir with the base name of filename (blocks path traversal).
+func SafeUploadPath(dir, filename string) string {
+	base := filepath.Base(filename)
+	if base == "." || base == ".." || base == "" {
+		base = "upload"
+	}
+	return filepath.Join(dir, base)
+}
+
 // File writes the specified file into the body stream in an efficient way.
-func (c *Context) File(filepath string) {
-	http.ServeFile(c.Writer, c.Request, filepath)
+// Do not pass user-controlled paths; use FileFrom when the name comes from the request.
+func (c *Context) File(path string) {
+	http.ServeFile(c.Writer, c.Request, path)
+	c.headerWritten = true
+	if c.status == 0 {
+		c.status = http.StatusOK
+	}
+}
+
+// FileFrom serves a file under root. name may not escape root (path traversal blocked).
+func (c *Context) FileFrom(root, name string) error {
+	target, err := safeJoinRoot(root, name)
+	if err != nil {
+		return httperr.BadRequest("invalid_path", "file path escapes root")
+	}
+	c.File(target)
+	return nil
+}
+
+// Attachment serves a file as a download with Content-Disposition attachment.
+func (c *Context) Attachment(path, filename string) {
+	if filename == "" {
+		filename = filepath.Base(path)
+	}
+	filename = sanitizeDownloadFilename(filename)
+	c.Writer.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+	c.File(path)
+}
+
+// AttachmentFrom serves a download under root (blocks path traversal).
+func (c *Context) AttachmentFrom(root, name, filename string) error {
+	target, err := safeJoinRoot(root, name)
+	if err != nil {
+		return httperr.BadRequest("invalid_path", "file path escapes root")
+	}
+	if filename == "" {
+		filename = filepath.Base(target)
+	}
+	c.Attachment(target, filename)
+	return nil
+}
+
+func safeJoinRoot(root, name string) (string, error) {
+	root = filepath.Clean(root)
+	if root == "" {
+		return "", httperr.BadRequest("invalid_path", "empty root")
+	}
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return "", httperr.BadRequest("invalid_path", "invalid root")
+	}
+	if resolved, err := filepath.EvalSymlinks(absRoot); err == nil {
+		absRoot = resolved
+	}
+
+	target := filepath.Clean(filepath.Join(absRoot, name))
+	if !underRoot(absRoot, target) {
+		return "", httperr.BadRequest("invalid_path", "path escapes root")
+	}
+	// If the path exists (file, dir, or symlink), require successful symlink resolution
+	// so a link inside root cannot point outside. Missing paths stay lexical-only (404 later).
+	if _, err := os.Lstat(target); err == nil {
+		resolved, err := filepath.EvalSymlinks(target)
+		if err != nil {
+			return "", httperr.BadRequest("invalid_path", "path escapes root")
+		}
+		if !underRoot(absRoot, resolved) {
+			return "", httperr.BadRequest("invalid_path", "path escapes root")
+		}
+		return resolved, nil
+	}
+	return target, nil
+}
+
+func underRoot(root, target string) bool {
+	rel, err := filepath.Rel(root, target)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func sanitizeDownloadFilename(name string) string {
+	name = filepath.Base(name)
+	var b strings.Builder
+	for _, r := range name {
+		if r < 32 || r == '"' || r == '\\' || r == '\n' || r == '\r' || r == ';' {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	out := b.String()
+	if out == "" || out == "." || out == ".." {
+		return "download"
+	}
+	return out
+}
+
+// Redirect sends an HTTP redirect to a safe relative location only.
+// Absolute URLs (http/https/javascript/…) and protocol-relative "//…" are rejected
+// to prevent open redirects. Use RedirectURL for trusted absolute URLs.
+func (c *Context) Redirect(code int, location string) error {
+	if !isSafeRelativeRedirect(location) {
+		return httperr.BadRequest("unsafe_redirect", "only relative redirects are allowed")
+	}
+	if code < 300 || code > 308 {
+		code = http.StatusFound
+	}
+	http.Redirect(c.Writer, c.Request, location, code)
+	c.headerWritten = true
+	c.status = code
+	return nil
+}
+
+// RedirectURL redirects to any URL. Use only with trusted/absolute locations you control.
+func (c *Context) RedirectURL(code int, location string) error {
+	if strings.TrimSpace(location) == "" {
+		return httperr.BadRequest("unsafe_redirect", "empty redirect location")
+	}
+	if code < 300 || code > 308 {
+		code = http.StatusFound
+	}
+	http.Redirect(c.Writer, c.Request, location, code)
+	c.headerWritten = true
+	c.status = code
+	return nil
+}
+
+func isSafeRelativeRedirect(location string) bool {
+	location = strings.TrimSpace(location)
+	if location == "" {
+		return false
+	}
+	// Only same-origin path redirects (leading single slash).
+	if !strings.HasPrefix(location, "/") || strings.HasPrefix(location, "//") {
+		return false
+	}
+	// Backslash / CRLF / NUL / @ (userinfo) tricks historically confuse some user-agents.
+	if strings.ContainsAny(location, "\\\r\n\x00@") {
+		return false
+	}
+	if strings.Contains(location, "://") {
+		return false
+	}
+	lower := strings.ToLower(location)
+	if strings.Contains(lower, "javascript:") || strings.Contains(lower, "data:") || strings.Contains(lower, "vbscript:") {
+		return false
+	}
+	return true
+}
+
+// NoContent sends 204 No Content.
+func (c *Context) NoContent() error {
+	c.writeHeader(http.StatusNoContent)
+	return nil
 }
 
 func sameOrigin(r *http.Request) bool {
