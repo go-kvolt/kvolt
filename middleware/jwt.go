@@ -2,12 +2,16 @@ package middleware
 
 import (
 	"errors"
-	"net/http"
 	"strings"
 
 	"github.com/go-kvolt/kvolt/v2/context"
+	"github.com/go-kvolt/kvolt/v2/pkg/httperr"
 	"github.com/golang-jwt/jwt/v5"
 )
+
+func httperrUnauthorized() error {
+	return httperr.Unauthorized("unauthorized", "Unauthorized")
+}
 
 // JWTConfig defines the config for JWT middleware.
 type JWTConfig struct {
@@ -22,8 +26,8 @@ type JWTConfig struct {
 	// Optional. Default value "header:Authorization".
 	// Possible values:
 	// - "header:<name>"
-	// - "query:<name>"
 	// - "cookie:<name>"
+	// - "query:<name>" (discouraged: tokens leak via logs, Referer, and history)
 	TokenLookup string
 
 	// AuthScheme to be used in the Authorization header.
@@ -62,6 +66,7 @@ func buildJWTExtractor(lookup, authScheme string) jwtExtractor {
 			return auth, nil
 		}
 	case "query":
+		// Discouraged: tokens in query strings leak via logs, Referer, and browser history.
 		return func(c *context.Context) (string, error) {
 			token := c.Request.URL.Query().Get(name)
 			if token == "" {
@@ -86,14 +91,15 @@ func buildJWTExtractor(lookup, authScheme string) jwtExtractor {
 
 // JWT returns a JWT authentication middleware.
 func JWT(config JWTConfig) context.HandlerFunc {
+	if strings.TrimSpace(config.SigningKey) == "" {
+		panic("middleware: JWT SigningKey must not be empty")
+	}
 	if config.ContextKey == "" {
 		config.ContextKey = "user"
 	}
 	if config.ErrorHandler == nil {
 		config.ErrorHandler = func(c *context.Context, err error) error {
-			return c.Status(http.StatusUnauthorized).JSON(http.StatusUnauthorized, map[string]string{
-				"error": "Unauthorized",
-			})
+			return httperrUnauthorized()
 		}
 	}
 	if config.TokenLookup == "" {

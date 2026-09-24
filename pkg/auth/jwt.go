@@ -1,94 +1,91 @@
 package auth
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
-	"strings"
+	"sync"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
-// Token helpers (Simplified JWT implementation to avoid heavy dependency for now)
-// Header.Payload.Signature
+// Token helpers backed by github.com/golang-jwt/jwt/v5 (same stack as middleware.JWT).
 
 var (
-	// secretKey is the signing key.
-	// It loads from JWT_SECRET env var, or defaults to "kvolt-default-secret" with a warning.
-	secretKey = []byte("kvolt-default-secret")
+	mu        sync.RWMutex
+	secretKey []byte
+	secretSet bool
 )
 
 func init() {
 	if env := os.Getenv("JWT_SECRET"); env != "" {
 		secretKey = []byte(env)
-	} else {
-		// In a real logger we'd use pkg/logger, but standard log is safer for init() to avoid cycles/setup issues
-		// fmt.Println("[WARNING] JWT_SECRET not set. Using default insecure secret.")
+		secretSet = true
 	}
 }
 
-// SetSecret allows setting the JWT secret programmatically.
+// SetSecret sets the HMAC signing secret. Required before GenerateToken/ParseToken
+// unless JWT_SECRET is set in the environment.
 func SetSecret(s string) {
+	mu.Lock()
+	defer mu.Unlock()
 	secretKey = []byte(s)
+	secretSet = s != ""
 }
 
+func currentSecret() ([]byte, error) {
+	mu.RLock()
+	defer mu.RUnlock()
+	if !secretSet || len(secretKey) == 0 {
+		return nil, errors.New("auth: JWT secret not configured; call auth.SetSecret or set JWT_SECRET")
+	}
+	return secretKey, nil
+}
+
+// Claims is a convenience map for HS256 tokens.
 type Claims map[string]interface{}
 
+// GenerateToken creates a signed HS256 JWT.
 func GenerateToken(claims Claims, expiry time.Duration) (string, error) {
-	claims["exp"] = time.Now().Add(expiry).Unix()
-
-	header := map[string]string{"alg": "HS256", "typ": "JWT"}
-
-	hJSON, _ := json.Marshal(header)
-	cJSON, _ := json.Marshal(claims)
-
-	token := base64.RawURLEncoding.EncodeToString(hJSON) + "." + base64.RawURLEncoding.EncodeToString(cJSON)
-
-	sig := sign(token, secretKey)
-	return token + "." + sig, nil
+	secret, err := currentSecret()
+	if err != nil {
+		return "", err
+	}
+	mapClaims := jwt.MapClaims{}
+	for k, v := range claims {
+		mapClaims[k] = v
+	}
+	mapClaims["exp"] = time.Now().Add(expiry).Unix()
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, mapClaims)
+	return token.SignedString(secret)
 }
 
-func ParseToken(token string) (Claims, error) {
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return nil, errors.New("invalid token format")
-	}
-
-	// Verify Signature
-	if !verify(parts[0]+"."+parts[1], parts[2], secretKey) {
-		return nil, errors.New("invalid signature")
-	}
-
-	// Parse Claims
-	var claims Claims
-	cJSON, err := base64.RawURLEncoding.DecodeString(parts[1])
+// ParseToken validates an HS256 JWT and returns claims.
+func ParseToken(tokenString string) (Claims, error) {
+	secret, err := currentSecret()
 	if err != nil {
 		return nil, err
 	}
-
-	if err := json.Unmarshal(cJSON, &claims); err != nil {
+	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return secret, nil
+	})
+	if err != nil {
 		return nil, err
 	}
-
-	// Check Exp
-	if exp, ok := claims["exp"].(float64); ok {
-		if time.Now().Unix() > int64(exp) {
-			return nil, errors.New("token expired")
-		}
+	if !token.Valid {
+		return nil, errors.New("invalid token")
 	}
-
-	return claims, nil
-}
-
-func sign(data string, secret []byte) string {
-	h := hmac.New(sha256.New, secret)
-	h.Write([]byte(data))
-	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
-}
-
-func verify(data, sig string, secret []byte) bool {
-	expected := sign(data, secret)
-	return hmac.Equal([]byte(sig), []byte(expected))
+	mc, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, errors.New("invalid claims")
+	}
+	out := Claims{}
+	for k, v := range mc {
+		out[k] = v
+	}
+	return out, nil
 }

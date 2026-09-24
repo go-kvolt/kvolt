@@ -7,7 +7,7 @@ import (
 
 func TestGenerateTokenAndParseToken(t *testing.T) {
 	SetSecret("test-secret")
-	defer SetSecret("kvolt-default-secret")
+	defer SetSecret("test-secret")
 
 	token, err := GenerateToken(Claims{"user": "alice", "role": "admin"}, time.Hour)
 	if err != nil {
@@ -27,6 +27,7 @@ func TestGenerateTokenAndParseToken(t *testing.T) {
 }
 
 func TestParseToken_InvalidFormat(t *testing.T) {
+	SetSecret("test-secret")
 	_, err := ParseToken("bad-token")
 	if err == nil {
 		t.Error("ParseToken bad format: want error")
@@ -35,13 +36,15 @@ func TestParseToken_InvalidFormat(t *testing.T) {
 
 func TestParseToken_InvalidSignature(t *testing.T) {
 	SetSecret("secret-a")
-	token, _ := GenerateToken(Claims{"x": "y"}, time.Hour)
+	token, err := GenerateToken(Claims{"x": "y"}, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
 	SetSecret("secret-b")
-	_, err := ParseToken(token)
+	_, err = ParseToken(token)
 	if err == nil {
 		t.Error("ParseToken wrong secret: want error")
 	}
-	SetSecret("kvolt-default-secret")
 }
 
 func TestParseToken_Expired(t *testing.T) {
@@ -54,5 +57,13 @@ func TestParseToken_Expired(t *testing.T) {
 	if err == nil {
 		t.Error("ParseToken expired: want error")
 	}
-	SetSecret("kvolt-default-secret")
+}
+
+func TestGenerateToken_RequiresSecret(t *testing.T) {
+	SetSecret("")
+	_, err := GenerateToken(Claims{"a": 1}, time.Hour)
+	if err == nil {
+		t.Fatal("expected error without secret")
+	}
+	SetSecret("test-secret")
 }

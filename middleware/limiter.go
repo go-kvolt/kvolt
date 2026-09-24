@@ -2,10 +2,12 @@ package middleware
 
 import (
 	"net"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/go-kvolt/kvolt/v2/context"
+	"github.com/go-kvolt/kvolt/v2/pkg/httperr"
 )
 
 type client struct {
@@ -21,42 +23,109 @@ func clientIP(remoteAddr string) string {
 	return host
 }
 
+const defaultLimiterMaxKeys = 10_000
+
+// LimiterConfig configures a token-bucket rate limiter.
+type LimiterConfig struct {
+	// RPS is refill rate (tokens per second).
+	RPS int
+	// Burst is the maximum bucket size.
+	Burst int
+	// KeyFunc derives the rate-limit bucket key. Default: client IP host.
+	KeyFunc func(c *context.Context) string
+	// ErrorHandler overrides the default 429 JSON response.
+	ErrorHandler func(c *context.Context) error
+	// MaxKeys caps distinct bucket keys (default 10000). When full, new keys are rejected with 429.
+	MaxKeys int
+}
+
 // Limiter implements a token-bucket rate limiter keyed by client IP (host only, not port).
 func Limiter(rps int, burst int) func(c *context.Context) error {
+	return LimiterWithConfig(LimiterConfig{RPS: rps, Burst: burst})
+}
+
+// LimiterWithConfig allows custom keys (API key, tenant id, user id, IP).
+func LimiterWithConfig(cfg LimiterConfig) func(c *context.Context) error {
+	if cfg.RPS <= 0 {
+		cfg.RPS = 10
+	}
+	if cfg.Burst <= 0 {
+		cfg.Burst = cfg.RPS
+	}
+	if cfg.MaxKeys <= 0 {
+		cfg.MaxKeys = defaultLimiterMaxKeys
+	}
+	if cfg.KeyFunc == nil {
+		cfg.KeyFunc = func(c *context.Context) string {
+			if ip := c.ClientIP(); ip != "" {
+				return ip
+			}
+			return clientIP(c.Request.RemoteAddr)
+		}
+	}
+	if cfg.ErrorHandler == nil {
+		cfg.ErrorHandler = func(c *context.Context) error {
+			return httperr.TooManyRequests("Too Many Requests")
+		}
+	}
+
 	var mu sync.Mutex
 	clients := make(map[string]*client)
+
+	evictStale := func(now time.Time) {
+		for key, cl := range clients {
+			if now.Sub(cl.lastRefill) > time.Minute {
+				delete(clients, key)
+			}
+		}
+	}
 
 	go func() {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
 			mu.Lock()
-			for ip, cl := range clients {
-				if time.Since(cl.lastRefill) > time.Minute {
-					delete(clients, ip)
-				}
-			}
+			evictStale(time.Now())
 			mu.Unlock()
 		}
 	}()
 
 	return func(c *context.Context) error {
-		ip := clientIP(c.Request.RemoteAddr)
+		key := cfg.KeyFunc(c)
+		if key == "" {
+			key = clientIP(c.Request.RemoteAddr)
+		}
 
 		mu.Lock()
-		lim, exists := clients[ip]
+		lim, exists := clients[key]
 		if !exists {
-			lim = &client{tokens: burst, lastRefill: time.Now()}
-			clients[ip] = lim
+			now := time.Now()
+			if len(clients) >= cfg.MaxKeys {
+				evictStale(now)
+			}
+			if len(clients) >= cfg.MaxKeys {
+				mu.Unlock()
+				c.Writer.Header().Set("Retry-After", "1")
+				err := cfg.ErrorHandler(c)
+				if err != nil && !c.HeaderWritten() {
+					if he, ok := httperr.As(err); ok {
+						return c.JSON(he.Status, he)
+					}
+					return c.JSON(http.StatusTooManyRequests, map[string]string{"error": "Too Many Requests"})
+				}
+				return err
+			}
+			lim = &client{tokens: cfg.Burst, lastRefill: now}
+			clients[key] = lim
 		}
 
 		now := time.Now()
 		elapsed := now.Sub(lim.lastRefill).Seconds()
-		refill := int(elapsed * float64(rps))
+		refill := int(elapsed * float64(cfg.RPS))
 		if refill > 0 {
 			lim.tokens += refill
-			if lim.tokens > burst {
-				lim.tokens = burst
+			if lim.tokens > cfg.Burst {
+				lim.tokens = cfg.Burst
 			}
 			lim.lastRefill = now
 		}
@@ -72,6 +141,14 @@ func Limiter(rps int, burst int) func(c *context.Context) error {
 			return nil
 		}
 
-		return c.JSON(429, map[string]string{"error": "Too Many Requests"})
+		c.Writer.Header().Set("Retry-After", "1")
+		err := cfg.ErrorHandler(c)
+		if err != nil && !c.HeaderWritten() {
+			if he, ok := httperr.As(err); ok {
+				return c.JSON(he.Status, he)
+			}
+			return c.JSON(http.StatusTooManyRequests, map[string]string{"error": "Too Many Requests"})
+		}
+		return err
 	}
 }
