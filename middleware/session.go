@@ -4,19 +4,14 @@ import (
 	"strings"
 
 	"github.com/go-kvolt/kvolt/v2/context"
+	"github.com/go-kvolt/kvolt/v2/pkg/httperr"
 	"github.com/go-kvolt/kvolt/v2/pkg/session"
 )
 
 // SessionConfig defines configuration for Session middleware.
 type SessionConfig struct {
-	// Manager is the session manager instance.
-	Manager *session.Manager
-	// Lookup is a string in the form of "source:key".
-	// Supported: "cookie:name", "header:name", "query:name".
-	// Default: "cookie:session_id"
-	Lookup string
-	// ContextKey is the key to store session data in context.
-	// Default: "session"
+	Manager    *session.Manager
+	Lookup     string
 	ContextKey string
 }
 
@@ -32,12 +27,12 @@ func Session(config SessionConfig) func(c *context.Context) error {
 	return func(c *context.Context) error {
 		token := extractToken(c, config.Lookup)
 		if token == "" {
-			return c.Status(401).String(401, "Unauthorized: No session token")
+			return httperr.Unauthorized("unauthorized", "no session token")
 		}
 
 		data, err := config.Manager.Get(token)
 		if err != nil {
-			return c.Status(401).String(401, "Unauthorized: Invalid session")
+			return httperr.Unauthorized("unauthorized", "invalid session")
 		}
 
 		c.Set(config.ContextKey, data)
@@ -62,6 +57,7 @@ func extractToken(c *context.Context, lookup string) string {
 	case "header":
 		return c.Request.Header.Get(key)
 	case "query":
+		// Discouraged: session tokens in query strings leak via logs/Referer/history.
 		return c.Request.URL.Query().Get(key)
 	}
 	return ""

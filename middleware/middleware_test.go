@@ -22,8 +22,11 @@ func TestSecure(t *testing.T) {
 	if h.Get("X-Content-Type-Options") != "nosniff" {
 		t.Errorf("X-Content-Type-Options want nosniff, got %s", h.Get("X-Content-Type-Options"))
 	}
-	if h.Get("X-XSS-Protection") != "1; mode=block" {
-		t.Errorf("X-XSS-Protection want 1; mode=block, got %s", h.Get("X-XSS-Protection"))
+	if h.Get("X-XSS-Protection") != "0" {
+		t.Errorf("X-XSS-Protection want 0, got %s", h.Get("X-XSS-Protection"))
+	}
+	if h.Get("Referrer-Policy") != "strict-origin-when-cross-origin" {
+		t.Errorf("Referrer-Policy missing: %s", h.Get("Referrer-Policy"))
 	}
 }
 
@@ -60,9 +63,24 @@ func TestRecovery(t *testing.T) {
 	if w.Code != 500 {
 		t.Errorf("Recovery: want status 500, got %d", w.Code)
 	}
-	if w.Body.String() != "Internal Server Error" {
-		t.Errorf("Recovery: body want Internal Server Error, got %s", w.Body.String())
+	if w.Body.String() == "" || w.Code != 500 {
+		t.Errorf("Recovery: body %q code %d", w.Body.String(), w.Code)
 	}
+	if !contains(w.Body.String(), "internal_error") {
+		t.Errorf("Recovery: want JSON internal_error, got %s", w.Body.String())
+	}
+}
+
+func contains(s, sub string) bool {
+	return len(s) >= len(sub) && (s == sub || len(sub) == 0 ||
+		(func() bool {
+			for i := 0; i+len(sub) <= len(s); i++ {
+				if s[i:i+len(sub)] == sub {
+					return true
+				}
+			}
+			return false
+		})())
 }
 
 func TestMaxBodySize(t *testing.T) {
@@ -116,6 +134,33 @@ func TestLimiter_SameHostDifferentPorts(t *testing.T) {
 	}
 	if !hit429 {
 		t.Fatal("Limiter should key on IP host, not port")
+	}
+}
+
+func TestLimiter_MaxKeysRejectsNew(t *testing.T) {
+	n := 0
+	lim := LimiterWithConfig(LimiterConfig{
+		RPS:     100,
+		Burst:   100,
+		MaxKeys: 2,
+		KeyFunc: func(c *context.Context) string {
+			n++
+			return "k" + string(rune('a'+n-1))
+		},
+	})
+	for i := 0; i < 3; i++ {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", "/", nil)
+		r.RemoteAddr = "1.1.1.1:1"
+		c := context.New(w, r)
+		c.Handlers = []context.HandlerFunc{lim, func(c *context.Context) error { return c.String(200, "OK") }}
+		c.Next()
+		if i < 2 && w.Code != 200 {
+			t.Fatalf("i=%d want 200 got %d", i, w.Code)
+		}
+		if i == 2 && w.Code != 429 {
+			t.Fatalf("third unique key should 429 when MaxKeys=2, got %d", w.Code)
+		}
 	}
 }
 

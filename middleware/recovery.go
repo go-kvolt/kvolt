@@ -2,16 +2,18 @@ package middleware
 
 import (
 	"log"
+	"net/http"
 	"runtime"
 
 	"github.com/go-kvolt/kvolt/v2/context"
+	"github.com/go-kvolt/kvolt/v2/pkg/httperr"
 )
 
 // RecoveryConfig configures the Recovery middleware.
 type RecoveryConfig struct {
-	// LogStackTrace when true logs the panic stack trace (useful in development).
-	// Set false in production to avoid leaking implementation details.
 	LogStackTrace bool
+	// RecoverHandler overrides the default JSON 500 response.
+	RecoverHandler func(c *context.Context, recovered interface{})
 }
 
 // DefaultRecoveryConfig is production-safe: stack is logged for debugging.
@@ -35,9 +37,14 @@ func RecoveryWithConfig(config RecoveryConfig) func(c *context.Context) error {
 					n := runtime.Stack(buf, false)
 					log.Printf("[Panic] stack:\n%s", buf[:n])
 				}
-				if !c.HeaderWritten() {
-					c.Status(500).String(500, "Internal Server Error")
+				if c.HeaderWritten() {
+					return
 				}
+				if config.RecoverHandler != nil {
+					config.RecoverHandler(c, err)
+					return
+				}
+				_ = c.JSON(http.StatusInternalServerError, httperr.Internal("internal server error"))
 			}
 		}()
 		c.Next()

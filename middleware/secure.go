@@ -2,32 +2,36 @@ package middleware
 
 import (
 	"fmt"
+	"net"
+	"strings"
 
 	"github.com/go-kvolt/kvolt/v2/context"
 )
 
 // SecureConfig defines the config for Secure middleware.
 type SecureConfig struct {
-	// XSSProtection sets the X-XSS-Protection header val. Default: "1; mode=block".
-	XSSProtection string
-	// ContentTypeNosniff sets the X-Content-Type-Options header val. Default: "nosniff".
-	ContentTypeNosniff string
-	// XFrameOptions sets the X-Frame-Options header val. Default: "DENY".
-	XFrameOptions string
-	// HSTSMaxAge sets the Strict-Transport-Security header max age in seconds. Default: 0 (disabled).
-	HSTSMaxAge int
-	// HSTSExcludeSubdomains sets the Strict-Transport-Security header exclude subdomains. Default: false.
+	XSSProtection         string
+	ContentTypeNosniff    string
+	XFrameOptions         string
+	HSTSMaxAge            int
 	HSTSExcludeSubdomains bool
-	// ContentSecurityPolicy sets the Content-Security-Policy header val. Default: "".
+	HSTSPreload           bool
+	// HSTSIfXForwardedProto sets HSTS when X-Forwarded-Proto is https.
+	// Only honored when the peer is in Context.TrustedProxies (set via Engine.TrustedProxies).
+	HSTSIfXForwardedProto bool
 	ContentSecurityPolicy string
+	ReferrerPolicy        string
+	PermissionsPolicy     string
 }
 
 // DefaultSecureConfig is the default Secure middleware config.
 var DefaultSecureConfig = SecureConfig{
-	XSSProtection:      "1; mode=block",
-	ContentTypeNosniff: "nosniff",
-	XFrameOptions:      "DENY",
-	HSTSMaxAge:         0,
+	XSSProtection:         "0",
+	ContentTypeNosniff:    "nosniff",
+	XFrameOptions:         "DENY",
+	HSTSMaxAge:            0,
+	HSTSIfXForwardedProto: true,
+	ReferrerPolicy:        "strict-origin-when-cross-origin",
 }
 
 // Secure returns a middleware that sets security headers.
@@ -38,31 +42,39 @@ func Secure() func(c *context.Context) error {
 // SecureWithConfig returns a middleware that sets security headers with config.
 func SecureWithConfig(config SecureConfig) func(c *context.Context) error {
 	return func(c *context.Context) error {
-		// X-XSS-Protection
 		if config.XSSProtection != "" {
 			c.Writer.Header().Set("X-XSS-Protection", config.XSSProtection)
 		}
-
-		// X-Content-Type-Options
 		if config.ContentTypeNosniff != "" {
 			c.Writer.Header().Set("X-Content-Type-Options", config.ContentTypeNosniff)
 		}
-
-		// X-Frame-Options
 		if config.XFrameOptions != "" {
 			c.Writer.Header().Set("X-Frame-Options", config.XFrameOptions)
 		}
-
-		// HSTS
-		if c.Request.TLS != nil && config.HSTSMaxAge != 0 {
-			subdomains := ""
-			if !config.HSTSExcludeSubdomains {
-				subdomains = "; includeSubDomains"
-			}
-			c.Writer.Header().Set("Strict-Transport-Security", fmt.Sprintf("max-age=%d%s", config.HSTSMaxAge, subdomains))
+		if config.ReferrerPolicy != "" {
+			c.Writer.Header().Set("Referrer-Policy", config.ReferrerPolicy)
+		}
+		if config.PermissionsPolicy != "" {
+			c.Writer.Header().Set("Permissions-Policy", config.PermissionsPolicy)
 		}
 
-		// CSP
+		https := c.Request.TLS != nil
+		if !https && config.HSTSIfXForwardedProto &&
+			strings.EqualFold(c.Request.Header.Get("X-Forwarded-Proto"), "https") &&
+			peerTrusted(c) {
+			https = true
+		}
+		if https && config.HSTSMaxAge != 0 {
+			val := fmt.Sprintf("max-age=%d", config.HSTSMaxAge)
+			if !config.HSTSExcludeSubdomains {
+				val += "; includeSubDomains"
+			}
+			if config.HSTSPreload {
+				val += "; preload"
+			}
+			c.Writer.Header().Set("Strict-Transport-Security", val)
+		}
+
 		if config.ContentSecurityPolicy != "" {
 			c.Writer.Header().Set("Content-Security-Policy", config.ContentSecurityPolicy)
 		}
@@ -70,4 +82,35 @@ func SecureWithConfig(config SecureConfig) func(c *context.Context) error {
 		c.Next()
 		return nil
 	}
+}
+
+func peerTrusted(c *context.Context) bool {
+	if c == nil || c.Request == nil || len(c.TrustedProxies) == 0 {
+		return false
+	}
+	host, _, err := net.SplitHostPort(c.Request.RemoteAddr)
+	if err != nil {
+		host = c.Request.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	for _, t := range c.TrustedProxies {
+		t = strings.TrimSpace(t)
+		if t == "" {
+			continue
+		}
+		if strings.Contains(t, "/") {
+			_, cidr, err := net.ParseCIDR(t)
+			if err == nil && cidr.Contains(ip) {
+				return true
+			}
+			continue
+		}
+		if tip := net.ParseIP(t); tip != nil && tip.Equal(ip) {
+			return true
+		}
+	}
+	return false
 }
