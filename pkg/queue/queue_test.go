@@ -31,6 +31,48 @@ func TestMemoryQueue_PushFull(t *testing.T) {
 	}
 }
 
+func TestMemoryQueue_RetryAndDeadLetter(t *testing.T) {
+	var dead Job
+	var deadErr error
+	done := make(chan struct{})
+	attempts := 0
+	q := NewMemoryQueue(10, 1,
+		WithDeadLetter(func(job Job, err error) {
+			dead = job
+			deadErr = err
+			close(done)
+		}),
+		WithRetryWait(5*time.Millisecond),
+	)
+	q.Register("flaky", func(job Job) error {
+		attempts++
+		return errFail
+	})
+	q.Start()
+	defer q.Stop()
+
+	if err := q.PushWithOptions("flaky", "x", PushOptions{MaxRetries: 2}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("dead letter not called")
+	}
+	if attempts != 3 { // 1 + 2 retries
+		t.Fatalf("attempts want 3 got %d", attempts)
+	}
+	if deadErr == nil || dead.Name != "flaky" {
+		t.Fatalf("dead letter: %+v %v", dead, deadErr)
+	}
+}
+
+var errFail = errString("fail")
+
+type errString string
+
+func (e errString) Error() string { return string(e) }
+
 func TestMemoryQueue_RegisterAndProcess(t *testing.T) {
 	q := NewMemoryQueue(10, 1)
 	var (

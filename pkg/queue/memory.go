@@ -17,33 +17,63 @@ type MemoryQueue struct {
 	quit        chan bool
 	wg          sync.WaitGroup
 	mu          sync.RWMutex
+	onDead      DeadLetterFunc
+	retryWait   time.Duration
+}
+
+// MemoryQueueOption configures MemoryQueue.
+type MemoryQueueOption func(*MemoryQueue)
+
+// WithDeadLetter sets a callback for jobs that fail after all retries.
+func WithDeadLetter(fn DeadLetterFunc) MemoryQueueOption {
+	return func(q *MemoryQueue) { q.onDead = fn }
+}
+
+// WithRetryWait sets delay before re-queueing a failed job (default 100ms).
+func WithRetryWait(d time.Duration) MemoryQueueOption {
+	return func(q *MemoryQueue) {
+		if d > 0 {
+			q.retryWait = d
+		}
+	}
 }
 
 // NewMemoryQueue creates a new in-memory queue.
-// bufferSize: How many jobs can be queued before blocking (e.g., 1000).
-// workerCount: How many concurrent workers to run (e.g., 10).
-func NewMemoryQueue(bufferSize int, workerCount int) *MemoryQueue {
-	return &MemoryQueue{
+// bufferSize: How many jobs can be queued before Push returns "queue is full".
+// workerCount: How many concurrent workers to run.
+func NewMemoryQueue(bufferSize int, workerCount int, opts ...MemoryQueueOption) *MemoryQueue {
+	q := &MemoryQueue{
 		jobChan:     make(chan Job, bufferSize),
 		handlers:    make(map[string]HandlerFunc),
 		workerCount: workerCount,
 		quit:        make(chan bool),
+		retryWait:   100 * time.Millisecond,
 	}
+	for _, opt := range opts {
+		opt(q)
+	}
+	return q
 }
 
 // Push adds a job to the queue (Thread-Safe).
 func (q *MemoryQueue) Push(name string, payload interface{}) error {
-	job := Job{
-		ID:        uuid.New().String(),
-		Name:      name,
-		Payload:   payload,
-		CreatedAt: time.Now(),
-	}
+	return q.PushWithOptions(name, payload, PushOptions{})
+}
 
-	// Non-blocking push if full? Or blocking?
-	// For "blazing fast", blocking is safer to apply backpressure.
-	// But if we want it to never block user, we might drop or error.
-	// Let's standard channel send.
+// PushWithOptions adds a job with retry settings.
+func (q *MemoryQueue) PushWithOptions(name string, payload interface{}, opts PushOptions) error {
+	job := Job{
+		ID:         uuid.New().String(),
+		Name:       name,
+		Payload:    payload,
+		CreatedAt:  time.Now(),
+		Attempt:    1,
+		MaxRetries: opts.MaxRetries,
+	}
+	return q.enqueue(job)
+}
+
+func (q *MemoryQueue) enqueue(job Job) error {
 	select {
 	case q.jobChan <- job:
 		return nil
@@ -97,13 +127,24 @@ func (q *MemoryQueue) process(job Job) {
 		return
 	}
 
-	// Execute
-	start := time.Now()
 	if err := handler(job); err != nil {
-		log.Printf("❌ Job %s failed: %v\n", job.ID, err)
-	} else {
-		// Log successes only in debug mode generally, but for now:
-		// log.Printf("✅ Job %s completed in %v\n", job.ID, time.Since(start))
-		_ = start
+		log.Printf("❌ Job %s attempt %d failed: %v\n", job.ID, job.Attempt, err)
+		if job.Attempt <= job.MaxRetries {
+			next := job
+			next.Attempt++
+			time.AfterFunc(q.retryWait, func() {
+				if e := q.enqueue(next); e != nil {
+					log.Printf("❌ Job %s requeue failed: %v\n", job.ID, e)
+					if q.onDead != nil {
+						q.onDead(job, err)
+					}
+				}
+			})
+			return
+		}
+		if q.onDead != nil {
+			q.onDead(job, err)
+		}
+		return
 	}
 }

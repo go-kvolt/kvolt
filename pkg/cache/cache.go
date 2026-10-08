@@ -3,6 +3,8 @@ package cache
 import (
 	"errors"
 	"time"
+
+	"github.com/bytedance/sonic"
 )
 
 var (
@@ -23,4 +25,18 @@ type Store interface {
 
 	// Flush clears all keys from the cache.
 	Flush() error
+}
+
+// GetInto loads a key and JSON-decodes it into dest (useful for Redis round-trips).
+// Memory stores that hold native values will re-marshal via JSON.
+func GetInto(store Store, key string, dest interface{}) error {
+	val, err := store.Get(key)
+	if err != nil {
+		return err
+	}
+	b, err := sonic.Marshal(val)
+	if err != nil {
+		return err
+	}
+	return sonic.Unmarshal(b, dest)
 }
