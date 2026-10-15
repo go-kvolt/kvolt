@@ -158,6 +158,9 @@ func TestAuthInterceptor_InvalidToken(t *testing.T) {
 	if st.Code() != codes.Unauthenticated {
 		t.Errorf("AuthInterceptor: want codes.Unauthenticated, got %v", st.Code())
 	}
+	if st.Message() != "unauthenticated" {
+		t.Fatalf("want generic message (no validator leak), got %q", st.Message())
+	}
 }
 
 func TestServerListenAndServe(t *testing.T) {

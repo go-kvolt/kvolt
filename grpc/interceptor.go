@@ -122,7 +122,8 @@ func AuthInterceptor(validate AuthFunc) grpc.UnaryServerInterceptor {
 			return nil, err
 		}
 		if err := validate(ctx, token); err != nil {
-			return nil, status.Errorf(codes.Unauthenticated, "invalid token: %v", err)
+			fmt.Printf("[gRPC-Auth] %s: %v\n", info.FullMethod, err)
+			return nil, status.Error(codes.Unauthenticated, "unauthenticated")
 		}
 		return handler(ctx, req)
 	}
@@ -142,7 +143,8 @@ func StreamAuthInterceptor(validate AuthFunc) grpc.StreamServerInterceptor {
 			return err
 		}
 		if err := validate(ss.Context(), token); err != nil {
-			return status.Errorf(codes.Unauthenticated, "invalid token: %v", err)
+			fmt.Printf("[gRPC-Auth] %s: %v\n", info.FullMethod, err)
+			return status.Error(codes.Unauthenticated, "unauthenticated")
 		}
 		return handler(srv, ss)
 	}
