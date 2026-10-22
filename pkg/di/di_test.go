@@ -43,3 +43,32 @@ func TestContainer_InvokeMissingService(t *testing.T) {
 		t.Error("Invoke missing: out should remain nil")
 	}
 }
+
+type Dep struct{ N int }
+
+type Wired struct{ Dep *Dep }
+
+func TestContainer_ProvideFunc(t *testing.T) {
+	c := NewContainer()
+	c.Provide(&Dep{N: 7})
+	if err := c.ProvideFunc(func(d *Dep) *Wired {
+		return &Wired{Dep: d}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var out *Wired
+	if !c.Invoke(&out) {
+		t.Fatal("Invoke Wired")
+	}
+	if out.Dep == nil || out.Dep.N != 7 {
+		t.Fatalf("wired: %#v", out)
+	}
+}
+
+func TestContainer_ProvideFuncMissingDep(t *testing.T) {
+	c := NewContainer()
+	err := c.ProvideFunc(func(d *Dep) *Wired { return &Wired{Dep: d} })
+	if err == nil {
+		t.Fatal("expected missing dependency error")
+	}
+}

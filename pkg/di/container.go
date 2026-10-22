@@ -1,6 +1,7 @@
 package di
 
 import (
+	"fmt"
 	"reflect"
 	"sync"
 )
@@ -41,7 +42,6 @@ func (c *Container) Invoke(target interface{}) bool {
 		return false
 	}
 
-	// We need the type of the element the pointer points to
 	elemType := val.Type().Elem()
 
 	if service, ok := c.services[elemType]; ok {
@@ -52,5 +52,56 @@ func (c *Container) Invoke(target interface{}) bool {
 	return false
 }
 
-// TODO: implementing Constructor injection (func NewService(dep Dep)) requires more complex reflection.
-// For KVolt v1, we stick to simple Instance Registration for speed.
+// ProvideFunc registers a service by invoking a constructor.
+// The constructor must be a function that returns T or (T, error).
+// Each parameter type is resolved from the container (exact type match).
+//
+//	c.Provide(&Dep{})
+//	c.ProvideFunc(func(d *Dep) *Service { return &Service{Dep: d} })
+func (c *Container) ProvideFunc(constructor interface{}) error {
+	fn := reflect.ValueOf(constructor)
+	if fn.Kind() != reflect.Func {
+		return fmt.Errorf("di: ProvideFunc requires a function")
+	}
+	ft := fn.Type()
+	numOut := ft.NumOut()
+	if numOut < 1 || numOut > 2 {
+		return fmt.Errorf("di: constructor must return T or (T, error)")
+	}
+	if numOut == 2 && !ft.Out(1).Implements(reflect.TypeOf((*error)(nil)).Elem()) {
+		return fmt.Errorf("di: second return value must be error")
+	}
+
+	args := make([]reflect.Value, ft.NumIn())
+	c.mu.RLock()
+	for i := 0; i < ft.NumIn(); i++ {
+		inType := ft.In(i)
+		svc, ok := c.services[inType]
+		if !ok {
+			c.mu.RUnlock()
+			return fmt.Errorf("di: missing dependency %s", inType.String())
+		}
+		args[i] = svc
+	}
+	c.mu.RUnlock()
+
+	results := fn.Call(args)
+	if numOut == 2 {
+		if errVal := results[1]; !errVal.IsNil() {
+			return errVal.Interface().(error)
+		}
+	}
+
+	instance := results[0]
+	c.mu.Lock()
+	c.services[instance.Type()] = instance
+	c.mu.Unlock()
+	return nil
+}
+
+// MustProvideFunc is ProvideFunc that panics on error.
+func (c *Container) MustProvideFunc(constructor interface{}) {
+	if err := c.ProvideFunc(constructor); err != nil {
+		panic(err)
+	}
+}

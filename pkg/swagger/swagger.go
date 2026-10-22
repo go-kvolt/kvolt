@@ -3,6 +3,7 @@ package swagger
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/go-kvolt/kvolt/v2"
@@ -30,16 +31,19 @@ func (a *kvoltAdapter) Routes() []RouteInfo {
 	var routes []RouteInfo
 	for _, r := range kvoltRoutes {
 		routes = append(routes, RouteInfo{
-			Method:  r.Method,
-			Path:    r.Path,
-			Summary: r.Summary,
+			Method:    r.Method,
+			Path:      r.Path,
+			Summary:   r.Summary,
+			Tags:      r.Tags,
+			Request:   r.Request,
+			Responses: r.Responses,
+			Security:  r.Security,
 		})
 	}
 	return routes
 }
 
-// RouteProvider interface allows decoupling from direct kvolt.Engine dependency if needed,
-// but for simplicity we can define a struct that matches kvolt.RouteInfo
+// RouteProvider interface allows decoupling from direct kvolt.Engine dependency if needed.
 type RouteProvider interface {
 	Routes() []RouteInfo
 }
@@ -47,35 +51,29 @@ type RouteProvider interface {
 // Config configures the Swagger UI.
 type Config struct {
 	// SpecJSON is the raw OpenAPI/Swagger JSON string.
-	// If empty, and App is provided, it will generate a basic spec.
+	// If empty, and RoutesProvider is set, a spec is generated from routes.
 	SpecJSON string
 	// Title is the page title. Default: "KVolt API Docs"
 	Title string
-	// App is the KVolt engine instance for auto-discovery
-	// We use an interface to avoid circular import if kvolt imports swagger.
-	// However, usually user imports both.
-	// But kvolt package already exists. Let's try to import kvolt if possible.
-	// Wait, if we import "github.com/go-kvolt/kvolt/v2" here, and user uses it, it works.
-	// But if kvolt package itself imported swagger, it would be circular.
-	// KVolt core does NOT import swagger. So we are safe.
-	// But to be generic, let's use a closure or interface.
-	// RoutesProvider is the interface for auto-discovery
+	// RoutesProvider supplies routes for auto-discovery.
 	RoutesProvider interface {
 		Routes() []RouteInfo
 	}
 	// Disabled, if true, disables the documentation endpoint (returns 404).
 	Disabled bool
-
 	// Host is the address where the server is running (e.g. "localhost:8080").
-	// Used for logging the full URL on startup.
 	Host string
 }
 
-// RouteInfo must match kvolt.RouteInfo
+// RouteInfo mirrors kvolt.RouteInfo for OpenAPI generation.
 type RouteInfo struct {
-	Method  string
-	Path    string
-	Summary string
+	Method    string
+	Path      string
+	Summary   string
+	Tags      []string
+	Request   interface{}
+	Responses map[int]interface{}
+	Security  []string
 }
 
 // Handler returns a KVolt handler that serves the Swagger UI and the spec.
@@ -85,21 +83,17 @@ func Handler(cfg Config) func(c *context.Context) error {
 		cfg.Title = "KVolt API Docs"
 	}
 
-	// Lazy generation of spec
 	var cachedSpec []byte
 
 	if !cfg.Disabled {
 		baseURL := cfg.Host
 		if baseURL == "" {
-			baseURL = "localhost" // Fallback
+			baseURL = "localhost"
 		}
-		// If Host doesn't contain scheme, assume http://
 		if !strings.HasPrefix(baseURL, "http") {
 			baseURL = "http://" + baseURL
 		}
-		// We can't know the mount path (e.g. /swagger/*any) inside the handler factory easily
-		// unless passed, but user usually mounts at /swagger.
-		fmt.Printf("📖 API Documentation enabled: %s/swagger/index.html\n", baseURL)
+		fmt.Printf("API Documentation enabled: %s/swagger/index.html\n", baseURL)
 	}
 
 	return func(c *context.Context) error {
@@ -109,7 +103,6 @@ func Handler(cfg Config) func(c *context.Context) error {
 
 		path := c.Param("any")
 
-		// 1. Serve the Spec JSON
 		if strings.HasSuffix(path, "doc.json") {
 			c.Writer.Header().Set("Content-Type", "application/json")
 			c.Writer.WriteHeader(200)
@@ -119,7 +112,6 @@ func Handler(cfg Config) func(c *context.Context) error {
 				return err
 			}
 
-			// Generate if not provided
 			if len(cachedSpec) == 0 && cfg.RoutesProvider != nil {
 				routes := cfg.RoutesProvider.Routes()
 				cachedSpec = generateOpenAPI(routes, cfg.Title)
@@ -130,11 +122,9 @@ func Handler(cfg Config) func(c *context.Context) error {
 				return err
 			}
 
-			// Fallback empty spec
 			return c.String(200, "{}")
 		}
 
-		// 2. Serve the HTML UI
 		c.Writer.Header().Set("Content-Type", "text/html")
 		html := fmt.Sprintf(uiTemplate, cfg.Title)
 		return c.HTML(200, html)
@@ -149,22 +139,17 @@ func generateOpenAPI(routes []RouteInfo, title string) []byte {
 			continue
 		}
 
-		// Parse parameters from path (e.g. /users/:id -> {id} and add to param list)
 		var parameters []map[string]interface{}
 		segments := strings.Split(r.Path, "/")
 		for i, seg := range segments {
 			if strings.HasPrefix(seg, ":") || strings.HasPrefix(seg, "*") {
 				paramName := seg[1:]
 				segments[i] = "{" + paramName + "}"
-
-				// Create parameter definition
 				parameters = append(parameters, map[string]interface{}{
 					"name":     paramName,
 					"in":       "path",
 					"required": true,
-					"schema": map[string]string{
-						"type": "string", // Default to string for auto-generated
-					},
+					"schema":   map[string]string{"type": "string"},
 				})
 			}
 		}
@@ -180,15 +165,48 @@ func generateOpenAPI(routes []RouteInfo, title string) []byte {
 			summary = fmt.Sprintf("%s %s", r.Method, r.Path)
 		}
 
-		operation := map[string]interface{}{
-			"summary": summary,
-			"responses": map[string]interface{}{
-				"200": map[string]string{"description": "OK"},
-			},
+		responses := map[string]interface{}{}
+		if len(r.Responses) == 0 {
+			responses["200"] = map[string]string{"description": "OK"}
+		} else {
+			for code, sample := range r.Responses {
+				responses[strconv.Itoa(code)] = map[string]interface{}{
+					"description": httpStatusText(code),
+					"content": map[string]interface{}{
+						"application/json": map[string]interface{}{
+							"schema": SchemaFromSample(sample),
+						},
+					},
+				}
+			}
 		}
 
+		operation := map[string]interface{}{
+			"summary":   summary,
+			"responses": responses,
+		}
+		if len(r.Tags) > 0 {
+			operation["tags"] = r.Tags
+		}
 		if len(parameters) > 0 {
 			operation["parameters"] = parameters
+		}
+		if r.Request != nil {
+			operation["requestBody"] = map[string]interface{}{
+				"required": true,
+				"content": map[string]interface{}{
+					"application/json": map[string]interface{}{
+						"schema": SchemaFromSample(r.Request),
+					},
+				},
+			}
+		}
+		if len(r.Security) > 0 {
+			var sec []map[string][]string
+			for _, s := range r.Security {
+				sec = append(sec, map[string][]string{s: {}})
+			}
+			operation["security"] = sec
 		}
 
 		paths[openAPIPath][method] = operation
@@ -205,6 +223,36 @@ func generateOpenAPI(routes []RouteInfo, title string) []byte {
 
 	b, _ := json.Marshal(spec)
 	return b
+}
+
+func httpStatusText(code int) string {
+	if t := statusText(code); t != "" {
+		return t
+	}
+	return strconv.Itoa(code)
+}
+
+func statusText(code int) string {
+	switch code {
+	case 200:
+		return "OK"
+	case 201:
+		return "Created"
+	case 204:
+		return "No Content"
+	case 400:
+		return "Bad Request"
+	case 401:
+		return "Unauthorized"
+	case 403:
+		return "Forbidden"
+	case 404:
+		return "Not Found"
+	case 500:
+		return "Internal Server Error"
+	default:
+		return ""
+	}
 }
 
 const uiTemplate = `<!doctype html>

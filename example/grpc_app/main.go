@@ -4,7 +4,7 @@
 //   - Create a kvolt HTTP app with routes
 //   - Initialize a gRPC server with interceptors
 //   - Register a gRPC service
-//   - Run both servers concurrently with RunAll()
+//   - Run both servers concurrently with grpc.RunDual()
 //
 // To generate the proto Go code:
 //
@@ -93,8 +93,9 @@ func main() {
 		return c.JSON(200, map[string]string{"status": "ok"})
 	})
 
-	// ── gRPC server ──
-	grpcSrv := app.GRPCServer(
+	// ── gRPC server (optional package — not pulled by kvolt.Default) ──
+	// Reflection is convenient for local grpcurl; disable in production.
+	grpcSrv := kvgrpc.Attach(app,
 		kvgrpc.WithReflection(true),
 		kvgrpc.WithHealthCheck(true),
 		kvgrpc.WithUnaryInterceptors(
@@ -113,7 +114,7 @@ func main() {
 
 	// ── Start both HTTP (:8080) and gRPC (:9090) ──
 	fmt.Println("Starting KVolt with HTTP + gRPC...")
-	if err := app.RunAll(":8080", ":9090"); err != nil {
+	if err := kvgrpc.RunDual(app, ":8080", ":9090"); err != nil {
 		fmt.Printf("Fatal: %v\n", err)
 	}
 }
