@@ -42,19 +42,75 @@ app.Use(middleware.GzipWithConfig(middleware.GzipConfig{
 
 
 ### 4. CORS
-Configures Cross-Origin Resource Sharing.
-
 ```go
-app.Use(middleware.CORS())
+app.Use(middleware.CORS()) // Allow-Origin * (no credentials)
+
+app.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+    AllowOrigins:     []string{"https://app.example.com"},
+    AllowCredentials: true,
+    MaxAge:           600,
+}))
 ```
+
+Never combine `AllowOrigins: ["*"]` with `AllowCredentials: true` (browsers reject it; KVolt disables credentials in that case).
 
 ### 5. Rate Limiter
-Protect your API from abuse using the Token Bucket rate limiter.
+In-process token bucket (default key: `ClientIP()` — set `Engine.TrustedProxies` behind a load balancer).
+`MaxKeys` (default 10000) bounds memory if your `KeyFunc` is high-cardinality:
 
 ```go
-// Allow 100 requests per second with a burst of 200
 app.Use(middleware.Limiter(100, 200))
+
+app.Use(middleware.LimiterWithConfig(middleware.LimiterConfig{
+    RPS: 50, Burst: 100, MaxKeys: 10000,
+    KeyFunc: func(c *context.Context) string {
+        if k := c.Request.Header.Get("X-API-Key"); k != "" {
+            return "key:" + k
+        }
+        return c.ClientIP()
+    },
+}))
 ```
+
+Multi-instance Redis limiter (optional package):
+
+```go
+import "github.com/go-kvolt/kvolt/v2/middleware/redislimit"
+
+app.Use(redislimit.New(rdb, 100, time.Second))
+```
+
+### 5b. Metrics
+In-process request counters (optional `OnRequest` hook for OTel):
+
+```go
+store := &middleware.MetricsStore{}
+app.Use(middleware.Metrics(store))
+app.GET("/metrics.json", func(c *context.Context) error {
+    return c.JSON(200, store.Snapshot())
+})
+```
+
+### 5c. Prometheus (optional package)
+Does not pull `client_golang` unless imported:
+
+```go
+import kvprom "github.com/go-kvolt/kvolt/v2/middleware/prometheus"
+
+app.Use(kvprom.Middleware())
+app.GET("/metrics", kvprom.Handler())
+```
+
+### 5d. CSRF
+Double-submit cookie protection for browser cookie sessions:
+
+```go
+app.Use(middleware.CSRF())
+// or CSRFWithConfig(CSRFConfig{SkipPaths: []string{"/webhooks"}, InsecureCookie: true}) // local HTTP only
+```
+
+Safe methods set a `csrf_token` cookie when missing. Mutating methods require header `X-CSRF-Token` to match.
+The cookie `Secure` flag is set automatically on HTTPS (TLS or trusted `X-Forwarded-Proto`); use `InsecureCookie` for plain local HTTP.
 
 ### 6. Secure Headers
 Protects your application from common web vulnerabilities by setting standard HTTP headers (HSTS, X-Frame-Options, CSP, etc.).
@@ -73,6 +129,8 @@ app.Use(middleware.SecureWithConfig(middleware.SecureConfig{
 }))
 ```
 
+HSTS is set only for TLS requests, or when `X-Forwarded-Proto: https` comes from a peer in `Engine.TrustedProxies` (spoofed headers from clients are ignored).
+
 ### 7. Max Body Size
 Limit request body size to prevent large-payload attacks. Reads beyond the limit fail (e.g. in `Bind()`); handle the error and respond with 413 if desired.
 
@@ -84,7 +142,7 @@ app.Use(middleware.MaxBodySize(1 << 20)) // 1MB
 `kvolt.Default()` already includes a 1MB limit.
 
 ### 8. Request ID
-Sets `X-Request-ID` on every response. Reuses the incoming header when present.
+Sets `X-Request-ID` on every response. Reuses a sanitized incoming header when present (alphanumeric / `.` / `_` / `-`, max 128); otherwise generates a UUID.
 
 ```go
 app.Use(middleware.RequestID())
@@ -99,13 +157,19 @@ app.Use(middleware.Timeout(15 * time.Second))
 ```
 
 ### 10. JWT Authentication
-Secure your routes with JSON Web Tokens.
-
 ```go
 app.Use(middleware.JWT(middleware.JWTConfig{
-    SigningKey:  "secret-key",
-    TokenLookup: "header:Authorization", // or "query:token", "cookie:auth"
+    SigningKey:  os.Getenv("JWT_SECRET"), // required
+    TokenLookup: "header:Authorization",
 }))
+```
+
+### 11. Basic Auth / API Key / Health
+```go
+app.GET("/admin", middleware.BasicAuth(map[string]string{"a": "b"}), h)
+app.GET("/api", middleware.APIKey("secret"), h)
+app.GET("/livez", middleware.Live())
+app.GET("/readyz", middleware.Ready(&readyFlag))
 ```
 
 ## Creating Custom Middleware

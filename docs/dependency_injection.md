@@ -1,20 +1,17 @@
-# Dependency Injection 💉
+# Dependency Injection
 
-KVolt includes a lightweight dependency injection container in `pkg/di`. It supports singleton service registration and injection.
+KVolt includes a lightweight DI container in `pkg/di` for singleton registration, lookup, and constructor injection.
 
-## Usage
+## Instance registration
 
 ```go
 package main
 
 import (
     "fmt"
-    "github.com/go-kvolt/kvolt/pkg/di"
-)
 
-type Database interface {
-    Connect()
-}
+    "github.com/go-kvolt/kvolt/v2/pkg/di"
+)
 
 type PostgresDB struct{}
 
@@ -23,22 +20,42 @@ func (p *PostgresDB) Connect() {
 }
 
 func main() {
-    // 1. Create Container
     container := di.NewContainer()
-
-    // 2. Register Service (Singleton)
     container.Provide(&PostgresDB{})
 
-    // 3. Resolve Service
     var db *PostgresDB
     if container.Invoke(&db) {
-        db.Connect() // Prints: Connected to Postgres
+        db.Connect()
     }
 }
 ```
 
+## Constructor injection
+
+`ProvideFunc` calls a constructor and resolves each parameter type from the container (exact type match, usually pointers).
+
+```go
+type Dep struct{}
+type Service struct{ Dep *Dep }
+
+container.Provide(&Dep{})
+err := container.ProvideFunc(func(d *Dep) *Service {
+    return &Service{Dep: d}
+})
+// or: container.MustProvideFunc(...)
+
+var svc *Service
+container.Invoke(&svc)
+```
+
+Constructors may return `(T, error)`. Missing dependencies return an error from `ProvideFunc`.
+
 ## API
 
--   `NewContainer()`: Creates a new container.
--   `Provide(service interface{})`: Registers a service instance. The type is inferred from the passed value.
--   `Invoke(target interface{}) bool`: Populates the target pointer with the registered service. Returns `true` if found.
+| Method | Description |
+| :--- | :--- |
+| `NewContainer()` | Create a container |
+| `Provide(service)` | Register a singleton instance |
+| `ProvideFunc(ctor)` | Build and register via constructor |
+| `MustProvideFunc(ctor)` | Like `ProvideFunc`, panics on error |
+| `Invoke(target)` | Fill a pointer; returns false if missing |

@@ -1,45 +1,62 @@
-# API Documentation (Swagger) 📜
+# API Documentation (Swagger)
 
-KVolt has built-in support for generating OpenAPI 3.0 specifications and serving them via a beautiful UI (Scalar).
+KVolt generates OpenAPI 3.0 specs and serves them with Scalar.
 
 ## Setup
-
-To enable the documentation endpoint, you need to register the swagger handler.
 
 ```go
 package main
 
 import (
-    "github.com/go-kvolt/kvolt"
-    "github.com/go-kvolt/kvolt/context"
-    "github.com/go-kvolt/kvolt/pkg/swagger"
+    "github.com/go-kvolt/kvolt/v2"
+    "github.com/go-kvolt/kvolt/v2/context"
+    "github.com/go-kvolt/kvolt/v2/pkg/swagger"
 )
 
+type CreateUser struct {
+    Email string `json:"email"`
+    Name  string `json:"name,omitempty"`
+}
+
+type User struct {
+    ID    string `json:"id"`
+    Email string `json:"email"`
+}
+
 func main() {
-    app := kvolt.New()
+    app := kvolt.Default()
 
-    // Define Routes
-    app.GET("/users", func(c *context.Context) error {
-        return c.String(200, "Users")
-    }).Desc("Get all users") // Add description for docs
+    app.POST("/users", func(c *context.Context) error {
+        var in CreateUser
+        if err := c.BindJSON(&in); err != nil {
+            return err
+        }
+        return c.JSON(201, User{ID: "1", Email: in.Email})
+    }).
+        Desc("Create user").
+        Tags("users").
+        Request(CreateUser{}).
+        Response(201, User{}).
+        Security("bearer")
 
-    // 1. Read Generated Spec (optional, if using swaggo)
-    // doc, _ := swagger.ReadDoc()
-
-    // 2. Serve API docs (Scalar UI)
-    // Visits http://localhost:8080/swagger/index.html
     app.GET("/swagger/*any", swagger.Handler(swagger.Config{
-          Title:          "My API Docs",
-          RoutesProvider: swagger.Adapter(app), // Auto-discover routes
+        Title:          "My API Docs",
+        RoutesProvider: swagger.Adapter(app),
+        Host:           "localhost:8080",
     }))
 
     app.Run(":8080")
 }
 ```
 
+Visit `http://localhost:8080/swagger/index.html`.
+
 ## Features
 
--   **Auto-Discovery**: `swagger.Adapter(app)` automatically scans your registered routes.
--   **Descriptions**: Use `.Desc("Summary")` on your route definitions to add documentation.
--   **Scalar UI**: Uses the modern Scalar UI for rendering.
--   **Parameter Parsing**: Automatically detects `:id` and `*wildcard` parameters and adds them to the spec.
+-   **Auto-discovery** via `swagger.Adapter(app)`
+-   **`.Desc` / `.Tags` / `.Request` / `.Response` / `.Security`** on routes
+-   **Schema reflection** from sample structs (`json` tags; `omitempty` → not required)
+-   **Path params** from `:id` / `*wildcard`
+-   **Scalar UI**
+
+Limits: exotic Go types become generic `object`; prefer JSON-friendly samples.

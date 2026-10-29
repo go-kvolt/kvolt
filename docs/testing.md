@@ -4,7 +4,7 @@ KVolt is designed with testability in mind. You can use **`pkg/test`** (fluent r
 
 ## Using `pkg/test` (recommended for most tests)
 
-Import as `kvtest "github.com/go-kvolt/kvolt/pkg/test"`. Build a request, call `Do()`, then chain assertions.
+Import as `kvtest "github.com/go-kvolt/kvolt/v2/pkg/test"`. Build a request, call `Do()`, then chain assertions.
 
 ```go
 test := kvtest.New(t, app)

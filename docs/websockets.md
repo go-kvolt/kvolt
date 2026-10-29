@@ -19,8 +19,8 @@ package main
 import (
     "log"
     "sync"
-    "github.com/go-kvolt/kvolt"
-    "github.com/go-kvolt/kvolt/context"
+    "github.com/go-kvolt/kvolt/v2"
+    "github.com/go-kvolt/kvolt/v2/context"
     "github.com/gorilla/websocket"
 )
 

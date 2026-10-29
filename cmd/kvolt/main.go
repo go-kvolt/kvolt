@@ -279,7 +279,7 @@ func %s() func(c *context.Context) error {
 
 func runDocker() {
 	const dockerfile = `# Build stage
-FROM golang:1.22-alpine AS builder
+FROM golang:1.27-alpine AS builder
 WORKDIR /app
 COPY go.mod ./
 RUN go mod download
@@ -320,7 +320,7 @@ func createProject(name string) {
 	}
 
 	// 1. Create go.mod
-	goModContent := fmt.Sprintf("module %s\n\ngo 1.25\n", name)
+	goModContent := fmt.Sprintf("module %s\n\ngo 1.27\n", name)
 	writeFile(filepath.Join(name, "go.mod"), goModContent)
 
 	// 2. Create .env
@@ -347,6 +347,7 @@ import (
 	"github.com/go-kvolt/kvolt/v2"
 	"github.com/go-kvolt/kvolt/v2/context"
 	"github.com/go-kvolt/kvolt/v2/pkg/config"
+	"github.com/go-kvolt/kvolt/v2/pkg/httperr"
 )
 
 type Config struct {
@@ -356,16 +357,14 @@ type Config struct {
 }
 
 func main() {
-	// 1. Load Configuration
 	var cfg Config
 	if err := config.Load(&cfg); err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// 2. Initialize App
+	// Default() includes Recovery, RequestID, MaxBodySize.
 	app := kvolt.Default()
 
-	// 3. Define Routes
 	app.GET("/", func(c *context.Context) error {
 		return c.JSON(200, map[string]interface{}{
 			"message": "Welcome to " + cfg.AppName,
@@ -374,9 +373,15 @@ func main() {
 		})
 	})
 
-	// 4. Run Server
+	app.GET("/health", func(c *context.Context) error {
+		if !cfg.Debug {
+			return httperr.NotFound("not_found", "not found")
+		}
+		return c.JSON(200, map[string]string{"status": "ok"})
+	})
+
 	addr := fmt.Sprintf(":%d", cfg.Port)
-	fmt.Printf("🚀 %s running on %s\n", cfg.AppName, addr)
+	fmt.Printf("%s running on %s\n", cfg.AppName, addr)
 	app.Run(addr)
 }
 `

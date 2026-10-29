@@ -1,10 +1,10 @@
-# Validation ✅
+# Validation
 
-KVolt includes a struct validator package `pkg/validator` to ensure data integrity for your request inputs.
+`Context.Bind` decodes JSON then validates with **[go-playground/validator/v10](https://github.com/go-playground/validator)** (`validate` struct tags).
 
-## Usage
+`pkg/validator` is a small optional helper for manual checks; it is **not** what `Bind` uses.
 
-Tag your struct fields with regex-like validation rules using the `validate` tag.
+## Usage with Bind
 
 ```go
 type RegisterRequest struct {
@@ -16,43 +16,17 @@ type RegisterRequest struct {
 
 app.POST("/register", func(c *context.Context) error {
     var req RegisterRequest
-    
-    // 1. Bind JSON (Parses body)
     if err := c.Bind(&req); err != nil {
-        return c.Status(400).JSON(400, map[string]string{
-            "error": "Invalid JSON format",
-        })
+        return httperr.BadRequest("validation_failed", err.Error())
     }
-
-    // 2. Validate (Checks struct tags)
-    // Note: c.Bind() typically calls Validate() internally if your framework supports it, 
-    // but here we show explicit validation usage if needed separate from binding.
-    // *In KVolt, c.Bind() calls validator.Validate() automatically!*
-    // So if you reach here, validation has already passed. 
-    // If you want to handle validation errors specifically:
-    
-    /* 
-    err := c.Bind(&req)
-    if err != nil {
-       // Check if it's a validation error
-       return c.JSON(400, map[string]string{"error": err.Error()})
-    } 
-    */
-
-    return c.JSON(201, map[string]string{
-        "message": "User registered successfully",
-        "username": req.Username,
-    })
+    return c.JSON(200, req)
 })
 ```
 
+- `BindJSON` — decode only (no validation)
+- `Bind` — decode + playground validation
+- `BindQuery` / `BindForm` / `BindURI` — bind from query/form/path (`form` / `query` / `uri` tags); validate separately with `validator/v10` if needed
 
-## Supported Tags
+## Common tags
 
-| Tag | Description | Example |
-| :--- | :--- | :--- |
-| `required` | Field cannot be empty, nil, or zero. | `validate:"required"` |
-| `email` | Field must be a valid email format. | `validate:"email"` |
-| `min=n` | String must be at least `n` characters long. | `validate:"min=5"` |
-
-> Note: To chain multiple rules, separate them with a comma (e.g., `required,email`).
+`required`, `email`, `min`, `max`, `len`, `oneof`, `uuid`, and many more — see playground docs.

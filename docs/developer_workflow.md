@@ -29,7 +29,7 @@ KVolt provides two test helpers for your app.
 
 ### 1. `pkg/test` (fluent API)
 
-Import as `kvtest "github.com/go-kvolt/kvolt/pkg/test"`. Build requests, run them, assert on response.
+Import as `kvtest "github.com/go-kvolt/kvolt/v2/pkg/test"`. Build requests, run them, assert on response.
 
 ```go
 test := kvtest.New(t, app)
@@ -47,7 +47,7 @@ Methods: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `WithHeader`, `WithJSON`, `Wit
 
 ### 2. `pkg/testkit` (simple API)
 
-Import `"github.com/go-kvolt/kvolt/pkg/testkit"`. Good for table-driven tests.
+Import `"github.com/go-kvolt/kvolt/v2/pkg/testkit"`. Good for table-driven tests.
 
 ```go
 ts := testkit.New(app)

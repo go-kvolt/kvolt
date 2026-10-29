@@ -9,7 +9,8 @@ Welcome to the official documentation for KVolt **v2.0** (production).
 -   **[Context API](context.md)**: The heart of every request (`BindJSON`, `Query`).
 
 ## Core Features
--   **[Middleware](middleware.md)**: Logger, Recovery, RequestID, Timeout, JWT, Rate Limiter, CORS, Secure, Gzip.
+-   **[Middleware](middleware.md)**: Logger, Recovery, RequestID, Timeout, JWT / JWTOptional, Rate Limiter (keyed), Metrics, CORS, Secure, Gzip.
+-   **[Structured Errors](errors.md)**: `pkg/httperr` + automatic JSON mapping.
 -   **[gRPC](grpc.md)**: HTTP + gRPC in one process.
 -   **[Configuration](configuration.md)**: Manage secrets and settings.
 -   **[Caching](caching.md)**: High-performance in-memory cache (LRU cap).
@@ -18,7 +19,8 @@ Welcome to the official documentation for KVolt **v2.0** (production).
 -   **[Session Authentication](session.md)**: Stateful session management.
 -   **[Templates](templates.md)**: HTML rendering.
 -   **[WebSockets](websockets.md)**: Real-time communication.
--   **[Background Jobs](queue.md)**: Async task processing.
+-   **[Server-Sent Events](sse.md)**: Streaming events to the browser.
+-   **[Background Jobs](queue.md)**: Async task processing (memory + Redis).
 -   **[Task Scheduler](scheduler.md)**: Cron jobs for recurring tasks.
 -   **[Dependency Injection](dependency_injection.md)**: Simple IoC container.
 -   **[Logging](logging.md)**: Structured JSON logging.
@@ -26,11 +28,12 @@ Welcome to the official documentation for KVolt **v2.0** (production).
 
 ## Testing & Quality
 -   **[Testing Guide](testing.md)**: Unit testing with `pkg/test` and `pkg/testkit`.
+-   **[Benchmarks](benchmarks.md)**: Reproducible microbenchmarks (`scripts/bench.ps1`).
 -   **[Developer Workflow](developer_workflow.md)**: Lint, test, and run your app (fmt, vet, test helpers, CLI).
 -   **[Go Report Card locally](report_card.md)**: Run Report Card–style checks (fmt, vet, lint) on your machine.
 
 ## Packages
--   `pkg/config`: Configuration loader.
--   `pkg/validator`: Struct validation.
--   `pkg/logger`: Structured logging.
--   `pkg/testkit`: Test utilities.
+-   `pkg/config`, `pkg/logger`, `pkg/validator`, `pkg/httperr`
+-   `pkg/cache` (memory + Redis), `pkg/queue` (memory + Redis), `pkg/session`
+-   `pkg/di`, `pkg/auth`, `pkg/scheduler`, `pkg/swagger`
+-   `pkg/test`, `pkg/testkit`

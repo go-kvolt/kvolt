@@ -12,7 +12,7 @@ package main
 import (
     "fmt"
     "log"
-    "github.com/go-kvolt/kvolt/pkg/config"
+    "github.com/go-kvolt/kvolt/v2/pkg/config"
 )
 
 type Config struct {
@@ -61,7 +61,7 @@ package main
 import (
     "fmt"
     "log"
-    "github.com/go-kvolt/kvolt/pkg/config"
+    "github.com/go-kvolt/kvolt/v2/pkg/config"
 )
 
 type DatabaseConfig struct {

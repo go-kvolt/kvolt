@@ -9,7 +9,7 @@ package main
 
 import (
     "os"
-    "github.com/go-kvolt/kvolt/pkg/logger"
+    "github.com/go-kvolt/kvolt/v2/pkg/logger"
 )
 
 func main() {

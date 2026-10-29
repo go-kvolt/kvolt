@@ -1,122 +1,67 @@
-# Authentication 🔐
+# Authentication
 
-KVolt provides utilities for securing your application, primarily through JSON Web Tokens (JWT).
+KVolt uses **HS256 JWT** via `github.com/golang-jwt/jwt/v5` for both:
 
-## JWT Middleware
+- `pkg/auth` — `GenerateToken` / `ParseToken` (set secret first)
+- `middleware.JWT` / `middleware.JWTOptional` — request validation
 
-The `middleware.JWT` middleware validates tokens on incoming requests.
+There is **no default secret**. Misconfiguration fails closed.
+
+## Generate tokens
 
 ```go
-import "github.com/go-kvolt/kvolt/middleware"
+import (
+    "time"
+    "github.com/go-kvolt/kvolt/v2/pkg/auth"
+)
 
-// ...
+auth.SetSecret(os.Getenv("JWT_SECRET")) // or hard-fail at startup if empty
+
+token, err := auth.GenerateToken(auth.Claims{
+    "sub":  "user-123",
+    "role": "admin",
+}, 24*time.Hour)
+```
+
+You can also set `JWT_SECRET` in the environment before process start.
+
+## Protect routes
+
+```go
+import "github.com/go-kvolt/kvolt/v2/middleware"
 
 app.Use(middleware.JWT(middleware.JWTConfig{
-    SigningKey: "your-secret-key",
+    SigningKey: os.Getenv("JWT_SECRET"), // required — empty panics
+}))
+
+// Optional bearer (anonymous if missing; invalid still 401)
+app.Use(middleware.JWTOptional(middleware.JWTConfig{
+    SigningKey: os.Getenv("JWT_SECRET"),
 }))
 ```
 
-### Configuration Options
-
 | Option | Description | Default |
 | :--- | :--- | :--- |
-| `SigningKey` | Secret key used to sign tokens (Required). | - |
-| `ContextKey` | Key to store claims in `c.Context`. | `"user"` |
-| `TokenLookup` | Source of the token (`header`, `query`, `cookie`). | `"header:Authorization"` |
-| `AuthScheme` | Prefix for the header value (e.g. Bearer). | `"Bearer"` |
+| `SigningKey` | HMAC secret (**required**) | — |
+| `TokenLookup` | `header`, `query`, or `cookie` | `header:Authorization` |
+| `ContextKey` | Where claims are stored | `"user"` |
 
+Prefer **header** tokens. Query tokens can leak via logs and Referer.
 
-## Real-World Example: Login & Protection
-
-Here is a complete example showing how to implement a Login endpoint (generating tokens) and a Protected endpoint (validating tokens).
+## Read claims
 
 ```go
-package main
-
-import (
-    "time"
-    "github.com/go-kvolt/kvolt"
-    "github.com/go-kvolt/kvolt/context"
-    "github.com/go-kvolt/kvolt/middleware"
-    "github.com/go-kvolt/kvolt/pkg/auth"
-    "github.com/golang-jwt/jwt/v5"
-)
-
-func main() {
-    app := kvolt.New()
-    
-    // Shared Secret (Optional: KVolt automatically loads JWT_SECRET from environment)
-    secret := "super-secret-key"
-    
-    // Update pkg/auth secret programmatically
-    auth.SetSecret(secret)
-
-    // 1. Login Endpoint (Public)
-    app.POST("/login", func(c *context.Context) error {
-        var creds struct {
-            Username string `json:"username"`
-            Password string `json:"password"`
-        }
-        if err := c.Bind(&creds); err != nil {
-            return c.Status(400).String(400, "Invalid Request")
-        }
-
-        // Mock User Check (Replace with DB check)
-        if creds.Username != "admin" || creds.Password != "password" {
-            return c.Status(401).String(401, "Invalid Credentials")
-        }
-
-        // Generate Token using pkg/auth helper
-        token, err := auth.GenerateToken(auth.Claims{
-            "sub":  "123",
-            "name": "Admin User",
-            "role": "admin",
-        }, 30*time.Minute)
-        
-        if err != nil {
-            return c.Status(500).String(500, "Could not generate token")
-        }
-
-        return c.JSON(200, map[string]string{
-            "token": token,
-        })
-    })
-
-    // 2. Setup JWT Middleware for Protected Routes
-    authMiddleware := middleware.JWT(middleware.JWTConfig{
-        SigningKey: secret,
-    })
-
-    // 3. Protected Routes
-    protected := app.Group("/api")
-    protected.Use(authMiddleware)
-    {
-        protected.GET("/profile", func(c *context.Context) error {
-            // Retrieve claims set by the middleware
-            user := c.MustGet("user").(jwt.MapClaims)
-            
-            return c.JSON(200, map[string]interface{}{
-                "message": "Welcome back!",
-                "user_id": user["sub"],
-                "role":    user["role"],
-            })
-        })
-    }
-
-    app.Run(":8080")
-}
+claims, ok := middleware.Claims(c)
+role := middleware.ClaimString(c, "role")
 ```
 
-## Token Extraction Strategy
+## Basic Auth / API keys
 
-KVolt supports multiple ways to extract tokens:
+```go
+app.GET("/admin", middleware.BasicAuth(map[string]string{"admin": "secret"}), handler)
+app.GET("/api", middleware.APIKey("my-api-key"), handler)
+```
 
-1.  **Header**: `TokenLookup: "header:Authorization"` (e.g., `Authorization: Bearer <token>`)
-2.  **Query**: `TokenLookup: "query:token"` (e.g., `?token=<token>`)
-3.  **Cookie**: `TokenLookup: "cookie:auth_token"`
+## Sessions
 
-## Helper Package (`pkg/auth`)
-
-The `pkg/auth` package (if available) may contain helpers for password hashing (Bcrypt) and token generation.
-
-*(Check your local `pkg/auth` for specific helper functions)*
+See [session.md](session.md) for cookie sessions + CSRF.

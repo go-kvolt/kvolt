@@ -52,6 +52,30 @@ if err := c.Bind(&u); err != nil {
 // Use 'u' safely here...
 ```
 
+## Raw body (webhooks)
+
+Read bytes for signature checks without breaking later `Bind`/`BindJSON`:
+
+```go
+raw, err := c.RawBody()
+// verify HMAC(raw, secret) …
+var evt Event
+if err := c.BindJSON(&evt); err != nil { … }
+```
+
+## Uploads
+
+```go
+fh, err := c.FormFileAllowed("image", 8<<20, ".jpg", ".png", ".webp")
+if err != nil { return err }
+// Always basename client filenames (blocks path traversal):
+_ = c.SaveUploadedFile(fh, context.SafeUploadPath("./uploads", fh.Filename))
+```
+
+## Structured errors
+
+See [errors.md](errors.md). Prefer `return httperr.BadRequest(...)` from handlers.
+
 ## Data Sharing (Keys)
 
 Share data between middleware and handlers.
@@ -71,17 +95,34 @@ c.RenderHTML(200, "index.html", data)
 c.HTML(200, "<h1>Hello</h1>")
 ```
 
-## File Uploads
-
-```go
-file, _ := c.FormFile("profile_pic")
-c.SaveUploadedFile(file, "./uploads/"+file.Filename)
-```
-
 ## Sending Files
 
 ```go
+// Static path you control:
 c.File("./public/document.pdf")
+
+// User-supplied name under a root (blocks traversal):
+_ = c.FileFrom("./public", name)
+_ = c.AttachmentFrom("./exports", name, "report.pdf")
+```
+
+## Cookies
+
+```go
+c.SetCookie("session_id", token, 86400, "/", "", true, true)
+c.SetCookieWith("csrf_token", tok, context.CookieOptions{
+    Path: "/", MaxAge: 86400, HTTPOnly: false, SameSite: http.SameSiteLaxMode,
+})
+c.ClearCookie("session_id", "/", "")
+```
+
+## Server-Sent Events
+
+See [sse.md](sse.md).
+
+```go
+_ = c.SSE()
+_ = c.Event("tick", "1")
 ```
 
 ## WebSockets

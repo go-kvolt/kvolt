@@ -6,7 +6,7 @@ KVolt is a high-performance, developer-friendly Go web framework designed for bu
 
 ### Prerequisites
 
--   **Go**: Version 1.21 or higher.
+-   **Go**: Version 1.27 or higher (matches `go.mod`).
 
 ### Option 1: Using the KVolt CLI (Recommended)
 
