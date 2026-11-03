@@ -6,7 +6,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-_No changes yet._
+### Changed
+
+- **Go toolchain**: module requires **Go 1.27** (`toolchain go1.27.3`) for runtime/compiler improvements (e.g. size-specialized malloc) and current security fixes.
+- **sonic** bumped to **v1.15.5** (Go 1.27-compatible; avoids encoding/json fallback).
+- **Benchmarks**: reproducible microbenches (`bench_test.go`, `router`/`context` benches, `scripts/bench.ps1`); README marketing Req/Sec removed — see [`docs/benchmarks.md`](docs/benchmarks.md).
+
+### Security
+
+- **`Context.Redirect`**: same-origin path only (`/...`); blocks open redirects / `@` / schemes; use **`RedirectURL`** for trusted absolutes.
+- **`Attachment`**: sanitizes download filenames (strips CR/LF/quotes/path segments).
+- **`FileFrom` / `AttachmentFrom`**: serve under a root without path traversal (incl. symlink escape via `EvalSymlinks`); prefer over raw `File` with user input.
+- **`Ready`**: readiness failures return generic `not_ready` (checker errors logged only).
+- **gRPC `AuthInterceptor`**: returns generic `unauthenticated` (validator details logged only).
+- **SSE**: strips CR/LF from `event`/`id` fields (blocks frame injection).
+- **`SaveUploadedFile`**: rejects non-local / escaping destinations (`filepath.IsLocal`); prefer **`SafeUploadPath`**.
+- **`RequestID`**: sanitizes incoming `X-Request-ID` (no header injection).
+- **`Secure` HSTS**: only for TLS or trusted-proxy `X-Forwarded-Proto: https`.
+- **`CSRF`**: auto `Secure` cookie on HTTPS; empty `SkipPaths` entries ignored; `InsecureCookie` / `ManualSecure` overrides.
+- **`BasicAuth`**: constant-time hashed compare + dummy work for unknown users; realm sanitized.
+- **`APIKey`**: SHA-256 + constant-time OR-compare across all keys (no early exit).
+- **`ClientIP`**: right-to-left XFF (skip trusted hops) so spoofed left-most values are ignored when proxies append.
+- **`Limiter`**: `MaxKeys` cap (default 10k) to bound memory under high-cardinality keys.
+- **Metrics / Prometheus**: `RoutePath` uses registered pattern (`/users/:id`), not raw URL.
+
+### Added
+
+- **`pkg/httperr`**: structured API errors; handlers can `return httperr.…` and get JSON responses.
+- **`Context.RawBody()`**: webhook-safe body read; restores body for later `Bind`/`BindJSON`.
+- **`Context.FormFileMax` / `FormFileAllowed`**: multipart helpers (size + extension allowlist).
+- **`Context.SetCookie` / `SetCookieWith` / `ClearCookie`**: cookie helpers (incl. SameSite).
+- **`Context.SSE` / `Event` / `SSEvent` / `Flush`**: Server-Sent Events helpers.
+- **`middleware.JWTOptional`**, **`Claims`**, **`ClaimString`**: optional JWT + claim helpers.
+- **`middleware.LimiterWithConfig`**: rate limit by custom key (tenant / API key / IP).
+- **`middleware.Metrics` / `MetricsStore`**: in-process counters + optional `OnRequest` hook.
+- **`middleware/prometheus`**: optional Prometheus metrics (not pulled by core middleware).
+- **`middleware/redislimit`**: optional Redis rate limiter (not pulled by core middleware).
+- **`middleware.CSRF`**: double-submit cookie CSRF (`X-CSRF-Token`).
+- **`pkg/cache/redis`**: optional Redis `cache.Store` (JSON via sonic, key prefix + safe Flush).
+- **`pkg/queue/redis`**: optional at-least-once Redis queue (`BRPOPLPUSH` + visibility timeout + reaper).
+- **`grpc.Attach` / `Run` / `RunDual`**: gRPC no longer imported by core `kvolt` package.
+- **Queue retries**: `PushWithOptions`, `WithDeadLetter`, `WithRetryWait` on `MemoryQueue`.
+- **OpenAPI schemas**: route `.Tags` / `.Request` / `.Response` / `.Security`; swagger schema reflection.
+- **`di.ProvideFunc` / `MustProvideFunc`**: constructor injection.
+- **Example**: [`example/full_app`](example/full_app) demo of the new APIs.
+- Docs: [`docs/errors.md`](docs/errors.md), [`docs/sse.md`](docs/sse.md).
+- **HTTP methods**: `PATCH` / `HEAD` / `OPTIONS` / `Handle` / `Any`; optional **405** + trailing-slash redirect.
+- **CORSWithConfig**: origins list, credentials, Max-Age, PATCH.
+- **ClientIP** + `Engine.TrustedProxies`; limiters use ClientIP.
+- **`middleware/redislimit`** for multi-instance Redis rate limits.
+- **BasicAuth** / **APIKey** middleware; **Live** / **Ready** health helpers.
+- **Context**: `Redirect`, `Attachment`, `Abort`, `BindQuery`/`BindForm`/`BindURI`, `SafeUploadPath`, `NoContent`.
+- **ServerConfig**: configurable timeouts (WriteTimeout `0` for SSE/WS), MaxHeaderBytes, shutdown timeout, `RunWithServer`.
+- **Recovery** JSON + `RecoverHandler`; **httperr** unwrap via `errors.As`; 413/409/422/503 helpers.
+- **JWT**: empty SigningKey panics; `pkg/auth` uses golang-jwt; no default insecure secret.
+- **Secure** headers: Referrer-Policy, HSTS behind `X-Forwarded-Proto`.
+- **CSRF** accepts form `_csrf` / `csrf_token`; **LoggerWithConfig** JSON + skipper.
+- **cache.GetInto**; queue durability semantics documented (at-most-once).
 
 ---
 
@@ -79,35 +135,4 @@ Production release. Safe JSON under load, a production `Default()` engine, and m
 
 ## [v1.0.0] - 2025-03-03
 
-First stable release. Production-ready with full CLI, docs, and quality tooling.
-
-### Added
-
-- **Session middleware** (`middleware.Session`) and **pkg/session** for stateful session management (cookie/header/query lookup, TTL, sliding window).
-- Session documentation (`docs/session.md`) and verification tests in the test project.
-- **Max body size middleware** (`middleware.MaxBodySize`, `middleware.MaxBodySizeBytes`) to limit request body size and prevent large-payload attacks. Uses `http.MaxBytesReader`; handlers can respond with 413 when reads exceed the limit.
-- **Production server timeouts** on `Run()` and `RunTLS()`: `ReadHeaderTimeout` (10s), `ReadTimeout` (30s), `WriteTimeout` (30s), `IdleTimeout` (120s). Exported constants: `DefaultReadHeaderTimeout`, `DefaultReadTimeout`, `DefaultWriteTimeout`, `DefaultIdleTimeout`.
-- **Handler error handling** in `context.Next()`: when a handler returns an error and no response has been written, the framework now logs the error, sends 500 with JSON `{"error":"Internal Server Error"}`, and stops the chain.
-- **`Context.HeaderWritten()`** method so middleware (e.g. Recovery) can check if the response has already been written.
-- **RecoveryWithConfig** (`middleware.RecoveryConfig` with `LogStackTrace bool`) to optionally disable stack trace logging in production.
-- **CLI**: `kvolt build` (with `-o`, `-e`), `kvolt test` (with `-cover`), `kvolt fmt`, `kvolt key`, `kvolt generate handler <name>`, `kvolt generate middleware <name>`, `kvolt docker` (generate Dockerfile). Global `-h`/`--help` and `-v`/`--version`. `kvolt run -e` for custom entry point; watch excludes `.git`, `vendor`, `node_modules`.
-- **Docs**: Developer workflow, Go Report Card locally, testing (`pkg/test` + `pkg/testkit`), CLI reference. **CI**: `go fmt` and `go vet` in workflow. **Makefile**: `make report` for local quality checks.
-
-### Changed
-
-- API docs UI: README and swagger doc now state that the default UI is **Scalar** (OpenAPI spec).
-- Reduced cyclomatic complexity in `middleware/jwt.go` (extracted `buildJWTExtractor`), `router/tree.go` (extracted `getValueParam`, `getValueCatchAll`), and `cmd/kvolt/main.go` (extracted `runWatcherLoop`, `shouldRestartOnEvent`) for better tooling scores.
-- **Recovery middleware**: fixed typo "Painc" → "Panic"; only writes 500 when headers not yet sent; configurable stack trace logging via `RecoveryWithConfig`.
-
-### Fixed
-
-- **Router**: Param routes such as `GET /auth/:provider` and `GET /auth/:provider/callback` now correctly match URLs like `/auth/twitter` and `/auth/twitter/callback` (404 issue fixed in stable v1).
-- **ineffassign** in `pkg/swagger/swagger.go`: removed ineffectual assignment to `openAPIPath`.
-- Test project: **TestSwaggerUI** now expects `doc.json` in the response (Scalar UI) instead of `swagger-ui`.
-- Handler-returned errors were previously ignored in `context.Next()`; they are now logged and result in a 500 response when no response has been written.
-
----
-
-## [v0.1.3]
-
-- Last release before the changes below. (No changelog entries before this version.)
+Initial stable release.

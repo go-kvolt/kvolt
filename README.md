@@ -1,7 +1,7 @@
-# KVolt ⚡ 
+# KVolt
 
 <p align="center">
-  <img src="assets/logo.png" alt="KVolt Logo" width="200">
+  <img src="assets/logo.png" alt="KVolt" width="180">
 </p>
 
 <p align="center">
@@ -10,172 +10,173 @@
   <a href="https://goreportcard.com/report/github.com/go-kvolt/kvolt"><img src="https://goreportcard.com/badge/github.com/go-kvolt/kvolt" alt="Go Report Card"></a>
   <a href="https://github.com/go-kvolt/kvolt/blob/main/LICENSE"><img src="https://img.shields.io/github/license/go-kvolt/kvolt" alt="License"></a>
   <a href="https://github.com/go-kvolt/kvolt"><img src="https://img.shields.io/github/go-mod/go-version/go-kvolt/kvolt" alt="Go Version"></a>
-  <a href="https://github.com/go-kvolt/kvolt"><img src="https://img.shields.io/github/v/release/go-kvolt/kvolt?include_prereleases" alt="Release"></a>
+  <a href="https://github.com/go-kvolt/kvolt/releases"><img src="https://img.shields.io/github/v/release/go-kvolt/kvolt?include_prereleases" alt="Release"></a>
 </p>
 
-**v2.0.1** — Module path `github.com/go-kvolt/kvolt/v2`. Safe JSON, `kvolt.Default()`, production tests. See [CHANGELOG](CHANGELOG.md).
+**KVolt** is a Go web framework on `net/http`: a fast radix router, a familiar context API, and production middleware — with optional Redis, Prometheus, and gRPC as separate imports so the core stays lean.
 
-**KVolt** is a high-performance, developer-friendly Go web framework built for speed and ease of use. It combines the raw power of `net/http` with a modern API, zero-allocation routing, and a suite of "Batteries Included" utilities.
+Module: [`github.com/go-kvolt/kvolt/v2`](https://pkg.go.dev/github.com/go-kvolt/kvolt/v2) · Requires **Go 1.27+** · [Changelog](CHANGELOG.md)
 
-## Features 🚀
+---
 
-*   **Extreme Performance**: **250,000+ Req/Sec** using `bytedance/sonic` for JSON serialization and `sync.Pool`.
-*   **Radix Tree Router**: Smart routing with named parameters (`/users/:id`), multiple static suffixes after a param (`/orders/:id/assets`, `/orders/:id/take`), wildcards, and isolated nested-group middleware.
-*   **Static Assets**: Built-in support for serving static files (`app.Static()`) with correct prefix handling.
-*   **Protocol Ready**: Native support for **HTTP/2** (`RunTLS`) and **WebSockets** (`c.Upgrade()`).
-*   **Auto-Documentation**:
-    *   Built-in **Scalar** API reference UI (OpenAPI/Swagger spec).
-    *   Automatic route discovery and documentation generation (`app.Routes()`).
-*   **Developer Experience (DX)**:
-    *   **Hot Reload**: CLI support for auto-restart on code changes (`kvolt run`).
-    *   **HTML Templates**: Robust support for layouts and partials.
-    *   **Unit Testing**: Specialized `pkg/testkit` for blazing-fast handler tests.
-*   **Middleware Ecosystem**:
-    *   **Logger**: Asynchronous, non-blocking console logging.
-    *   **Recovery**: Panic recovery to keep your server alive.
-    *   **Gzip**: Automatic response compression.
-    *   **CORS**: Configurable Cross-Origin Resource Sharing.
-    *   **Rate Limiter**: Token-bucket strategy for API protection.
-    *   **Secure Headers**: Protection against XSS, Clickjacking, and MIME sniffing (`middleware.Secure()`).
-    *   **JWT Middleware**: Standard-compliant authentication.
-*   **Batteries Included**:
-    *   **Dependency Injection** (`pkg/di`)
-    *   **Configuration Loader** (`pkg/config`)
-    *   **Structured Logging** (`pkg/logger`)
-    *   **Input Validation** (`pkg/validator`)
-    *   **Authentication** (`pkg/auth` - Bcrypt)
-*   **Graceful Shutdown**: Native support for OS signals (SIGINT/SIGTERM).
-*   **Background Jobs**: "Blazing Fast" In-Memory Queue (`pkg/queue`).
-*   **Caching System**: Sharded In-Memory Cache with TTL support (`pkg/cache`).
-*   **Task Scheduler**: Built-in Cron/Interval task runner (`pkg/scheduler`).
-
-
-
-## Documentation 📚
-
-Full documentation is available in the [docs](docs/index.md) folder.
-
-*   **[Getting Started](docs/getting_started.md)**
-*   **[CLI Usage](docs/cli.md)**
-*   **[Routing](docs/router.md)**
-*   **[Middleware](docs/middleware.md)**
-*   **[Context API](docs/context.md)**
-*   ...or view the [Full Index](docs/index.md)
-
-
-## Getting Started 🛠️
-
-You can start a KVolt project in two ways: using our powerful CLI or the standard Go method.
-
-### Option 1: The KVolt Way (Recommended) ⚡
-The CLI scaffolds a production-ready directory structure (`cmd`, `internal`, `pkg`, etc.) for you.
-
-1. **Install the CLI**
-   ```bash
-   go install github.com/go-kvolt/kvolt/v2/cmd/kvolt@v2.0.1
-   # From this clone: go install ./cmd/kvolt
-   ```
-
-   > **Note (Linux/macOS)**: If the `kvolt` command is not found after installation, add the Go bin directory to your PATH:
-   > ```bash
-   > export PATH=$PATH:$(go env GOPATH)/bin
-   > ```
-
-2. **Create & Run a New Project**
-   ```bash
-   # Create a new project
-   kvolt new my-app
-   
-   # Run it
-   cd my-app
-   go mod tidy      # Autodetects latest kvolt version
-   go run cmd/api/main.go
-   ```
-
-### Option 2: The Standard Go Way 📦
-If you prefer starting from scratch or adding KVolt to an existing project.
-
-1. **Initialize Module**
-   ```bash
-   mkdir my-app && cd my-app
-   go mod init my-app
-   ```
-
-2. **Install Framework**
-   ```bash
-   go get github.com/go-kvolt/kvolt/v2@v2.0.1
-   ```
-
-3. **Create `main.go`**
-   (See the Quick Start example below)
-
-## Quick Start
+## Quick start
 
 ```go
 package main
 
 import (
+	"log"
+
 	"github.com/go-kvolt/kvolt/v2"
 	"github.com/go-kvolt/kvolt/v2/context"
 	"github.com/go-kvolt/kvolt/v2/middleware"
 )
 
 func main() {
-    // Production defaults: Recovery, Request-ID, 1MB body limit
-	app := kvolt.Default()
+	app := kvolt.Default() // Recovery, Request-ID, 1MB body limit
 	app.Use(middleware.Logger())
-	app.Use(middleware.Secure())
 
-	// 3. Define a simple route
-	app.GET("/", func(c *context.Context) error {
-		return c.JSON(200, map[string]string{
-            "message": "Welcome to KVolt",
-            "status": "Running",
-        })
+	app.GET("/ping", func(c *context.Context) error {
+		return c.JSON(200, map[string]string{"message": "pong"})
 	})
 
-	// 5. Input Binding & Validation
-	app.POST("/users", func(c *context.Context) error {
-        type CreateUser struct {
-            Name  string `json:"name" validate:"required"`
-            Email string `json:"email" validate:"required,email"`
-        }
-        var u CreateUser
-        
-        // Bind() automatically binds JSON and runs Validation
-        if err := c.Bind(&u); err != nil {
-            return c.JSON(400, map[string]string{"error": err.Error()})
-        }
-        
-		return c.JSON(201, u)
-	})
-    
-	// 5. Start Server
-	app.Run(":8080")
+	log.Fatal(app.Run(":8080"))
 }
 ```
 
-
-## Tests
-
 ```bash
-# Full local 10/10 (needs gcc on Windows — WinLibs MinGW):
-./scripts/local10.ps1
+go get github.com/go-kvolt/kvolt/v2@latest
+go run .
+# → http://localhost:8080/ping
 ```
 
-## Benchmarks 📊
+---
 
-KVolt is optimized for raw speed. By utilizing `sync.Pool` for Context recycling and the **Sonic** JSON engine, it achieves massive throughput.
+## Install
 
-*   **250,000+ Req/Sec** on standard hardware (v0.2).
-*   **~8µs Latency** per JSON request.
-*   **Zero-Allocation** hot paths.
-*   **Asynchronous Logging** to prevent I/O bottlenecks.
+**Library**
+
+```bash
+go get github.com/go-kvolt/kvolt/v2@latest
+```
+
+**CLI** (scaffold + hot reload)
+
+```bash
+go install github.com/go-kvolt/kvolt/v2/cmd/kvolt@latest
+kvolt new my-app
+cd my-app && go mod tidy && go run ./cmd/api
+```
+
+If `kvolt` is not found: `export PATH="$PATH:$(go env GOPATH)/bin"`
+
+---
+
+## Why KVolt
+
+| | KVolt |
+| :--- | :--- |
+| Core | `net/http` engine, radix router, `Context` helpers, graceful shutdown |
+| Defaults | `kvolt.Default()` — recovery, request ID, body size limit |
+| Security | CSRF, Secure headers, JWT, BasicAuth/APIKey, trusted-proxy `ClientIP`, safe redirects/uploads |
+| Batteries | Config, DI, validation, sessions, cache, queue, scheduler, OpenAPI/Scalar |
+| Optional deps | Redis cache/queue, Prometheus, gRPC — imported only when you need them |
+
+Compared to Gin/Echo/Fiber: similar routing ergonomics, with more built-ins in-tree and heavier integrations kept out of the default import graph.
+
+---
+
+## Features
+
+- **Router** — params (`/users/:id`), static suffixes after params, wildcards, groups, trailing-slash / 405 helpers
+- **Middleware** — Logger, Recovery, RequestID, Timeout, CORS, Gzip, Limiter, CSRF, Secure, JWT / JWTOptional, Metrics
+- **APIs** — JSON bind/validate, `httperr`, cookies, SSE, WebSockets, file uploads (`SafeUploadPath` / `FileFrom`)
+- **Docs** — OpenAPI from routes + Scalar UI
+- **Jobs** — in-memory queue; Redis at-least-once queue (`pkg/queue/redis`)
+- **Cache** — sharded memory store; Redis store (`pkg/cache/redis`)
+- **gRPC** — `grpc.Attach` / `RunDual` alongside HTTP
+- **DX** — `kvolt` CLI, templates, `pkg/test` / `pkg/testkit`
+
+Full list and guides: **[Documentation](docs/index.md)**
+
+---
+
+## Examples
+
+| Example | Description |
+| :--- | :--- |
+| [`example/full_app`](example/full_app) | Middleware, JWT, queue, Prometheus, OpenAPI |
+| [`example/queue_app`](example/queue_app) | Background jobs |
+| [`example/grpc_app`](example/grpc_app) | HTTP + gRPC dual serve |
+
+---
+
+## Documentation
+
+- [Getting started](docs/getting_started.md)
+- [Routing](docs/router.md) · [Context](docs/context.md) · [Middleware](docs/middleware.md)
+- [Authentication](docs/authentication.md) · [Errors](docs/errors.md) · [SSE](docs/sse.md)
+- [Caching](docs/caching.md) · [Queue](docs/queue.md) · [gRPC](docs/grpc.md)
+- [Testing](docs/testing.md) · [Benchmarks](docs/benchmarks.md) · [CLI](docs/cli.md)
+- [Full index](docs/index.md) · [pkg.go.dev API](https://pkg.go.dev/github.com/go-kvolt/kvolt/v2)
+
+---
+
+## Binding example
+
+```go
+app.POST("/users", func(c *context.Context) error {
+	var u struct {
+		Name  string `json:"name" validate:"required"`
+		Email string `json:"email" validate:"required,email"`
+	}
+	if err := c.Bind(&u); err != nil {
+		return err // maps to JSON via httperr / WriteHandlerError
+	}
+	return c.JSON(201, u)
+})
+```
+
+---
+
+## Development
+
+```bash
+go test ./...
+./scripts/local10.ps1   # fmt, vet, race, soak, fuzz (needs gcc on Windows)
+./scripts/bench.ps1     # microbenchmarks
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
+## Benchmarks
+
+Reproducible **in-process** microbenchmarks (not network Req/Sec). Methodology: [docs/benchmarks.md](docs/benchmarks.md).
+
+```bash
+./scripts/bench.ps1
+```
+
+Sample (`go1.27.3`, Windows/amd64, Intel Core Ultra 7 155H) — run on your machine for authoritative numbers:
+
+| Benchmark | ns/op | allocs/op | ≈ ops/sec |
+| :--- | ---: | ---: | ---: |
+| `BenchmarkEngine_Ping` | ~114 | 2 | ~8.7M |
+| `BenchmarkEngine_PingParallel` | ~50 | 2 | ~20M |
+| `BenchmarkEngine_JSON` | ~2.2µs | 6 | ~460k |
+| `BenchmarkEngine_Param` | ~407 | 2 | ~2.5M |
+| `BenchmarkEngine_DefaultPing` | ~1.3µs | 9 | ~780k |
+| `BenchmarkRouter_Static` | ~16 | 0 | ~63M |
+| `BenchmarkRouter_Param` | ~50 | 1 | ~20M |
+
+For end-to-end HTTP throughput, load-test a live `app.Run` with `wrk` or `hey`.
+
+---
 
 ## License
 
-MIT
-
----
+[MIT](LICENSE)
 
 Created & maintained by Kaviraj Mani

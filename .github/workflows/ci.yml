@@ -33,6 +33,12 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      - name: govulncheck
+        if: runner.os != 'Windows'
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
       - name: Build
         run: go build -v ./...
 
