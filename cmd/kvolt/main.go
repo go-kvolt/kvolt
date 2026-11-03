@@ -15,7 +15,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// Version is set at build time: go build -ldflags "-X main.Version=v2.0.1"
+// Version is set at build time: go build -ldflags "-X main.Version=v2.1.0"
 var Version = "2.0.1"
 
 func main() {

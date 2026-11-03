@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [v2.1.0] - 2026-11-04
+
+Feature and security release: optional Redis/Prometheus/gRPC splits, CSRF/SSE, Go 1.27, and reproducible benchmarks.
+
 ### Changed
 
 - **Go toolchain**: module requires **Go 1.27** (`toolchain go1.27.3`) for runtime/compiler improvements (e.g. size-specialized malloc) and current security fixes.
