@@ -1,6 +1,6 @@
 # Getting Started with KVolt ⚡
 
-KVolt is a high-performance, developer-friendly Go web framework designed for building fast and scalable web applications. **v2.0** is the production release.
+KVolt is a high-performance, developer-friendly Go web framework designed for building fast and scalable web applications. **v2.1** is the current production release.
 
 ## Installation
 
