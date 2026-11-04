@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+
+- Bump **`google.golang.org/grpc`** to **v1.83.2** and **`golang.org/x/net`** to **v0.60.0** (govulncheck: HTTP/2 + gRPC CVEs).
+
 ## [v2.1.1] - 2026-11-04
 
 Patch on top of v2.1.0 (Go module tags are immutable once proxied — do not retag v2.1.0).
