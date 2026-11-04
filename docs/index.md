@@ -30,7 +30,7 @@ Welcome to the official documentation for KVolt **v2.1** (production-promising).
 -   **[Testing Guide](testing.md)**: Unit testing with `pkg/test` and `pkg/testkit`.
 -   **[Benchmarks](benchmarks.md)**: Reproducible microbenchmarks (`scripts/bench.ps1`).
 -   **[Developer Workflow](developer_workflow.md)**: Lint, test, and run your app (fmt, vet, test helpers, CLI).
--   **[Go Report Card locally](report_card.md)**: Run Report Card–style checks (fmt, vet, lint) on your machine.
+-   **[Local quality checks](report_card.md)**: fmt / vet / lint locally (Go Report Card site is sunset).
 
 ## Packages
 -   `pkg/config`, `pkg/logger`, `pkg/validator`, `pkg/httperr`

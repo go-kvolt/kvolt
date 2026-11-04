@@ -1,25 +1,20 @@
-# Running Go Report Card Checks Locally
+# Local quality checks (Go Report Card style)
 
-[Go Report Card](https://goreportcard.com/report/github.com/go-kvolt/kvolt) runs several checks on the codebase. You can run the same style of checks on your machine before pushing.
+[Go Report Card](https://goreportcard.com/) **was sunset** (public site/badge no longer grades repos). The old README badge is removed; quality signal is **CI** (`gofmt`, `go vet`, `govulncheck`, tests) plus these local checks.
+
+The official successor they recommend is [golangci-lint](https://golangci-lint.run/).
 
 ## Quick (built-in Go tools)
 
-From the **kvolt** directory:
+From the repo root:
 
 ```bash
-cd kvolt
 go fmt ./...
 go vet ./...
 go test ./...
 ```
 
-- **go fmt** — formatting (must be clean for Report Card).
-- **go vet** — static analysis.
-- **go test** — unit tests.
-
 ## Using the Makefile
-
-From the **kvolt** directory:
 
 ```bash
 make report
@@ -33,17 +28,13 @@ For only format + vet + optional linters (no test):
 make lint
 ```
 
-## Optional tools (for full parity with Report Card)
+## Optional tools
 
-Install these to match what goreportcard.com runs:
-
-| Check        | Install |
-|-------------|---------|
+| Check | Install |
+| :--- | :--- |
 | ineffassign | `go install github.com/gordonklaus/ineffassign@latest` |
-| misspell    | `go install github.com/client9/misspell/cmd/misspell@latest` |
+| misspell | `go install github.com/client9/misspell/cmd/misspell@latest` |
 | staticcheck | `go install honnef.co/go/tools/cmd/staticcheck@latest` |
-
-Then run:
 
 ```bash
 ineffassign ./...
@@ -51,29 +42,22 @@ misspell -error .
 staticcheck ./...
 ```
 
-Or use **golangci-lint** (single tool, many linters):
+Or **golangci-lint**:
 
 ```bash
 go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 golangci-lint run ./...
 ```
 
-## One-shot: goreportcard-cli
+## Optional: goreportcard-cli (self-run)
 
-To run the same CLI that the Report Card site uses:
+The CLI from the old project still exists if you want the classic checklist locally:
 
 ```bash
 go install github.com/gojp/goreportcard/cmd/goreportcard-cli@latest
-cd kvolt
 goreportcard-cli
-```
-
-Verbose output:
-
-```bash
-goreportcard-cli -v
 ```
 
 ---
 
-**Summary:** Use `make report` (or `go fmt ./... && go vet ./... && go test ./...`) for a fast local check. Add the optional tools or `goreportcard-cli` when you want to mirror the full Report Card.
+**Summary:** Prefer CI + `make report` / `golangci-lint`. Do not rely on goreportcard.com badges — the service is retired.
