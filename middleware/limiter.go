@@ -35,7 +35,9 @@ type LimiterConfig struct {
 	KeyFunc func(c *context.Context) string
 	// ErrorHandler overrides the default 429 JSON response.
 	ErrorHandler func(c *context.Context) error
-	// MaxKeys caps distinct bucket keys (default 10000). When full, new keys are rejected with 429.
+	// MaxKeys caps distinct bucket keys (default 10000). When full, the oldest
+	// bucket (by last refill) is evicted so memory stays bounded without
+	// rejecting brand-new clients with 429.
 	MaxKeys int
 }
 
@@ -80,6 +82,22 @@ func LimiterWithConfig(cfg LimiterConfig) func(c *context.Context) error {
 		}
 	}
 
+	evictOldest := func() {
+		var oldestKey string
+		var oldestTime time.Time
+		first := true
+		for key, cl := range clients {
+			if first || cl.lastRefill.Before(oldestTime) {
+				oldestKey = key
+				oldestTime = cl.lastRefill
+				first = false
+			}
+		}
+		if oldestKey != "" {
+			delete(clients, oldestKey)
+		}
+	}
+
 	go func() {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
@@ -103,17 +121,8 @@ func LimiterWithConfig(cfg LimiterConfig) func(c *context.Context) error {
 			if len(clients) >= cfg.MaxKeys {
 				evictStale(now)
 			}
-			if len(clients) >= cfg.MaxKeys {
-				mu.Unlock()
-				c.Writer.Header().Set("Retry-After", "1")
-				err := cfg.ErrorHandler(c)
-				if err != nil && !c.HeaderWritten() {
-					if he, ok := httperr.As(err); ok {
-						return c.JSON(he.Status, he)
-					}
-					return c.JSON(http.StatusTooManyRequests, map[string]string{"error": "Too Many Requests"})
-				}
-				return err
+			for len(clients) >= cfg.MaxKeys {
+				evictOldest()
 			}
 			lim = &client{tokens: cfg.Burst, lastRefill: now}
 			clients[key] = lim

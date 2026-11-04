@@ -56,7 +56,8 @@ Never combine `AllowOrigins: ["*"]` with `AllowCredentials: true` (browsers reje
 
 ### 5. Rate Limiter
 In-process token bucket (default key: `ClientIP()` — set `Engine.TrustedProxies` behind a load balancer).
-`MaxKeys` (default 10000) bounds memory if your `KeyFunc` is high-cardinality:
+`MaxKeys` (default 10000) bounds memory if your `KeyFunc` is high-cardinality.
+When the map is full, the **oldest** bucket is evicted (new clients are not 429'd just for being new):
 
 ```go
 app.Use(middleware.Limiter(100, 200))

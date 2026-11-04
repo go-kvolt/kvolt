@@ -30,22 +30,14 @@ func main() {
 	app := kvolt.Default()
 	app.Use(middleware.Logger())
 	app.Use(kvprom.Middleware())
-	app.Use(middleware.LimiterWithConfig(middleware.LimiterConfig{
-		RPS:   50,
-		Burst: 100,
-		KeyFunc: func(c *context.Context) string {
-			if k := c.Request.Header.Get("X-API-Key"); k != "" {
-				return "key:" + k
-			}
-			return c.Request.RemoteAddr
-		},
-	}))
-	app.Use(middleware.JWTOptional(middleware.JWTConfig{
-		SigningKey: envOr("JWT_SECRET", "dev-secret"),
-	}))
-	app.Use(middleware.CSRFWithConfig(middleware.CSRFConfig{
-		SkipPaths: []string{"/jobs", "/items"},
-	}))
+	// Default key is ClientIP(); prefer that over RemoteAddr (includes ephemeral port).
+	app.Use(middleware.Limiter(50, 100))
+	if secret := os.Getenv("JWT_SECRET"); secret != "" {
+		app.Use(middleware.JWTOptional(middleware.JWTConfig{SigningKey: secret}))
+	} else {
+		log.Println("JWTOptional skipped (set JWT_SECRET to enable)")
+	}
+	// JSON API demo: CSRF is for cookie/browser apps — see docs/middleware.md.
 
 	var q queue.Queue
 	var worker queue.Worker
@@ -118,11 +110,4 @@ func main() {
 
 	fmt.Println("listening on :8080  (docs /swagger/index.html, metrics /metrics)")
 	app.Run(":8080")
-}
-
-func envOr(k, def string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return def
 }

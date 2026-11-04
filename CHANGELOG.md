@@ -8,7 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
-- Bump **`google.golang.org/grpc`** to **v1.83.2** and **`golang.org/x/net`** to **v0.60.0** (govulncheck: HTTP/2 + gRPC CVEs).
+- Bump **`google.golang.org/grpc`** to **v1.83.2**, **`golang.org/x/net`** to **v0.62.0**, **`golang.org/x/crypto`** past openpgp advisory (govulncheck clean).
+- **`Limiter` `MaxKeys`**: when full, **evict oldest** bucket instead of 429'ing brand-new keys (availability DoS under high-cardinality `KeyFunc`).
+
+### Fixed
+
+- **`example/full_app`**: no hardcoded JWT secret; limiter uses `ClientIP`; CSRF not mis-skipped on API routes.
+- **`redislimit`**: unit tests (allow/block + fail-closed).
 
 ## [v2.1.1] - 2026-11-04
 

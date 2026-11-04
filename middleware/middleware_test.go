@@ -137,7 +137,7 @@ func TestLimiter_SameHostDifferentPorts(t *testing.T) {
 	}
 }
 
-func TestLimiter_MaxKeysRejectsNew(t *testing.T) {
+func TestLimiter_MaxKeysEvictsOldest(t *testing.T) {
 	n := 0
 	lim := LimiterWithConfig(LimiterConfig{
 		RPS:     100,
@@ -155,11 +155,8 @@ func TestLimiter_MaxKeysRejectsNew(t *testing.T) {
 		c := context.New(w, r)
 		c.Handlers = []context.HandlerFunc{lim, func(c *context.Context) error { return c.String(200, "OK") }}
 		c.Next()
-		if i < 2 && w.Code != 200 {
-			t.Fatalf("i=%d want 200 got %d", i, w.Code)
-		}
-		if i == 2 && w.Code != 429 {
-			t.Fatalf("third unique key should 429 when MaxKeys=2, got %d", w.Code)
+		if w.Code != 200 {
+			t.Fatalf("i=%d want 200 (evict oldest when full), got %d", i, w.Code)
 		}
 	}
 }
