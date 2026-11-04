@@ -1,0 +1,5 @@
+*.err.log
+*.exe
+results.json
+results-10x.json
+run10.out.txt

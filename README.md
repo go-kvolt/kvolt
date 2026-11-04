@@ -15,7 +15,7 @@
 
 **KVolt** is a Go web framework on `net/http`: a fast radix router, a familiar context API, and production middleware — with optional Redis, Prometheus, and gRPC as separate imports so the core stays lean.
 
-**v2.1.0** · Module: [`github.com/go-kvolt/kvolt/v2`](https://pkg.go.dev/github.com/go-kvolt/kvolt/v2) · Requires **Go 1.27+** · [Changelog](CHANGELOG.md)
+**v2.1.1** · Module: [`github.com/go-kvolt/kvolt/v2`](https://pkg.go.dev/github.com/go-kvolt/kvolt/v2) · Requires **Go 1.27+** · [Changelog](CHANGELOG.md)
 
 ---
 
@@ -45,7 +45,7 @@ func main() {
 ```
 
 ```bash
-go get github.com/go-kvolt/kvolt/v2@v2.1.0
+go get github.com/go-kvolt/kvolt/v2@v2.1.1
 go run .
 # → http://localhost:8080/ping
 ```
@@ -57,13 +57,13 @@ go run .
 **Library**
 
 ```bash
-go get github.com/go-kvolt/kvolt/v2@v2.1.0
+go get github.com/go-kvolt/kvolt/v2@v2.1.1
 ```
 
 **CLI** (scaffold + hot reload)
 
 ```bash
-go install github.com/go-kvolt/kvolt/v2/cmd/kvolt@v2.1.0
+go install github.com/go-kvolt/kvolt/v2/cmd/kvolt@v2.1.1
 kvolt new my-app
 cd my-app && go mod tidy && go run ./cmd/api
 ```
@@ -153,13 +153,15 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Benchmarks
 
-Reproducible **in-process** microbenchmarks (not network Req/Sec). Methodology: [docs/benchmarks.md](docs/benchmarks.md).
+Methodology + live HTTP comparison: [docs/benchmarks.md](docs/benchmarks.md).
+
+### Microbenchmarks (in-process)
 
 ```bash
 ./scripts/bench.ps1
 ```
 
-Sample (`go1.27.3`, Windows/amd64, Intel Core Ultra 7 155H) — run on your machine for authoritative numbers:
+Sample (`go1.27.3`, Windows/amd64, Lenovo Yoga Slim 7 14IMH9, Intel Core Ultra 7 155H) — run on your machine for authoritative numbers:
 
 | Benchmark | ns/op | allocs/op | ≈ ops/sec |
 | :--- | ---: | ---: | ---: |
@@ -171,7 +173,22 @@ Sample (`go1.27.3`, Windows/amd64, Intel Core Ultra 7 155H) — run on your mach
 | `BenchmarkRouter_Static` | ~16 | 0 | ~63M |
 | `BenchmarkRouter_Param` | ~50 | 1 | ~20M |
 
-For end-to-end HTTP throughput, load-test a live `app.Run` with `wrk` or `hey`.
+### Live HTTP (`GET /ping`, median of 10 rounds)
+
+Same laptop/CPU. Bombardier, 125 conn, 10s. Full table + how to reproduce: [docs/benchmarks.md](docs/benchmarks.md#live-http-comparison).
+
+| Framework | Engine | Median RPS |
+| :--- | :--- | ---: |
+| Fiber | fasthttp | ~87k |
+| **KVolt** | **net/http** | **~81k** |
+| Gin | net/http | ~70k |
+| stdlib | net/http | ~68k |
+| Echo | net/http | ~67k |
+| Chi | net/http | ~66k |
+
+```powershell
+cd benchmarks/live; ./run10.ps1
+```
 
 ---
 

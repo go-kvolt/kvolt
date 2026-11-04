@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [v2.1.1] - 2026-11-04
+
+Patch on top of v2.1.0 (Go module tags are immutable once proxied — do not retag v2.1.0).
+
+### Fixed
+
+- **CLI**: default `Version` string is **2.1.1** (v2.1.0 tag still reported `2.0.1` when installed without `-ldflags`).
+- **gofmt**: align `Engine` struct fields so CI `go fmt ./...` passes on Ubuntu.
+
+### Added
+
+- **Live HTTP harness** (`benchmarks/live`): bombardier `/ping` vs Gin/Echo/Chi/stdlib/Fiber; sample medians + laptop/CPU in [`docs/benchmarks.md`](docs/benchmarks.md).
+
 ## [v2.1.0] - 2026-11-04
 
 Feature and security release: optional Redis/Prometheus/gRPC splits, CSRF/SSE, Go 1.27, and reproducible benchmarks.

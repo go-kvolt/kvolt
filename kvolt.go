@@ -19,9 +19,9 @@ import (
 
 // Engine is the main framework instance.
 type Engine struct {
-	*RouterGroup // Engine is the root group
-	router       *router.Router
-	pool         sync.Pool
+	*RouterGroup    // Engine is the root group
+	router          *router.Router
+	pool            sync.Pool
 	htmlTemplates   *template.Template
 	attachments     sync.Map // optional features (e.g. gRPC) without hard imports
 	noRoute         []context.HandlerFunc
