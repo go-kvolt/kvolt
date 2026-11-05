@@ -102,7 +102,50 @@ app.Use(kvprom.Middleware())
 app.GET("/metrics", kvprom.Handler())
 ```
 
-### 5d. CSRF
+### 5d. Tenant (multi-tenant helper)
+Resolves a tenant id into `c.Keys["tenant_id"]` (header / route param / JWT claim / custom extractor):
+
+```go
+app.Use(middleware.Tenant(middleware.TenantConfig{
+    Header:   "X-Tenant-ID",
+    Required: true,
+}))
+// later: middleware.TenantID(c)
+```
+
+### 5e. RBAC helpers
+Generic permission gates — you supply the checker (DB, JWT claims, etc.):
+
+```go
+check := func(c *context.Context, perm string) (bool, error) {
+    // look up tenant + user permissions
+    return perm == "inv.read", nil
+}
+app.GET("/stock", middleware.RequirePermission("inv.read", check), handler)
+app.POST("/stock", middleware.RequireAnyPermission(check, "inv.write", "inv.admin"), handler)
+```
+
+### 5f. Idempotency-Key
+Replays prior responses for `Idempotency-Key` on POST/PUT/PATCH (memory store included; plug in Redis for multi-instance):
+
+```go
+store := middleware.NewMemoryIdempotencyStore()
+app.Use(middleware.Idempotency(middleware.IdempotencyConfig{Store: store, Required: true}))
+```
+
+### 5g. Audit hook
+Emits a structured event after each request (you persist/ship it):
+
+```go
+app.Use(middleware.Audit(middleware.AuditConfig{
+    OnAudit: func(e middleware.AuditEvent) {
+        log.Printf("audit method=%s path=%s tenant=%s status=%d actor=%s", e.Method, e.Path, e.TenantID, e.Status, e.Actor)
+    },
+    ActorFunc: func(c *context.Context) string { return "user-from-jwt" },
+}))
+```
+
+### 5h. CSRF
 Double-submit cookie protection for browser cookie sessions:
 
 ```go

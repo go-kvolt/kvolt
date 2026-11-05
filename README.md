@@ -88,7 +88,7 @@ Compared to Gin/Echo/Fiber: similar routing ergonomics, with more built-ins in-t
 ## Features
 
 - **Router** — params (`/users/:id`), static suffixes after params, wildcards, groups, trailing-slash / 405 helpers
-- **Middleware** — Logger, Recovery, RequestID, Timeout, CORS, Gzip, Limiter, CSRF, Secure, JWT / JWTOptional, Metrics
+- **Middleware** — Logger, Recovery, RequestID, Timeout, CORS, Gzip, Limiter, CSRF, Secure, JWT / JWTOptional, Metrics, Tenant, RBAC helpers, Idempotency-Key, Audit
 - **APIs** — JSON bind/validate, `httperr`, cookies, SSE, WebSockets, file uploads (`SafeUploadPath` / `FileFrom`)
 - **Docs** — OpenAPI from routes + Scalar UI
 - **Jobs** — in-memory queue; Redis at-least-once queue (`pkg/queue/redis`)

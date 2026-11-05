@@ -419,10 +419,10 @@ func runDev(entryPoint string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer watcher.Close()
+	defer func() { _ = watcher.Close() }()
 
 	root := "."
-	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}

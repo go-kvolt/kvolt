@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **`middleware.Tenant` / `TenantID`**: multi-tenant id from header, route param, JWT claim, or custom extractor.
+- **`middleware.RequirePermission` / `RequireAnyPermission` / `RequireAllPermissions`**: generic RBAC gates via `PermissionChecker`.
+- **`middleware.Idempotency`**: `Idempotency-Key` replay for POST/PUT/PATCH (`MemoryIdempotencyStore` + pluggable store).
+- **`middleware.Audit`**: post-request audit hook (`AuditEvent` with tenant, actor, status, duration).
+- **CI**: `golangci-lint` job (`.golangci.yml`).
+
 ### Security
 
 - Bump **`google.golang.org/grpc`** to **v1.83.2**, **`golang.org/x/net`** to **v0.62.0**, **`golang.org/x/crypto`** past openpgp advisory (govulncheck clean).

@@ -226,7 +226,6 @@ func (n *Node) insertChild(path, fullPath string, handle Handler) {
 			}
 			if i > 0 {
 				n.path = path[:i]
-				path = path[i:]
 			}
 
 			child := &Node{

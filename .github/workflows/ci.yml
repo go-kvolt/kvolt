@@ -50,6 +50,22 @@ jobs:
         if: runner.os == 'Windows'
         run: go test -count=1 ./...
 
+  lint:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.15.0
+          args: --timeout=5m
+          # Go 1.27 needs golangci-lint >= 2.15
+
   fuzz:
     name: Fuzz
     runs-on: ubuntu-latest

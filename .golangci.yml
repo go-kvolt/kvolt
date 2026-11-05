@@ -1,0 +1,64 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+  settings:
+    govet:
+      disable:
+        - inline
+    errcheck:
+      exclude-functions:
+        - (*database/sql.DB).Close
+        - (*database/sql.Rows).Close
+        - (*os.File).Close
+        - (io.Closer).Close
+        - (*github.com/fsnotify/fsnotify.Watcher).Close
+  exclusions:
+    paths:
+      - benchmarks/live
+      - third_party$
+      - builtin$
+      - examples$
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+      - path: example/
+        linters:
+          - errcheck
+      - path: cmd/kvolt/
+        text: Error return value of `fmt\.Fprint
+        linters:
+          - errcheck
+      - path: pkg/queue/redis/
+        text: SA1019
+        linters:
+          - staticcheck
+      - text: "QF1008:"
+        linters:
+          - staticcheck
+      - text: "SA9003:"
+        linters:
+          - staticcheck
+
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    paths:
+      - benchmarks/live
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

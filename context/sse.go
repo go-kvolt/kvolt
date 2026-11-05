@@ -51,9 +51,7 @@ func (c *Context) SSEvent(ev SSEvent) error {
 		b.WriteByte('\n')
 	}
 	if ev.Retry > 0 {
-		b.WriteString("retry: ")
-		b.WriteString(fmt.Sprintf("%d", ev.Retry))
-		b.WriteByte('\n')
+		fmt.Fprintf(&b, "retry: %d\n", ev.Retry)
 	}
 	data := strings.ReplaceAll(ev.Data, "\r\n", "\n")
 	data = strings.ReplaceAll(data, "\r", "\n")

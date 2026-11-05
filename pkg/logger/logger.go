@@ -80,7 +80,7 @@ func (l *Logger) log(level Level, msg string, fields map[string]interface{}) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	json.NewEncoder(l.out).Encode(entry)
+	_ = json.NewEncoder(l.out).Encode(entry)
 }
 
 // Info logs an info message.
