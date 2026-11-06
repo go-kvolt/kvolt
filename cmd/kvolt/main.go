@@ -319,35 +319,37 @@ func createProject(name string) {
 		}
 	}
 
-	// 1. Create go.mod
 	goModContent := fmt.Sprintf("module %s\n\ngo 1.27\n", name)
 	writeFile(filepath.Join(name, "go.mod"), goModContent)
 
-	// 2. Create .env
 	envContent := `APP_NAME="My KVolt App"
 PORT=8080
 DEBUG=true
+# JWT_SECRET=
+# Require X-Tenant-ID when TENANT_REQUIRED=true
+TENANT_REQUIRED=false
 `
 	writeFile(filepath.Join(name, ".env"), envContent)
 
-	// 3. Create config.yaml
 	configContent := `app_name: "My KVolt App"
 port: 8080
 debug: true
 `
 	writeFile(filepath.Join(name, "config.yaml"), configContent)
 
-	// 4. Create main.go
 	mainContent := `package main
 
 import (
 	"fmt"
 	"log"
+	"os"
+	"sync/atomic"
 
 	"github.com/go-kvolt/kvolt/v2"
 	"github.com/go-kvolt/kvolt/v2/context"
+	"github.com/go-kvolt/kvolt/v2/middleware"
 	"github.com/go-kvolt/kvolt/v2/pkg/config"
-	"github.com/go-kvolt/kvolt/v2/pkg/httperr"
+	"github.com/go-kvolt/kvolt/v2/pkg/swagger"
 )
 
 type Config struct {
@@ -364,33 +366,61 @@ func main() {
 
 	// Default() includes Recovery, RequestID, MaxBodySize.
 	app := kvolt.Default()
+	app.Use(middleware.Logger())
+
+	// Optional multi-tenant stub: set TENANT_REQUIRED=true to require X-Tenant-ID.
+	tenantRequired := os.Getenv("TENANT_REQUIRED") == "true"
+	app.Use(middleware.Tenant(middleware.TenantConfig{
+		Header:   middleware.DefaultTenantHeader,
+		Required: tenantRequired,
+	}))
+
+	ready := atomic.Bool{}
+	ready.Store(true)
+	app.GET("/livez", middleware.Live())
+	app.GET("/readyz", middleware.Ready(&ready))
 
 	app.GET("/", func(c *context.Context) error {
 		return c.JSON(200, map[string]interface{}{
 			"message": "Welcome to " + cfg.AppName,
 			"port":    cfg.Port,
+			"tenant":  middleware.TenantID(c),
 			"status":  "running",
 		})
-	})
+	}).Desc("Root").Tags("meta")
 
-	app.GET("/health", func(c *context.Context) error {
-		if !cfg.Debug {
-			return httperr.NotFound("not_found", "not found")
-		}
-		return c.JSON(200, map[string]string{"status": "ok"})
-	})
+	app.GET("/swagger/*any", swagger.Handler(swagger.Config{
+		Title:          cfg.AppName,
+		RoutesProvider: swagger.Adapter(app),
+		Host:           fmt.Sprintf("localhost:%d", cfg.Port),
+	}))
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
-	fmt.Printf("%s running on %s\n", cfg.AppName, addr)
-	app.Run(addr)
+	fmt.Printf("%s running on %s  (docs /swagger/index.html, livez /livez)\n", cfg.AppName, addr)
+	log.Fatal(app.Run(addr))
 }
 `
 	writeFile(filepath.Join(name, "cmd/api/main.go"), mainContent)
 
+	readme := `# ` + name + `
+
+Scaffolded with ` + "`kvolt new`" + `.
+
+` + "```bash" + `
+go mod tidy
+go run ./cmd/api
+` + "```" + `
+
+- Health: ` + "`GET /livez`" + `, ` + "`GET /readyz`" + `
+- OpenAPI: ` + "`/swagger/index.html`" + `
+- Optional tenant: set ` + "`TENANT_REQUIRED=true`" + ` and send ` + "`X-Tenant-ID`" + `
+`
+	writeFile(filepath.Join(name, "README.md"), readme)
+
 	fmt.Println("\n🎉 Done! To start coding:")
 	fmt.Printf("  cd %s\n", name)
 	fmt.Printf("  go mod tidy\n")
-	fmt.Printf("  go run cmd/api/main.go\n")
+	fmt.Printf("  go run ./cmd/api\n")
 }
 
 func writeFile(path, content string) {

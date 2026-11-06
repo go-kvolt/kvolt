@@ -22,11 +22,10 @@ kvolt new my-awesome-api
 kvolt new -h   # show help for new
 ```
 
-**What it does:**
-1.  Creates project directories (`cmd/api`, `internal`, `pkg`).
-2.  Initializes `go.mod`.
-3.  Creates default configuration files (`.env`, `config.yaml`).
-4.  Generates a starter `main.go` with example code.
+**What it scaffolds:**
+1. Project dirs (`cmd/api`, `internal/handler`, `internal/model`, `pkg`).
+2. `go.mod`, `.env`, `config.yaml`, project `README.md`.
+3. `cmd/api/main.go` with `kvolt.Default()`, Logger, **Live/Ready** health routes, **OpenAPI/Swagger**, and an optional **tenant stub** (`TENANT_REQUIRED=true` → require `X-Tenant-ID`).
 
 ### `kvolt run [-e entry]`
 

@@ -11,7 +11,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`middleware.Tenant` / `TenantID`**: multi-tenant id from header, route param, JWT claim, or custom extractor.
 - **`middleware.RequirePermission` / `RequireAnyPermission` / `RequireAllPermissions`**: generic RBAC gates via `PermissionChecker`.
 - **`middleware.Idempotency`**: `Idempotency-Key` replay for POST/PUT/PATCH (`MemoryIdempotencyStore` + pluggable store).
+- **`middleware/redisidem`**: Redis-backed `IdempotencyStore` for multi-instance deployments.
 - **`middleware.Audit`**: post-request audit hook (`AuditEvent` with tenant, actor, status, duration).
+- **`middleware/otel`**: optional OpenTelemetry HTTP tracing middleware (explicit import).
+- **`example/tenant_app`**: Tenant + JWTOptional + RBAC + Idempotency + Audit demo.
+- **CLI `kvolt new`**: scaffold includes `Default()`, Logger, Live/Ready, OpenAPI/Swagger, optional tenant stub (`TENANT_REQUIRED` / `X-Tenant-ID`).
 - **CI**: `golangci-lint` job (`.golangci.yml`).
 
 ### Security

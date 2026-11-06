@@ -9,7 +9,8 @@ Welcome to the official documentation for KVolt **v2.1** (production-promising).
 -   **[Context API](context.md)**: The heart of every request (`BindJSON`, `Query`).
 
 ## Core Features
--   **[Middleware](middleware.md)**: Logger, Recovery, RequestID, Timeout, JWT / JWTOptional, Rate Limiter (keyed), Metrics, CORS, Secure, Gzip.
+-   **[Middleware](middleware.md)**: Logger, Recovery, RequestID, Timeout, JWT / JWTOptional, Rate Limiter, Tenant, RBAC, Idempotency, Audit, Metrics, CORS, Secure, Gzip.
+-   **[OpenTelemetry](otel.md)**: optional `middleware/otel` tracing.
 -   **[Structured Errors](errors.md)**: `pkg/httperr` + automatic JSON mapping.
 -   **[gRPC](grpc.md)**: HTTP + gRPC in one process.
 -   **[Configuration](configuration.md)**: Manage secrets and settings.

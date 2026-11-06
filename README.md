@@ -89,12 +89,13 @@ Compared to Gin/Echo/Fiber: similar routing ergonomics, with more built-ins in-t
 
 - **Router** — params (`/users/:id`), static suffixes after params, wildcards, groups, trailing-slash / 405 helpers
 - **Middleware** — Logger, Recovery, RequestID, Timeout, CORS, Gzip, Limiter, CSRF, Secure, JWT / JWTOptional, Metrics, Tenant, RBAC helpers, Idempotency-Key, Audit
+- **Optional** — Redis idempotency (`middleware/redisidem`), OpenTelemetry (`middleware/otel`), Prometheus, redislimit, gRPC
 - **APIs** — JSON bind/validate, `httperr`, cookies, SSE, WebSockets, file uploads (`SafeUploadPath` / `FileFrom`)
 - **Docs** — OpenAPI from routes + Scalar UI
 - **Jobs** — in-memory queue; Redis at-least-once queue (`pkg/queue/redis`)
 - **Cache** — sharded memory store; Redis store (`pkg/cache/redis`)
 - **gRPC** — `grpc.Attach` / `RunDual` alongside HTTP
-- **DX** — `kvolt` CLI, templates, `pkg/test` / `pkg/testkit`
+- **DX** — `kvolt` CLI (`new` scaffolds health + OpenAPI + tenant stub), templates, `pkg/test` / `pkg/testkit`
 
 Full list and guides: **[Documentation](docs/index.md)**
 
@@ -105,6 +106,7 @@ Full list and guides: **[Documentation](docs/index.md)**
 | Example | Description |
 | :--- | :--- |
 | [`example/full_app`](example/full_app) | Middleware, JWT, queue, Prometheus, OpenAPI |
+| [`example/tenant_app`](example/tenant_app) | Tenant + RBAC + Idempotency + Audit |
 | [`example/queue_app`](example/queue_app) | Background jobs |
 | [`example/grpc_app`](example/grpc_app) | HTTP + gRPC dual serve |
 

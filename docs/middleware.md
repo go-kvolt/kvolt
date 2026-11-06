@@ -121,15 +121,23 @@ check := func(c *context.Context, perm string) (bool, error) {
     // look up tenant + user permissions
     return perm == "inv.read", nil
 }
-app.GET("/stock", middleware.RequirePermission("inv.read", check), handler)
-app.POST("/stock", middleware.RequireAnyPermission(check, "inv.write", "inv.admin"), handler)
+g := app.Group("/stock")
+g.Use(middleware.RequirePermission("inv.read", check))
+g.GET("", handler)
+
+w := app.Group("/stock")
+w.Use(middleware.RequireAnyPermission(check, "inv.write", "inv.admin"))
+w.POST("", handler)
 ```
 
 ### 5f. Idempotency-Key
-Replays prior responses for `Idempotency-Key` on POST/PUT/PATCH (memory store included; plug in Redis for multi-instance):
+Replays prior responses for `Idempotency-Key` on POST/PUT/PATCH (memory store included; Redis for multi-instance):
 
 ```go
 store := middleware.NewMemoryIdempotencyStore()
+// Multi-instance:
+// import "github.com/go-kvolt/kvolt/v2/middleware/redisidem"
+// store := redisidem.New(rdb)
 app.Use(middleware.Idempotency(middleware.IdempotencyConfig{Store: store, Required: true}))
 ```
 
