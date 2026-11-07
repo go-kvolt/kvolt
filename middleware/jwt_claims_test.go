@@ -58,6 +58,47 @@ func TestJWTOptional_ValidToken(t *testing.T) {
 	}
 }
 
+func TestJWT_BearerCaseInsensitive(t *testing.T) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": "u1",
+		"exp": time.Now().Add(time.Hour).Unix(),
+	})
+	s, err := token.SignedString([]byte("secret"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("Authorization", "bearer "+s)
+	c := context.New(w, r)
+	c.Handlers = []context.HandlerFunc{
+		JWT(JWTConfig{SigningKey: "secret"}),
+		func(c *context.Context) error { return c.String(200, "ok") },
+	}
+	c.Next()
+	if w.Code != 200 {
+		t.Fatalf("code=%d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestJWTOptional_SkipOnInvalid(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("Authorization", "Bearer not-a-jwt")
+	c := context.New(w, r)
+	called := false
+	c.Handlers = []context.HandlerFunc{
+		func(c *context.Context) error {
+			called = true
+			return c.String(200, "anon")
+		},
+	}
+	JWTOptional(JWTConfig{SigningKey: "secret", SkipOnInvalid: true})(c)
+	if !called || w.Code != 200 {
+		t.Fatalf("called=%v code=%d", called, w.Code)
+	}
+}
+
 func TestLimiterWithConfig_KeyFunc(t *testing.T) {
 	lim := LimiterWithConfig(LimiterConfig{
 		RPS:   1,

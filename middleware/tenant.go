@@ -18,10 +18,13 @@ const (
 // TenantConfig configures tenant resolution for multi-tenant apps.
 type TenantConfig struct {
 	// Header to read (default X-Tenant-ID). Ignored when Extractor is set.
+	// When Claim is set, the header is not used as the tenant source (JWT wins).
+	// If both header and claim are present and differ, the request is rejected with 403.
 	Header string
 	// Param is an optional route param name (e.g. "tenant").
 	Param string
 	// Claim is an optional JWT claim name read from ContextKey (default "user") MapClaims.
+	// When set, claim is preferred over Header; a conflicting header yields 403.
 	Claim string
 	// ContextKey is the JWT claims context key (default "user").
 	ContextKey string
@@ -34,7 +37,10 @@ type TenantConfig struct {
 }
 
 // Tenant resolves a tenant id into c.Keys[TenantIDKey].
-// Resolution order when Extractor is nil: Param → Header → Claim.
+// Resolution when Extractor is nil:
+//   - Param (if set)
+//   - If Claim is set: Claim only (header ignored as source); header≠claim → 403
+//   - Else: Header
 func Tenant(cfg TenantConfig) func(c *context.Context) error {
 	if cfg.Header == "" {
 		cfg.Header = DefaultTenantHeader
@@ -60,11 +66,24 @@ func Tenant(cfg TenantConfig) func(c *context.Context) error {
 			if cfg.Param != "" {
 				id = strings.TrimSpace(c.Param(cfg.Param))
 			}
-			if id == "" && cfg.Header != "" {
-				id = strings.TrimSpace(c.Request.Header.Get(cfg.Header))
+			headerID := ""
+			if cfg.Header != "" {
+				headerID = strings.TrimSpace(c.Request.Header.Get(cfg.Header))
 			}
-			if id == "" && cfg.Claim != "" {
-				id = tenantFromClaim(c, cfg.ContextKey, cfg.Claim)
+			claimID := ""
+			if cfg.Claim != "" {
+				claimID = strings.TrimSpace(tenantFromClaim(c, cfg.ContextKey, cfg.Claim))
+			}
+
+			if cfg.Claim != "" {
+				if claimID != "" && headerID != "" && claimID != headerID {
+					return writeMiddlewareError(c, httperr.Forbidden("tenant_mismatch", "tenant header does not match token claim"))
+				}
+				if id == "" {
+					id = claimID
+				}
+			} else if id == "" {
+				id = headerID
 			}
 		}
 		id = strings.TrimSpace(id)

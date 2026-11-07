@@ -67,6 +67,28 @@ func (s *Store) Delete(key string) error {
 	return s.client.Del(context.Background(), s.key(key)).Err()
 }
 
+// Touch extends TTL only if the key still exists (does not create/resurrect).
+func (s *Store) Touch(key string, ttl time.Duration) error {
+	if ttl <= 0 {
+		ok, err := s.client.Persist(context.Background(), s.key(key)).Result()
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return cache.ErrKeyNotFound
+		}
+		return nil
+	}
+	ok, err := s.client.Expire(context.Background(), s.key(key), ttl).Result()
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return cache.ErrKeyNotFound
+	}
+	return nil
+}
+
 // Flush deletes all keys with this store's prefix. Empty prefix is rejected.
 func (s *Store) Flush() error {
 	if s.prefix == "" {

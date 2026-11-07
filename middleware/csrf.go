@@ -1,18 +1,24 @@
 package middleware
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/go-kvolt/kvolt/v2/context"
 	"github.com/go-kvolt/kvolt/v2/pkg/httperr"
 )
 
-// CSRFConfig configures double-submit CSRF protection.
+// CSRFConfig configures HMAC-signed double-submit CSRF protection.
 type CSRFConfig struct {
+	// Secret signs tokens so a planted cookie without the secret cannot pass.
+	// When empty, a process-local random secret is used (fine for single-instance).
+	Secret string
 	CookieName string
 	HeaderName string
 	CookiePath string
@@ -29,12 +35,31 @@ type CSRFConfig struct {
 	SkipPaths      []string
 }
 
+var (
+	csrfProcessSecret     []byte
+	csrfProcessSecretOnce sync.Once
+)
+
+func csrfSecretBytes(cfg CSRFConfig) []byte {
+	if s := strings.TrimSpace(cfg.Secret); s != "" {
+		return []byte(s)
+	}
+	csrfProcessSecretOnce.Do(func() {
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			panic("csrf: crypto/rand failed: " + err.Error())
+		}
+		csrfProcessSecret = b
+	})
+	return csrfProcessSecret
+}
+
 // CSRF returns middleware using default CSRFConfig.
 func CSRF() func(c *context.Context) error {
 	return CSRFWithConfig(CSRFConfig{})
 }
 
-// CSRFWithConfig returns double-submit cookie CSRF middleware.
+// CSRFWithConfig returns signed double-submit cookie CSRF middleware.
 func CSRFWithConfig(cfg CSRFConfig) func(c *context.Context) error {
 	if cfg.CookieName == "" {
 		cfg.CookieName = "csrf_token"
@@ -48,6 +73,7 @@ func CSRFWithConfig(cfg CSRFConfig) func(c *context.Context) error {
 	if cfg.SameSite == 0 {
 		cfg.SameSite = http.SameSiteLaxMode
 	}
+	secret := csrfSecretBytes(cfg)
 
 	safe := map[string]bool{
 		http.MethodGet: true, http.MethodHead: true,
@@ -78,10 +104,13 @@ func CSRFWithConfig(cfg CSRFConfig) func(c *context.Context) error {
 		if cookie, err := c.Request.Cookie(cfg.CookieName); err == nil {
 			token = cookie.Value
 		}
+		if token != "" && !csrfTokenValid(secret, token) {
+			token = ""
+		}
 
 		if safe[c.Request.Method] {
 			if token == "" {
-				token = newCSRFToken()
+				token = newCSRFToken(secret)
 				c.SetCookieWith(cfg.CookieName, token, context.CookieOptions{
 					Path:     cfg.CookiePath,
 					MaxAge:   86400,
@@ -101,7 +130,7 @@ func CSRFWithConfig(cfg CSRFConfig) func(c *context.Context) error {
 		if got == "" {
 			got = c.Request.FormValue("csrf_token")
 		}
-		if !csrfTokenMatch(token, got) {
+		if !csrfTokenValid(secret, token) || !csrfTokenMatch(token, got) {
 			return httperr.Forbidden("csrf_mismatch", "csrf token mismatch")
 		}
 		c.Next()
@@ -136,20 +165,31 @@ func csrfTokenMatch(a, b string) bool {
 	if a == "" || b == "" {
 		return false
 	}
-	// Pad to equal length for constant-time compare without leaking length via early return on Compare.
 	if len(a) != len(b) {
-		// Still compare against itself to keep roughly constant work; result is failure.
 		subtle.ConstantTimeCompare([]byte(a), []byte(a))
 		return false
 	}
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
-func newCSRFToken() string {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		// Extremely rare; fall back to zero buffer is unsafe — panic so misconfig is loud.
+func newCSRFToken(secret []byte) string {
+	nonce := make([]byte, 32)
+	if _, err := rand.Read(nonce); err != nil {
 		panic("csrf: crypto/rand failed: " + err.Error())
 	}
-	return hex.EncodeToString(b)
+	n := hex.EncodeToString(nonce)
+	mac := hmac.New(sha256.New, secret)
+	_, _ = mac.Write([]byte(n))
+	return n + "." + hex.EncodeToString(mac.Sum(nil))
+}
+
+func csrfTokenValid(secret []byte, token string) bool {
+	parts := strings.Split(token, ".")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return false
+	}
+	mac := hmac.New(sha256.New, secret)
+	_, _ = mac.Write([]byte(parts[0]))
+	expected := hex.EncodeToString(mac.Sum(nil))
+	return subtle.ConstantTimeCompare([]byte(expected), []byte(parts[1])) == 1
 }

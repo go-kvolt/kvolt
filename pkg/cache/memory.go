@@ -157,6 +157,28 @@ func (m *MemoryStore) Delete(key string) error {
 	return nil
 }
 
+// Touch extends TTL only if the key still exists (does not create/resurrect).
+func (m *MemoryStore) Touch(key string, ttl time.Duration) error {
+	s := m.getShard(key)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	it, exists := s.items[key]
+	if !exists {
+		return ErrKeyNotFound
+	}
+	if it.expiresAt > 0 && time.Now().UnixNano() > it.expiresAt {
+		s.removeLocked(key)
+		return ErrExpired
+	}
+	if ttl > 0 {
+		it.expiresAt = time.Now().Add(ttl).UnixNano()
+	} else {
+		it.expiresAt = 0
+	}
+	s.touchLocked(it)
+	return nil
+}
+
 // Flush clears everything.
 func (m *MemoryStore) Flush() error {
 	for _, s := range m.shards {

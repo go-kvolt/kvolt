@@ -16,6 +16,8 @@
 
 # Local KVolt artifacts
 /kvolt
+/bin/
+bin/
 example/main
 example/benchmark
 example/load_test

@@ -1,9 +1,11 @@
 # Authentication
 
-KVolt uses **HS256 JWT** via `github.com/golang-jwt/jwt/v5` for both:
+KVolt uses **JWT** via `github.com/golang-jwt/jwt/v5` for both:
 
-- `pkg/auth` — `GenerateToken` / `ParseToken` (set secret first)
-- `middleware.JWT` / `middleware.JWTOptional` — request validation
+- `pkg/auth` — `GenerateToken` / `ParseToken` (HS256; set secret first)
+- `middleware.JWT` / `middleware.JWTOptional` — request validation (default HS256; set `KeyFunc` + `SigningMethod: "RS256"` for RSA)
+
+`exp` is required by default (`RequireExp`). Optional `Issuer` / `Audience`. The `Bearer` scheme match is case-insensitive. `JWTOptional` supports `SkipOnInvalid` for anonymous continue on bad tokens.
 
 There is **no default secret**. Misconfiguration fails closed.
 
@@ -34,7 +36,7 @@ app.Use(middleware.JWT(middleware.JWTConfig{
     SigningKey: os.Getenv("JWT_SECRET"), // required — empty panics
 }))
 
-// Optional bearer (anonymous if missing; invalid still 401)
+// Optional bearer (anonymous if missing; invalid still 401 unless SkipOnInvalid)
 app.Use(middleware.JWTOptional(middleware.JWTConfig{
     SigningKey: os.Getenv("JWT_SECRET"),
 }))

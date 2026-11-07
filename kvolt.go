@@ -4,6 +4,7 @@ import (
 	stdContext "context"
 	"fmt"
 	"html/template"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -259,50 +260,73 @@ const (
 )
 
 // Run starts the HTTP server with Graceful Shutdown and production timeouts.
+// It returns immediately if the address cannot be bound (e.g. port in use).
 func (e *Engine) Run(addr string) error {
-	return e.serveAndWait(e.httpServer(addr), nil, nil)
+	return e.serveAndWait(e.httpServer(addr), "", "")
 }
 
 // RunWithServer runs a preconfigured http.Server (Handler is set to the Engine).
+// Binds srv.Addr before printing "running"; returns bind errors to the caller.
 func (e *Engine) RunWithServer(srv *http.Server) error {
 	if srv == nil {
 		return fmt.Errorf("kvolt: nil server")
 	}
 	srv.Handler = e
-	return e.serveAndWait(srv, nil, nil)
+	return e.serveAndWait(srv, "", "")
 }
 
-func (e *Engine) serveAndWait(srv *http.Server, startTLS func() error, onShutdown func()) error {
-	fmt.Println("⚡ KVolt is running on " + formatListenURL("http", srv.Addr))
+// serveAndWait binds first, then serves. certFile/keyFile non-empty enables TLS via ServeTLS.
+func (e *Engine) serveAndWait(srv *http.Server, certFile, keyFile string) error {
+	if srv.Addr == "" {
+		srv.Addr = ":http"
+	}
+	ln, err := net.Listen("tcp", srv.Addr)
+	if err != nil {
+		return fmt.Errorf("listen %s: %w", srv.Addr, err)
+	}
+
+	scheme := "http"
+	if certFile != "" && keyFile != "" {
+		scheme = "https"
+	}
+	fmt.Println("⚡ KVolt is running on " + formatListenURL(scheme, srv.Addr))
 	fmt.Println("Press Ctrl+C to stop")
 
+	errCh := make(chan error, 1)
 	go func() {
-		var err error
-		if startTLS != nil {
-			err = startTLS()
+		var serveErr error
+		if certFile != "" && keyFile != "" {
+			serveErr = srv.ServeTLS(ln, certFile, keyFile)
 		} else {
-			err = srv.ListenAndServe()
+			serveErr = srv.Serve(ln)
 		}
-		if err != nil && err != http.ErrServerClosed {
-			fmt.Printf("Listen: %s\n", err)
+		if serveErr != nil && serveErr != http.ErrServerClosed {
+			errCh <- serveErr
+			return
 		}
+		errCh <- nil
 	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(quit)
-	<-quit
-	fmt.Println("\nShutting down server...")
 
+	select {
+	case serveErr := <-errCh:
+		if serveErr != nil {
+			return serveErr
+		}
+		return nil
+	case <-quit:
+	}
+
+	fmt.Println("\nShutting down server...")
 	ctx, cancel := stdContext.WithTimeout(stdContext.Background(), e.shutdownTimeout())
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
 		fmt.Println("Server Shutdown Error:", err)
 		return err
-	}
-	if onShutdown != nil {
-		onShutdown()
 	}
 	fmt.Println("Server exiting")
 	return nil
@@ -311,8 +335,12 @@ func (e *Engine) serveAndWait(srv *http.Server, startTLS func() error, onShutdow
 // ListenAndServe starts HTTP with net/http defaults (no extra timeouts).
 // Use Run() in production for slowloris timeouts and graceful shutdown.
 func (e *Engine) ListenAndServe(addr string) error {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("listen %s: %w", addr, err)
+	}
 	fmt.Println("⚡ KVolt is running on " + formatListenURL("http", addr))
-	return http.ListenAndServe(addr, e)
+	return http.Serve(ln, e)
 }
 
 // LoadHTMLGlob loads HTML templates from a directory pattern.
@@ -322,11 +350,7 @@ func (e *Engine) LoadHTMLGlob(pattern string) {
 
 // RunTLS starts the HTTPS server (enabling HTTP/2 by default) with production timeouts.
 func (e *Engine) RunTLS(addr, certFile, keyFile string) error {
-	srv := e.httpServer(addr)
-	fmt.Println("⚡ KVolt (HTTPS) is running on " + formatListenURL("https", addr))
-	return e.serveAndWait(srv, func() error {
-		return srv.ListenAndServeTLS(certFile, keyFile)
-	}, nil)
+	return e.serveAndWait(e.httpServer(addr), certFile, keyFile)
 }
 
 // RouteInfo represents a route metadata.

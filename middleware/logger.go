@@ -2,7 +2,9 @@ package middleware
 
 import (
 	"fmt"
+	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-kvolt/kvolt/v2/context"
@@ -10,20 +12,45 @@ import (
 
 var (
 	logChan = make(chan string, 10000)
-	emitLog = func(msg string) {
-		select {
-		case logChan <- msg:
-		default:
-		}
-	}
+	logOnce sync.Once
+	logWg   sync.WaitGroup
+	emitLog = enqueueLog
 )
 
-func init() {
-	go func() {
-		for msg := range logChan {
-			fmt.Print(msg)
+func ensureLogWorker() {
+	logOnce.Do(func() {
+		logWg.Add(1)
+		go func() {
+			defer logWg.Done()
+			for msg := range logChan {
+				_, _ = fmt.Fprint(os.Stdout, msg)
+			}
+		}()
+	})
+}
+
+func enqueueLog(msg string) {
+	ensureLogWorker()
+	select {
+	case logChan <- msg:
+	default:
+		// Channel full: write synchronously so lines are not silently dropped.
+		_, _ = fmt.Fprint(os.Stdout, msg)
+	}
+}
+
+// FlushLogger drains buffered access logs (best-effort). Safe to call on shutdown.
+func FlushLogger() {
+	ensureLogWorker()
+	// Give the worker a brief moment to drain; remaining lines stay in the buffer
+	// until process exit. Closing the channel is process-lifetime once.
+	deadline := time.Now().Add(200 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if len(logChan) == 0 {
+			return
 		}
-	}()
+		time.Sleep(5 * time.Millisecond)
+	}
 }
 
 // LoggerConfig configures the access logger.
@@ -41,6 +68,7 @@ func Logger() func(c *context.Context) error {
 
 // LoggerWithConfig returns a configurable access logger.
 func LoggerWithConfig(cfg LoggerConfig) func(c *context.Context) error {
+	ensureLogWorker()
 	return func(c *context.Context) error {
 		start := time.Now()
 		c.Next()
@@ -64,7 +92,7 @@ func LoggerWithConfig(cfg LoggerConfig) func(c *context.Context) error {
 		if ip == "" {
 			ip = c.Request.RemoteAddr
 		}
-		path := c.Request.URL.Path
+		path := sanitizeLogPath(c.Request.URL.Path)
 		method := c.Request.Method
 
 		var msg string
@@ -77,10 +105,17 @@ func LoggerWithConfig(cfg LoggerConfig) func(c *context.Context) error {
 				prefix = reqIDStr + " | "
 			}
 			timestamp := time.Now().Format("2006/01/02 - 15:04:05")
-			msg = fmt.Sprintf("[KVolt] %s | %s%3d | %13v | %15s | %-7s %s\n",
+			// Use %q for path so CR/LF in decoded URLs cannot forge log lines.
+			msg = fmt.Sprintf("[KVolt] %s | %s%3d | %13v | %15s | %-7s %q\n",
 				timestamp, prefix, status, latency, ip, method, path)
 		}
 		emitLog(msg)
 		return nil
 	}
+}
+
+func sanitizeLogPath(path string) string {
+	path = strings.ReplaceAll(path, "\r", "")
+	path = strings.ReplaceAll(path, "\n", "")
+	return path
 }

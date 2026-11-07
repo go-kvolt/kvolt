@@ -47,19 +47,36 @@ func TestCSRF_PostWithoutTokenForbidden(t *testing.T) {
 }
 
 func TestCSRF_PostWithMatchingToken(t *testing.T) {
-	token := "abc123token"
+	secret := "test-csrf-secret"
+	token := newCSRFToken([]byte(secret))
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: token})
 	req.Header.Set("X-CSRF-Token", token)
 	rec := httptest.NewRecorder()
 	c := context.New(rec, req)
 	c.Handlers = []context.HandlerFunc{
-		CSRF(),
+		CSRFWithConfig(CSRFConfig{Secret: secret}),
 		func(c *context.Context) error { return c.String(200, "ok") },
 	}
 	c.Next()
 	if rec.Code != 200 {
 		t.Fatalf("want 200, got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCSRF_RejectsUnsignedPlantedCookie(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: "planted.notreal"})
+	req.Header.Set("X-CSRF-Token", "planted.notreal")
+	rec := httptest.NewRecorder()
+	c := context.New(rec, req)
+	c.Handlers = []context.HandlerFunc{
+		CSRFWithConfig(CSRFConfig{Secret: "test-csrf-secret"}),
+		func(c *context.Context) error { return c.String(200, "ok") },
+	}
+	c.Next()
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("want 403, got %d", rec.Code)
 	}
 }
 

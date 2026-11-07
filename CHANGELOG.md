@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+
+- **`Tenant`**: when `Claim` is set, ignore header as tenant source; reject header≠claim with 403.
+- **`CSRF`**: HMAC-signed tokens (process secret or `CSRFConfig.Secret`) so planted cookies without the secret fail.
+- **`JWT` / `JWTOptional`**: optional `KeyFunc` / `SigningMethod` (e.g. RS256), `Issuer` / `Audience`, `RequireExp` (default true), case-insensitive `Bearer`, `SkipOnInvalid` on optional.
+- **`session.Manager`**: sliding TTL via `Touch` (no Set-resurrect race); optional `MaxAge` absolute cap.
+- **Repo**: `SECURITY.md`, Dependabot (gomod + Actions); ignore `/bin/` (binary removed from git in prior commit).
+
+### Fixed
+
+- **`Engine.Run` / `RunTLS`**: bind (`Listen`) first and return the error; print “running” only after the listen succeeds.
+- **`middleware.Idempotency`**: no 5xx cache; strip `Set-Cookie`; actor + body hash in default key; reject oversized keys; bound memory store; single-flight; preserve `Flusher`/`Hijacker`; Redis body size cap.
+- **`Static`**: block directory listings (no index) and dotfile path segments (e.g. `.env`).
+- **`BindQuery` / `BindForm` / `BindURI`**: reject integer overflow; surface invalid JSON for struct/slice/map fields.
+- **`Logger`**: sanitize/quote paths; sync fallback when buffer full; lazy worker (no silent drop).
+- **`Limiter`**: no background goroutine; O(1) eviction when full.
+- **`Audit`**: `defer` (panic-safe), sets `Err` on panic, async `OnAudit` (use `Sync` in tests).
+- **`Recovery`**: re-raise `http.ErrAbortHandler`; larger stack dump (64KiB).
+- **`CORS`**: only short-circuit preflight `OPTIONS` (with `Access-Control-Request-Method`); do not shadow app OPTIONS routes.
+
 ## [v2.2.0] - 2026-11-07
 
 Production-promising platform release: multi-tenant helpers, idempotency, audit, optional OpenTelemetry, and dependency security bumps. Tested (fmt/vet/govulncheck/race/lint) before tag.

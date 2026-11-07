@@ -13,10 +13,13 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
+const defaultMaxBodyBytes = 1 << 20 // 1 MiB
+
 // Store implements middleware.IdempotencyStore using Redis JSON values.
 type Store struct {
-	client *goredis.Client
-	prefix string
+	client       *goredis.Client
+	prefix       string
+	maxBodyBytes int
 }
 
 // Option configures Store.
@@ -27,12 +30,21 @@ func WithPrefix(prefix string) Option {
 	return func(s *Store) { s.prefix = prefix }
 }
 
+// WithMaxBodyBytes caps cached response body size (default 1 MiB). Larger bodies are rejected.
+func WithMaxBodyBytes(n int) Option {
+	return func(s *Store) {
+		if n > 0 {
+			s.maxBodyBytes = n
+		}
+	}
+}
+
 // New wraps a go-redis client as an IdempotencyStore.
 func New(client *goredis.Client, opts ...Option) *Store {
 	if client == nil {
 		panic("redisidem: Client required")
 	}
-	s := &Store{client: client, prefix: "kvolt:idem:"}
+	s := &Store{client: client, prefix: "kvolt:idem:", maxBodyBytes: defaultMaxBodyBytes}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -69,6 +81,9 @@ func (s *Store) Get(key string) (middleware.IdempotencyRecord, bool, error) {
 
 // Set implements middleware.IdempotencyStore.
 func (s *Store) Set(key string, rec middleware.IdempotencyRecord, ttl time.Duration) error {
+	if s.maxBodyBytes > 0 && len(rec.Body) > s.maxBodyBytes {
+		return fmt.Errorf("redisidem: body %d exceeds max %d", len(rec.Body), s.maxBodyBytes)
+	}
 	raw := storedRec{
 		Status:  rec.Status,
 		Headers: map[string][]string(rec.Headers),

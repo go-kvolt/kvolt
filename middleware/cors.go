@@ -86,7 +86,8 @@ func CORSWithConfig(cfg CORSConfig) func(c *context.Context) error {
 			c.Writer.Header().Set("Access-Control-Max-Age", strconv.Itoa(cfg.MaxAge))
 		}
 
-		if c.Request.Method == http.MethodOptions {
+		// Only short-circuit CORS preflight; do not shadow app OPTIONS handlers.
+		if c.Request.Method == http.MethodOptions && c.Request.Header.Get("Access-Control-Request-Method") != "" {
 			c.Status(http.StatusNoContent)
 			return nil
 		}

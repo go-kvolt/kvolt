@@ -101,28 +101,33 @@ func setField(fv reflect.Value, raw string) error {
 		}
 		fv.SetBool(b)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		n, err := strconv.ParseInt(raw, 10, 64)
+		n, err := strconv.ParseInt(raw, 10, fv.Type().Bits())
 		if err != nil {
 			return err
 		}
 		fv.SetInt(n)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		n, err := strconv.ParseUint(raw, 10, 64)
+		n, err := strconv.ParseUint(raw, 10, fv.Type().Bits())
 		if err != nil {
 			return err
 		}
 		fv.SetUint(n)
 	case reflect.Float32, reflect.Float64:
-		n, err := strconv.ParseFloat(raw, 64)
+		bitSize := 64
+		if fv.Kind() == reflect.Float32 {
+			bitSize = 32
+		}
+		n, err := strconv.ParseFloat(raw, bitSize)
 		if err != nil {
 			return err
 		}
 		fv.SetFloat(n)
 	case reflect.Struct, reflect.Slice, reflect.Map:
 		ptr := reflect.New(fv.Type())
-		if err := json.Unmarshal([]byte(raw), ptr.Interface()); err == nil {
-			fv.Set(ptr.Elem())
+		if err := json.Unmarshal([]byte(raw), ptr.Interface()); err != nil {
+			return fmt.Errorf("bind %s: %w", fv.Type().String(), err)
 		}
+		fv.Set(ptr.Elem())
 	}
 	return nil
 }

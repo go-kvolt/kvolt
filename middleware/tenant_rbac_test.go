@@ -56,6 +56,34 @@ func TestTenant_FromClaim(t *testing.T) {
 	}
 }
 
+func TestTenant_HeaderClaimMismatch(t *testing.T) {
+	mw := Tenant(TenantConfig{Claim: "tid", Required: true})
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("X-Tenant-ID", "other")
+	c := context.New(w, r)
+	c.Set("user", jwt.MapClaims{"tid": "t1"})
+	c.Handlers = []context.HandlerFunc{func(c *context.Context) error { return c.String(200, "ok") }}
+	_ = mw(c)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("want 403 got %d", w.Code)
+	}
+}
+
+func TestTenant_ClaimIgnoresHeaderAlone(t *testing.T) {
+	// When Claim is configured, a bare header must not satisfy Required.
+	mw := Tenant(TenantConfig{Claim: "tid", Required: true})
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("X-Tenant-ID", "spoofed")
+	c := context.New(w, r)
+	c.Handlers = []context.HandlerFunc{func(c *context.Context) error { return c.String(200, "ok") }}
+	_ = mw(c)
+	if w.Code != 400 {
+		t.Fatalf("want 400 got %d", w.Code)
+	}
+}
+
 func TestRequirePermission(t *testing.T) {
 	check := func(c *context.Context, perm string) (bool, error) {
 		return perm == "inv.read", nil

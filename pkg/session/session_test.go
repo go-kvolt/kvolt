@@ -54,3 +54,33 @@ func TestManager_GetInvalidToken(t *testing.T) {
 		t.Errorf("Get invalid: want ErrSessionNotFound, got %v", err)
 	}
 }
+
+func TestManager_GetDoesNotResurrectAfterDestroy(t *testing.T) {
+	store := cache.NewMemoryStore(time.Minute)
+	manager := New(store, time.Hour)
+	token, err := manager.Create(map[string]string{"user": "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Destroy(token); err != nil {
+		t.Fatal(err)
+	}
+	_, err = manager.Get(token)
+	if err != ErrSessionNotFound {
+		t.Fatalf("want not found after destroy, got %v", err)
+	}
+}
+
+func TestManager_MaxAge(t *testing.T) {
+	store := cache.NewMemoryStore(time.Minute)
+	manager := New(store, time.Hour).WithMaxAge(time.Millisecond)
+	token, err := manager.Create("x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(5 * time.Millisecond)
+	_, err = manager.Get(token)
+	if err != ErrSessionNotFound {
+		t.Fatalf("want expired by MaxAge, got %v", err)
+	}
+}

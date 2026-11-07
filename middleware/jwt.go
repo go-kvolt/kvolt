@@ -15,8 +15,16 @@ func httperrUnauthorized() error {
 
 // JWTConfig defines the config for JWT middleware.
 type JWTConfig struct {
-	// SigningKey is the secret used to sign the JWT (Required).
+	// SigningKey is the HMAC secret (Required unless KeyFunc is set).
 	SigningKey string
+
+	// KeyFunc supplies the verification key (e.g. RSA public key for RS256).
+	// When set, SigningKey may be empty. Prefer KeyFunc for asymmetric algorithms.
+	KeyFunc jwt.Keyfunc
+
+	// SigningMethod restricts accepted algorithms (default "HS256").
+	// Use "RS256" with KeyFunc returning an *rsa.PublicKey.
+	SigningMethod string
 
 	// ContextKey is the key used to store claims in context (Default: "user").
 	ContextKey string
@@ -31,11 +39,28 @@ type JWTConfig struct {
 	TokenLookup string
 
 	// AuthScheme to be used in the Authorization header.
-	// Optional. Default value "Bearer".
+	// Optional. Default value "Bearer". Matching is case-insensitive.
 	AuthScheme string
+
+	// Issuer when non-empty requires claim "iss" to match.
+	Issuer string
+	// Audience when non-empty requires claim "aud" to include this value.
+	Audience string
+	// RequireExp when true (default) rejects tokens without an exp claim.
+	RequireExp *bool
+
+	// SkipOnInvalid (JWTOptional only): treat invalid tokens as anonymous instead of 401.
+	SkipOnInvalid bool
 
 	// ErrorHandler handles errors during token validation (Optional).
 	ErrorHandler func(c *context.Context, err error) error
+}
+
+func jwtRequireExp(cfg JWTConfig) bool {
+	if cfg.RequireExp == nil {
+		return true
+	}
+	return *cfg.RequireExp
 }
 
 // jwtExtractor extracts the token string from the request.
@@ -51,17 +76,20 @@ func buildJWTExtractor(lookup, authScheme string) jwtExtractor {
 	source, name := parts[0], parts[1]
 	switch source {
 	case "header":
-		lenAuth := len(authScheme)
+		scheme := authScheme
 		return func(c *context.Context) (string, error) {
 			auth := c.Request.Header.Get(name)
 			if auth == "" {
 				return "", errors.New("missing auth header")
 			}
-			if lenAuth > 0 {
-				if len(auth) > lenAuth+1 && auth[:lenAuth] == authScheme && auth[lenAuth] == ' ' {
-					return auth[lenAuth+1:], nil
+			if scheme != "" {
+				if len(auth) <= len(scheme) || auth[len(scheme)] != ' ' {
+					return "", errors.New("invalid auth header format")
 				}
-				return "", errors.New("invalid auth header format")
+				if !strings.EqualFold(auth[:len(scheme)], scheme) {
+					return "", errors.New("invalid auth header format")
+				}
+				return auth[len(scheme)+1:], nil
 			}
 			return auth, nil
 		}
@@ -89,11 +117,48 @@ func buildJWTExtractor(lookup, authScheme string) jwtExtractor {
 	}
 }
 
-// JWT returns a JWT authentication middleware.
-func JWT(config JWTConfig) context.HandlerFunc {
-	if strings.TrimSpace(config.SigningKey) == "" {
-		panic("middleware: JWT SigningKey must not be empty")
+func parseJWTToken(tokenString string, cfg JWTConfig) (*jwt.Token, error) {
+	methodName := cfg.SigningMethod
+	if methodName == "" {
+		methodName = "HS256"
 	}
+	keyBytes := []byte(cfg.SigningKey)
+	keyFunc := cfg.KeyFunc
+	if keyFunc == nil {
+		keyFunc = func(token *jwt.Token) (interface{}, error) {
+			if token.Method == nil || token.Method.Alg() != methodName {
+				return nil, errors.New("unexpected signing method")
+			}
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, errors.New("unexpected signing method")
+			}
+			return keyBytes, nil
+		}
+	} else {
+		inner := keyFunc
+		keyFunc = func(token *jwt.Token) (interface{}, error) {
+			if token.Method == nil || token.Method.Alg() != methodName {
+				return nil, errors.New("unexpected signing method")
+			}
+			return inner(token)
+		}
+	}
+
+	opts := []jwt.ParserOption{jwt.WithValidMethods([]string{methodName})}
+	if jwtRequireExp(cfg) {
+		opts = append(opts, jwt.WithExpirationRequired())
+	}
+	if cfg.Issuer != "" {
+		opts = append(opts, jwt.WithIssuer(cfg.Issuer))
+	}
+	if cfg.Audience != "" {
+		opts = append(opts, jwt.WithAudience(cfg.Audience))
+	}
+	parser := jwt.NewParser(opts...)
+	return parser.Parse(tokenString, keyFunc)
+}
+
+func normalizeJWTConfig(config *JWTConfig) {
 	if config.ContextKey == "" {
 		config.ContextKey = "user"
 	}
@@ -108,9 +173,18 @@ func JWT(config JWTConfig) context.HandlerFunc {
 	if config.AuthScheme == "" && strings.HasPrefix(config.TokenLookup, "header:") {
 		config.AuthScheme = "Bearer"
 	}
+	if config.SigningMethod == "" {
+		config.SigningMethod = "HS256"
+	}
+}
 
+// JWT returns a JWT authentication middleware.
+func JWT(config JWTConfig) context.HandlerFunc {
+	if config.KeyFunc == nil && strings.TrimSpace(config.SigningKey) == "" {
+		panic("middleware: JWT SigningKey or KeyFunc is required")
+	}
+	normalizeJWTConfig(&config)
 	extractor := buildJWTExtractor(config.TokenLookup, config.AuthScheme)
-	keyBytes := []byte(config.SigningKey)
 
 	return func(c *context.Context) error {
 		tokenString, err := extractor(c)
@@ -118,14 +192,8 @@ func JWT(config JWTConfig) context.HandlerFunc {
 			return config.ErrorHandler(c, err)
 		}
 
-		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, errors.New("unexpected signing method")
-			}
-			return keyBytes, nil
-		})
-
-		if err != nil || !token.Valid {
+		token, err := parseJWTToken(tokenString, config)
+		if err != nil || token == nil || !token.Valid {
 			return config.ErrorHandler(c, err)
 		}
 
@@ -134,9 +202,7 @@ func JWT(config JWTConfig) context.HandlerFunc {
 			return config.ErrorHandler(c, errors.New("invalid claims"))
 		}
 
-		// Store claims in context (Zero alloc)
 		c.Set(config.ContextKey, claims)
-
 		c.Next()
 		return nil
 	}

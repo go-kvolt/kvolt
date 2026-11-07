@@ -35,9 +35,8 @@ type LimiterConfig struct {
 	KeyFunc func(c *context.Context) string
 	// ErrorHandler overrides the default 429 JSON response.
 	ErrorHandler func(c *context.Context) error
-	// MaxKeys caps distinct bucket keys (default 10000). When full, the oldest
-	// bucket (by last refill) is evicted so memory stays bounded without
-	// rejecting brand-new clients with 429.
+	// MaxKeys caps distinct bucket keys (default 10000). When full, expired then
+	// one arbitrary oldest-ish entry is evicted (no background goroutine).
 	MaxKeys int
 }
 
@@ -74,39 +73,20 @@ func LimiterWithConfig(cfg LimiterConfig) func(c *context.Context) error {
 	var mu sync.Mutex
 	clients := make(map[string]*client)
 
-	evictStale := func(now time.Time) {
+	evictOne := func(now time.Time) {
+		// Prefer stale buckets (>1m idle).
 		for key, cl := range clients {
 			if now.Sub(cl.lastRefill) > time.Minute {
 				delete(clients, key)
+				return
 			}
 		}
-	}
-
-	evictOldest := func() {
-		var oldestKey string
-		var oldestTime time.Time
-		first := true
-		for key, cl := range clients {
-			if first || cl.lastRefill.Before(oldestTime) {
-				oldestKey = key
-				oldestTime = cl.lastRefill
-				first = false
-			}
-		}
-		if oldestKey != "" {
-			delete(clients, oldestKey)
+		// Otherwise drop one arbitrary key (map iteration) — O(1) amortised.
+		for key := range clients {
+			delete(clients, key)
+			return
 		}
 	}
-
-	go func() {
-		ticker := time.NewTicker(time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			mu.Lock()
-			evictStale(time.Now())
-			mu.Unlock()
-		}
-	}()
 
 	return func(c *context.Context) error {
 		key := cfg.KeyFunc(c)
@@ -116,19 +96,15 @@ func LimiterWithConfig(cfg LimiterConfig) func(c *context.Context) error {
 
 		mu.Lock()
 		lim, exists := clients[key]
+		now := time.Now()
 		if !exists {
-			now := time.Now()
-			if len(clients) >= cfg.MaxKeys {
-				evictStale(now)
-			}
 			for len(clients) >= cfg.MaxKeys {
-				evictOldest()
+				evictOne(now)
 			}
 			lim = &client{tokens: cfg.Burst, lastRefill: now}
 			clients[key] = lim
 		}
 
-		now := time.Now()
 		elapsed := now.Sub(lim.lastRefill).Seconds()
 		refill := int(elapsed * float64(cfg.RPS))
 		if refill > 0 {

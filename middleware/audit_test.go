@@ -14,6 +14,7 @@ func TestAudit_EmitsEvent(t *testing.T) {
 		ev AuditEvent
 	)
 	mw := Audit(AuditConfig{
+		Sync: true,
 		OnAudit: func(e AuditEvent) {
 			mu.Lock()
 			ev = e

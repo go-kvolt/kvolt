@@ -1,12 +1,49 @@
 package kvolt
 
 import (
+	"io/fs"
 	"net/http"
+	"os"
+	"path"
 	"strings"
 
 	"github.com/go-kvolt/kvolt/v2/context"
 	"github.com/go-kvolt/kvolt/v2/router"
 )
+
+// onlyFilesFS wraps http.FileSystem to disable directory listings and block dotfiles.
+type onlyFilesFS struct {
+	fs http.FileSystem
+}
+
+func (o onlyFilesFS) Open(name string) (http.File, error) {
+	cleaned := path.Clean("/" + name)
+	for _, seg := range strings.Split(cleaned, "/") {
+		if seg == "" || seg == "." {
+			continue
+		}
+		if strings.HasPrefix(seg, ".") {
+			return nil, os.ErrNotExist
+		}
+	}
+	f, err := o.fs.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	st, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	if st.IsDir() {
+		// Allow only if index.html exists; otherwise no directory listing.
+		if _, err := o.fs.Open(strings.TrimSuffix(name, "/") + "/index.html"); err != nil {
+			_ = f.Close()
+			return nil, fs.ErrNotExist
+		}
+	}
+	return f, nil
+}
 
 // RouterGroup is a wrapper to group routes with a common prefix and middleware.
 type RouterGroup struct {
@@ -132,14 +169,14 @@ func (group *RouterGroup) Any(path string, handler context.HandlerFunc) []*Route
 }
 
 // Static registers a route to serve static files from the provided root directory.
+// Directory listings and dotfile paths (e.g. .env) are blocked.
 // relativePath: The path pattern (e.g. "/assets")
 // root: The file system root (e.g. "./public")
 func (group *RouterGroup) Static(relativePath, root string) *Route {
 	// Construct the full prefix path to strip (e.g. /v1/assets)
 	absolutePrefix := group.prefix + relativePath
 
-	// Create the file server handler
-	fs := http.StripPrefix(absolutePrefix, http.FileServer(http.Dir(root)))
+	fs := http.StripPrefix(absolutePrefix, http.FileServer(onlyFilesFS{http.Dir(root)}))
 
 	handler := func(c *context.Context) error {
 		fs.ServeHTTP(c.Writer, c.Request)

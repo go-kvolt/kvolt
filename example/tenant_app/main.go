@@ -19,15 +19,19 @@ import (
 func main() {
 	app := kvolt.Default()
 	app.Use(middleware.Logger())
-	app.Use(middleware.Tenant(middleware.TenantConfig{
-		Header:   middleware.DefaultTenantHeader,
-		Required: true,
-	}))
-
 	if secret := os.Getenv("JWT_SECRET"); secret != "" {
+		// JWT first so Tenant can read the claim; header alone is not trusted when Claim is set.
 		app.Use(middleware.JWTOptional(middleware.JWTConfig{SigningKey: secret}))
+		app.Use(middleware.Tenant(middleware.TenantConfig{
+			Claim:    "tid",
+			Required: true,
+		}))
 	} else {
-		log.Println("JWTOptional skipped (set JWT_SECRET to enable)")
+		log.Println("JWTOptional skipped (set JWT_SECRET to enable); tenant from X-Tenant-ID only")
+		app.Use(middleware.Tenant(middleware.TenantConfig{
+			Header:   middleware.DefaultTenantHeader,
+			Required: true,
+		}))
 	}
 
 	// Demo RBAC: permission "orders.write" allowed for any authenticated-or-anonymous demo.
