@@ -7,7 +7,7 @@ toolchain go1.27.3
 require (
 	github.com/alicebob/miniredis/v2 v2.40.0
 	github.com/bytedance/sonic v1.15.5
-	github.com/fsnotify/fsnotify v1.9.0
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-playground/validator/v10 v10.30.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
