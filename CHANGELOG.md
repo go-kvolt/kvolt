@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [v2.2.0] - 2026-11-07
+
+Production-promising platform release: multi-tenant helpers, idempotency, audit, optional OpenTelemetry, and dependency security bumps. Tested (fmt/vet/govulncheck/race/lint) before tag.
+
 ### Added
 
 - **`middleware.Tenant` / `TenantID`**: multi-tenant id from header, route param, JWT claim, or custom extractor.
@@ -27,6 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`example/full_app`**: no hardcoded JWT secret; limiter uses `ClientIP`; CSRF not mis-skipped on API routes.
 - **`redislimit`**: unit tests (allow/block + fail-closed).
+- Docs: remove sunset Go Report Card badge; maturity wording production-promising.
 
 ## [v2.1.1] - 2026-11-04
 

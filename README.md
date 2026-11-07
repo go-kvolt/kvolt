@@ -14,7 +14,7 @@
 
 **KVolt** is a Go web framework on `net/http`: a fast radix router, a familiar context API, and production middleware — with optional Redis, Prometheus, and gRPC as separate imports so the core stays lean.
 
-**v2.1.1** · Module: [`github.com/go-kvolt/kvolt/v2`](https://pkg.go.dev/github.com/go-kvolt/kvolt/v2) · Requires **Go 1.27+** · [Changelog](CHANGELOG.md)
+**v2.2.0** · Module: [`github.com/go-kvolt/kvolt/v2`](https://pkg.go.dev/github.com/go-kvolt/kvolt/v2) · Requires **Go 1.27+** · [Changelog](CHANGELOG.md)
 
 ---
 
@@ -44,7 +44,7 @@ func main() {
 ```
 
 ```bash
-go get github.com/go-kvolt/kvolt/v2@v2.1.1
+go get github.com/go-kvolt/kvolt/v2@v2.2.0
 go run .
 # → http://localhost:8080/ping
 ```
@@ -56,13 +56,13 @@ go run .
 **Library**
 
 ```bash
-go get github.com/go-kvolt/kvolt/v2@v2.1.1
+go get github.com/go-kvolt/kvolt/v2@v2.2.0
 ```
 
 **CLI** (scaffold + hot reload)
 
 ```bash
-go install github.com/go-kvolt/kvolt/v2/cmd/kvolt@v2.1.1
+go install github.com/go-kvolt/kvolt/v2/cmd/kvolt@v2.2.0
 kvolt new my-app
 cd my-app && go mod tidy && go run ./cmd/api
 ```

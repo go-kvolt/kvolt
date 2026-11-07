@@ -1,6 +1,6 @@
 # KVolt Documentation ⚡
 
-Welcome to the official documentation for KVolt **v2.1** (production-promising).
+Welcome to the official documentation for KVolt **v2.2** (production-promising).
 
 ## Basics
 -   **[Getting Started](getting_started.md)**: Installation, Quick Start, and HTTPS. Use `kvolt.Default()`.

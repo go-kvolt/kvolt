@@ -1,6 +1,6 @@
 # Getting Started with KVolt ⚡
 
-KVolt is a high-performance, developer-friendly Go web framework designed for building fast and scalable web applications. **v2.1** is the current **production-promising** line (tested and approved for real apps; validate for your own workload).
+KVolt is a high-performance, developer-friendly Go web framework designed for building fast and scalable web applications. **v2.2** is the current **production-promising** line (tested and approved for real apps; validate for your own workload).
 
 ## Installation
 
@@ -15,11 +15,11 @@ The KVolt CLI is the easiest way to start a new project. It scaffolds a practica
 1.  **Install the CLI:**
 
     ```bash
-    go install github.com/go-kvolt/kvolt/v2/cmd/kvolt@v2.1.1
+    go install github.com/go-kvolt/kvolt/v2/cmd/kvolt@v2.2.0
     kvolt version
 ```
 
-Use `@v2.1.1` (or `@latest`). The `v2.0.0` tag is not a valid Go module (path was not `/v2`).
+Use `@v2.2.0` (or `@latest`). The `v2.0.0` tag is not a valid Go module (path was not `/v2`).
 
 2.  **Verify Installation:**
 
@@ -63,7 +63,7 @@ If you prefer to start from scratch or integrate KVolt into an existing project:
 2.  **Install KVolt:**
 
     ```bash
-    go get github.com/go-kvolt/kvolt/v2@v2.1.1
+    go get github.com/go-kvolt/kvolt/v2@v2.2.0
     ```
 
 3.  **Create `main.go`:**
