@@ -25,8 +25,8 @@ type Manager struct {
 	// MaxAge is an absolute lifetime from Create (0 = sliding only, no absolute cap).
 	MaxAge time.Duration
 
-	mu       sync.Mutex
-	created  map[string]time.Time // token -> createdAt for absolute MaxAge
+	mu      sync.Mutex
+	created map[string]time.Time // token -> createdAt for absolute MaxAge
 }
 
 // New creates a new Session Manager.

@@ -18,7 +18,7 @@ import (
 type CSRFConfig struct {
 	// Secret signs tokens so a planted cookie without the secret cannot pass.
 	// When empty, a process-local random secret is used (fine for single-instance).
-	Secret string
+	Secret     string
 	CookieName string
 	HeaderName string
 	CookiePath string

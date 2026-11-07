@@ -20,8 +20,8 @@ import (
 
 const (
 	// IdempotencyKeyHeader is the standard request header.
-	IdempotencyKeyHeader = "Idempotency-Key"
-	maxIdempotencyKeyLen = 128
+	IdempotencyKeyHeader      = "Idempotency-Key"
+	maxIdempotencyKeyLen      = 128
 	defaultIdempotencyMaxKeys = 10_000
 )
 
