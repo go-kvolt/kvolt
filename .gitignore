@@ -10,6 +10,45 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+*.cov
+coverage*.out
+.ci-*.txt
+cov_*
+covboost*
+cover_targets
+coverage
+coverage-*
+coverage_boost
+coverage_gaps.txt
+coverage_low.txt
+covrun.txt
+*_cover
+*_cover.html
+*_final
+*_funcs.txt
+final_cover
+context_cover
+middleware_cover
+router_cover
+prom_cover
+prom_final
+prom_funcs.txt
+ridem_cover
+ridem_final
+ridem_funcs.txt
+rlim_cover
+rlim_final
+rlim_funcs.txt
+mw_f2
+mw_final
+mid_funcs.txt
+mid_cover.html
+ctx_f2
+ctx_final
+ctx_funcs.txt
+ctx_cover.html
+k.html
+cmd.cov
 
 # Dependency directories (remove the comment below to include it)
 # vendor/

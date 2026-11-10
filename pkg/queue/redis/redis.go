@@ -22,6 +22,9 @@ const (
 	defaultVisibilityTimeout = 30 * time.Second
 )
 
+// Overridable in tests to exercise wire marshal failure paths.
+var wireMarshal = sonic.Marshal
+
 type jobWire struct {
 	ID         string                 `json:"id"`
 	Name       string                 `json:"name"`
@@ -142,7 +145,7 @@ func (q *Queue) PushWithOptions(name string, payload interface{}, opts queue.Pus
 }
 
 func (q *Queue) enqueueReady(job jobWire) error {
-	data, err := sonic.Marshal(job)
+	data, err := wireMarshal(job)
 	if err != nil {
 		return err
 	}
@@ -150,7 +153,7 @@ func (q *Queue) enqueueReady(job jobWire) error {
 }
 
 func (q *Queue) enqueueDelayed(job jobWire, delay time.Duration) error {
-	data, err := sonic.Marshal(job)
+	data, err := wireMarshal(job)
 	if err != nil {
 		return err
 	}
@@ -214,7 +217,11 @@ func (q *Queue) workerLoop(id int) {
 		}
 
 		deadline := float64(time.Now().Add(q.visibility).UnixMilli())
-		_ = q.client.ZAdd(ctx, q.inflightKey(), goredis.Z{Score: deadline, Member: data}).Err()
+		if err := q.client.ZAdd(ctx, q.inflightKey(), goredis.Z{Score: deadline, Member: data}).Err(); err != nil {
+			// Leave job in processing; reaper/orphan reclaim will retry.
+			log.Printf("queue redis ZADD inflight: %v\n", err)
+			continue
+		}
 		q.processAndAck(ctx, data)
 	}
 }
@@ -242,17 +249,41 @@ func (q *Queue) reclaimExpired(ctx context.Context) {
 		Min: "-inf",
 		Max: fmt.Sprintf("%f", now),
 	}).Result()
-	if err != nil || len(members) == 0 {
+	if err == nil {
+		for _, m := range members {
+			n, err := q.client.ZRem(ctx, q.inflightKey(), m).Result()
+			if err != nil || n == 0 {
+				continue
+			}
+			_ = q.client.LRem(ctx, q.processingKey(), 1, m).Err()
+			_ = q.client.LPush(ctx, q.readyKey(), m).Err()
+			log.Printf("queue redis: reclaimed expired job\n")
+		}
+	}
+	// Jobs stuck in processing without an inflight deadline (crash between
+	// BRPOPLPUSH and ZADD) would never be reaped — recover them here.
+	q.reclaimOrphans(ctx)
+}
+
+// reclaimOrphans moves processing-list entries that have no inflight score back to ready.
+func (q *Queue) reclaimOrphans(ctx context.Context) {
+	items, err := q.client.LRange(ctx, q.processingKey(), 0, -1).Result()
+	if err != nil || len(items) == 0 {
 		return
 	}
-	for _, m := range members {
-		n, err := q.client.ZRem(ctx, q.inflightKey(), m).Result()
-		if err != nil || n == 0 {
+	for _, m := range items {
+		_, err := q.client.ZScore(ctx, q.inflightKey(), m).Result()
+		if err == nil {
+			continue // has a deadline — leave for score-based reclaim
+		}
+		if err != goredis.Nil {
 			continue
 		}
-		_ = q.client.LRem(ctx, q.processingKey(), 1, m).Err()
+		if n, err := q.client.LRem(ctx, q.processingKey(), 1, m).Result(); err != nil || n == 0 {
+			continue
+		}
 		_ = q.client.LPush(ctx, q.readyKey(), m).Err()
-		log.Printf("queue redis: reclaimed expired job\n")
+		log.Printf("queue redis: reclaimed orphan processing job\n")
 	}
 }
 

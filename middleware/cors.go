@@ -89,6 +89,7 @@ func CORSWithConfig(cfg CORSConfig) func(c *context.Context) error {
 		// Only short-circuit CORS preflight; do not shadow app OPTIONS handlers.
 		if c.Request.Method == http.MethodOptions && c.Request.Header.Get("Access-Control-Request-Method") != "" {
 			c.Status(http.StatusNoContent)
+			c.FlushHeaders()
 			return nil
 		}
 		c.Next()

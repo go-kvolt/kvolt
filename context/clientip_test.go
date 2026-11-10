@@ -27,3 +27,14 @@ func TestClientIP_UntrustedPeerIgnoresXFF(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestClientIP_RejectsTrustedXRealIP(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.5:443"
+	req.Header.Set("X-Real-IP", "10.0.0.9") // another trusted hop — not a client
+	c := New(httptest.NewRecorder(), req)
+	c.TrustedProxies = []string{"10.0.0.0/8"}
+	if got := c.ClientIP(); got != "10.0.0.5" {
+		t.Fatalf("got %q want peer 10.0.0.5", got)
+	}
+}

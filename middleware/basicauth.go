@@ -56,10 +56,11 @@ func BasicAuthWithConfig(cfg BasicAuthConfig) func(c *context.Context) error {
 
 	return func(c *context.Context) error {
 		auth := c.Request.Header.Get("Authorization")
-		if !strings.HasPrefix(auth, "Basic ") {
+		const basic = "Basic "
+		if len(auth) <= len(basic) || !strings.EqualFold(auth[:len(basic)-1], "Basic") || auth[len(basic)-1] != ' ' {
 			return unauthorizedBasic(c, cfg.Realm)
 		}
-		raw, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(auth, "Basic "))
+		raw, err := base64.StdEncoding.DecodeString(auth[len(basic):])
 		if err != nil {
 			return unauthorizedBasic(c, cfg.Realm)
 		}

@@ -25,6 +25,9 @@ func clientIP(remoteAddr string) string {
 
 const defaultLimiterMaxKeys = 10_000
 
+// limiterNow is time.Now; tests swap it to exercise stale-bucket eviction.
+var limiterNow = time.Now
+
 // LimiterConfig configures a token-bucket rate limiter.
 type LimiterConfig struct {
 	// RPS is refill rate (tokens per second).
@@ -96,7 +99,7 @@ func LimiterWithConfig(cfg LimiterConfig) func(c *context.Context) error {
 
 		mu.Lock()
 		lim, exists := clients[key]
-		now := time.Now()
+		now := limiterNow()
 		if !exists {
 			for len(clients) >= cfg.MaxKeys {
 				evictOne(now)

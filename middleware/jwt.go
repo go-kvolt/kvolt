@@ -125,23 +125,9 @@ func parseJWTToken(tokenString string, cfg JWTConfig) (*jwt.Token, error) {
 	keyBytes := []byte(cfg.SigningKey)
 	keyFunc := cfg.KeyFunc
 	if keyFunc == nil {
-		keyFunc = func(token *jwt.Token) (interface{}, error) {
-			if token.Method == nil || token.Method.Alg() != methodName {
-				return nil, errors.New("unexpected signing method")
-			}
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, errors.New("unexpected signing method")
-			}
-			return keyBytes, nil
-		}
+		keyFunc = jwtHMACKeyFunc(methodName, keyBytes)
 	} else {
-		inner := keyFunc
-		keyFunc = func(token *jwt.Token) (interface{}, error) {
-			if token.Method == nil || token.Method.Alg() != methodName {
-				return nil, errors.New("unexpected signing method")
-			}
-			return inner(token)
-		}
+		keyFunc = jwtWrapKeyFunc(methodName, keyFunc)
 	}
 
 	opts := []jwt.ParserOption{jwt.WithValidMethods([]string{methodName})}
@@ -197,7 +183,7 @@ func JWT(config JWTConfig) context.HandlerFunc {
 			return config.ErrorHandler(c, err)
 		}
 
-		claims, ok := token.Claims.(jwt.MapClaims)
+		claims, ok := jwtMapClaims(token)
 		if !ok {
 			return config.ErrorHandler(c, errors.New("invalid claims"))
 		}
@@ -206,4 +192,33 @@ func JWT(config JWTConfig) context.HandlerFunc {
 		c.Next()
 		return nil
 	}
+}
+
+// jwtHMACKeyFunc verifies HMAC alg then returns the shared secret.
+func jwtHMACKeyFunc(methodName string, keyBytes []byte) jwt.Keyfunc {
+	return func(token *jwt.Token) (interface{}, error) {
+		if token.Method == nil || token.Method.Alg() != methodName {
+			return nil, errors.New("unexpected signing method")
+		}
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return keyBytes, nil
+	}
+}
+
+// jwtWrapKeyFunc rejects unexpected algs before delegating to KeyFunc.
+func jwtWrapKeyFunc(methodName string, inner jwt.Keyfunc) jwt.Keyfunc {
+	return func(token *jwt.Token) (interface{}, error) {
+		if token.Method == nil || token.Method.Alg() != methodName {
+			return nil, errors.New("unexpected signing method")
+		}
+		return inner(token)
+	}
+}
+
+// jwtMapClaims extracts MapClaims (overridable in tests for the !ok branch).
+var jwtMapClaims = func(token *jwt.Token) (jwt.MapClaims, bool) {
+	claims, ok := token.Claims.(jwt.MapClaims)
+	return claims, ok
 }

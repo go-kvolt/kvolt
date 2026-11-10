@@ -18,6 +18,21 @@ import (
 // Version is set at build time: go build -ldflags "-X main.Version=v2.2.0"
 var Version = "2.2.0"
 
+// Test seams (production defaults).
+var (
+	exitFunc      = os.Exit
+	fatalFunc     = log.Fatal
+	randRead      = rand.Read
+	execCommand   = exec.Command
+	writeFileFn   = os.WriteFile
+	mkdirAllFn    = os.MkdirAll
+	newWatcherFn  = fsnotify.NewWatcher
+	filepathWalk  = filepath.Walk
+	filepathAbs   = filepath.Abs
+	osGetwd       = os.Getwd
+	debounceDelay = 500 * time.Millisecond
+)
+
 func main() {
 	if len(os.Args) < 2 {
 		printHelp()
@@ -99,27 +114,31 @@ func runNew() {
 }
 
 func runRun() {
-	fs := flag.NewFlagSet("run", flag.ExitOnError)
+	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	entry := fs.String("e", "", "Entry point (default: cmd/api/main.go or main.go)")
 	fs.Usage = func() {
 		fmt.Println("Usage: kvolt run [-e entry]")
 		fmt.Println("  Starts the app with hot reload. Watches .go, .yaml, .env, .html files.")
 		fmt.Println("  -e  Entry point path (e.g. cmd/api/main.go or ./cmd/server)")
 	}
-	_ = fs.Parse(os.Args[2:])
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		return
+	}
 	fmt.Println("Starting development server with hot reload...")
 	runDev(*entry)
 }
 
 func runBuild() {
-	fs := flag.NewFlagSet("build", flag.ExitOnError)
+	fs := flag.NewFlagSet("build", flag.ContinueOnError)
 	out := fs.String("o", "bin/app", "Output binary path")
 	entry := fs.String("e", "", "Entry point (default: cmd/api/main.go or main.go)")
 	fs.Usage = func() {
 		fmt.Println("Usage: kvolt build [-o output] [-e entry]")
 		fmt.Println("  Builds the app to a binary. Default output: bin/app")
 	}
-	_ = fs.Parse(os.Args[2:])
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		return
+	}
 	entryPoint := *entry
 	if entryPoint == "" {
 		entryPoint = "cmd/api/main.go"
@@ -131,45 +150,47 @@ func runBuild() {
 		fmt.Println("❌ Entry point not found:", entryPoint)
 		return
 	}
-	if err := os.MkdirAll(filepath.Dir(*out), 0755); err != nil {
+	if err := mkdirAllFn(filepath.Dir(*out), 0755); err != nil {
 		fmt.Printf("❌ Failed to create output dir: %v\n", err)
 		return
 	}
-	cmd := exec.Command("go", "build", "-o", *out, entryPoint)
+	cmd := execCommand("go", "build", "-o", *out, entryPoint)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		os.Exit(1)
+		exitFunc(1)
 	}
 	fmt.Printf("✅ Built %s\n", *out)
 }
 
 func runTest() {
-	fs := flag.NewFlagSet("test", flag.ExitOnError)
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
 	cover := fs.Bool("cover", false, "Enable coverage")
 	fs.Usage = func() {
 		fmt.Println("Usage: kvolt test [-cover]")
 		fmt.Println("  Runs go test ./... Use -cover for coverage.")
 	}
-	_ = fs.Parse(os.Args[2:])
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		return
+	}
 	args := []string{"test", "./..."}
 	if *cover {
 		args = append(args, "-cover")
 	}
-	cmd := exec.Command("go", args...)
+	cmd := execCommand("go", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		os.Exit(1)
+		exitFunc(1)
 	}
 }
 
 func runFmt() {
-	cmd := exec.Command("go", "fmt", "./...")
+	cmd := execCommand("go", "fmt", "./...")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		os.Exit(1)
+		exitFunc(1)
 	}
 	fmt.Println("✅ Formatted")
 }
@@ -183,9 +204,9 @@ func toExportName(s string) string {
 
 func runKey() {
 	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
+	if _, err := randRead(b); err != nil {
 		fmt.Printf("❌ %v\n", err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 	fmt.Println(hex.EncodeToString(b))
 }
@@ -220,9 +241,9 @@ func runGenerate() {
 
 func generateHandler(name string) {
 	dir := "internal/handler"
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := mkdirAllFn(dir, 0755); err != nil {
 		fmt.Printf("❌ %v\n", err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 	fileName := strings.ToLower(name) + ".go"
 	path := filepath.Join(dir, fileName)
@@ -238,18 +259,18 @@ func %s(c *context.Context) error {
 	return c.JSON(200, map[string]string{"message": "ok"})
 }
 `, "handler", exportName, name, exportName)
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := writeFileFn(path, []byte(content), 0644); err != nil {
 		fmt.Printf("❌ %v\n", err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 	fmt.Printf("✅ Created %s\n", path)
 }
 
 func generateMiddleware(name string) {
 	dir := "internal/middleware"
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := mkdirAllFn(dir, 0755); err != nil {
 		fmt.Printf("❌ %v\n", err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 	fileName := strings.ToLower(name) + ".go"
 	path := filepath.Join(dir, fileName)
@@ -270,9 +291,9 @@ func %s() func(c *context.Context) error {
 	}
 }
 `, exportName, name, exportName)
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := writeFileFn(path, []byte(content), 0644); err != nil {
 		fmt.Printf("❌ %v\n", err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 	fmt.Printf("✅ Created %s\n", path)
 }
@@ -296,7 +317,7 @@ CMD ["./server"]
 `
 	if err := os.WriteFile("Dockerfile", []byte(dockerfile), 0644); err != nil {
 		fmt.Printf("❌ %v\n", err)
-		os.Exit(1)
+		exitFunc(1)
 	}
 	fmt.Println("✅ Created Dockerfile")
 }
@@ -424,7 +445,7 @@ go run ./cmd/api
 }
 
 func writeFile(path, content string) {
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := writeFileFn(path, []byte(content), 0644); err != nil {
 		fmt.Printf("Error writing file %s: %v\n", path, err)
 	}
 }
@@ -442,17 +463,28 @@ var watchSkipDirs = map[string]bool{
 	".git": true, "vendor": true, "node_modules": true,
 }
 
+// runDevStop, when non-nil, lets tests terminate the hot-reload loop.
+var runDevStop <-chan struct{}
+
+// armInitialDebounce, when true, leaves the debounce timer armed at start (tests).
+var armInitialDebounce bool
+
 func runDev(entryPoint string) {
+	runDevUntil(entryPoint, runDevStop)
+}
+
+// runDevUntil is runDev with an optional stop signal (used by tests).
+func runDevUntil(entryPoint string, stop <-chan struct{}) {
 	restartApp(entryPoint)
 
-	watcher, err := fsnotify.NewWatcher()
+	watcher, err := newWatcherFn()
 	if err != nil {
-		log.Fatal(err)
+		fatalFunc(err)
 	}
 	defer func() { _ = watcher.Close() }()
 
 	root := "."
-	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+	_ = filepathWalk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -469,29 +501,42 @@ func runDev(entryPoint string) {
 		return nil
 	})
 
-	debounceTimer := time.NewTimer(time.Millisecond)
-	debounceTimer.Stop()
+	debounceTimer := time.NewTimer(debounceDelay)
+	// Production stops the timer until a watch event Resets it. Tests may
+	// leave armInitialDebounce set so C fires without a filesystem event.
+	if !armInitialDebounce {
+		debounceTimer.Stop()
+	}
 
-	go runWatcherLoop(watcher, debounceTimer)
+	go runWatcherLoop(watcher.Events, watcher.Errors, debounceTimer)
 
 	for {
-		<-debounceTimer.C
-		fmt.Println("🔄 Change detected, restarting...")
-		restartApp(entryPoint)
+		select {
+		case <-stop:
+			stopApp()
+			return
+		case <-debounceTimer.C:
+			onDebouncedChange(entryPoint)
+		}
 	}
 }
 
-func runWatcherLoop(watcher *fsnotify.Watcher, debounceTimer *time.Timer) {
+func onDebouncedChange(entryPoint string) {
+	fmt.Println("🔄 Change detected, restarting...")
+	restartApp(entryPoint)
+}
+
+func runWatcherLoop(events <-chan fsnotify.Event, errs <-chan error, debounceTimer *time.Timer) {
 	for {
 		select {
-		case event, ok := <-watcher.Events:
+		case event, ok := <-events:
 			if !ok {
 				return
 			}
 			if shouldRestartOnEvent(event) {
-				debounceTimer.Reset(500 * time.Millisecond)
+				debounceTimer.Reset(debounceDelay)
 			}
-		case err, ok := <-watcher.Errors:
+		case err, ok := <-errs:
 			if !ok {
 				return
 			}
@@ -532,7 +577,7 @@ func restartApp(entryPoint string) {
 	}
 
 	// Build before stopping so a compile error leaves the previous server running.
-	buildCmd := exec.Command("go", "build", "-o", bin, entryPoint)
+	buildCmd := execCommand("go", "build", "-o", bin, entryPoint)
 	buildCmd.Stdout = os.Stdout
 	buildCmd.Stderr = os.Stderr
 	if err := buildCmd.Run(); err != nil {
@@ -542,7 +587,7 @@ func restartApp(entryPoint string) {
 
 	stopApp()
 
-	cmdProcess = exec.Command(bin)
+	cmdProcess = execCommand(bin)
 	cmdProcess.Stdout = os.Stdout
 	cmdProcess.Stderr = os.Stderr
 	cmdProcess.Stdin = os.Stdin

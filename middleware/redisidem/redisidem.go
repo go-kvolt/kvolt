@@ -15,6 +15,9 @@ import (
 
 const defaultMaxBodyBytes = 1 << 20 // 1 MiB
 
+// Overridable in tests to exercise marshal failure paths.
+var recordMarshal = sonic.Marshal
+
 // Store implements middleware.IdempotencyStore using Redis JSON values.
 type Store struct {
 	client       *goredis.Client
@@ -89,7 +92,7 @@ func (s *Store) Set(key string, rec middleware.IdempotencyRecord, ttl time.Durat
 		Headers: map[string][]string(rec.Headers),
 		Body:    rec.Body,
 	}
-	data, err := sonic.Marshal(raw)
+	data, err := recordMarshal(raw)
 	if err != nil {
 		return fmt.Errorf("redisidem marshal: %w", err)
 	}

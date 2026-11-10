@@ -38,7 +38,15 @@ type CSRFConfig struct {
 var (
 	csrfProcessSecret     []byte
 	csrfProcessSecretOnce sync.Once
+	// csrfRandRead is crypto/rand.Read; tests swap it to hit panic paths.
+	csrfRandRead = rand.Read
 )
+
+func mustCSRFRand(dst []byte) {
+	if _, err := csrfRandRead(dst); err != nil {
+		panic("csrf: crypto/rand failed: " + err.Error())
+	}
+}
 
 func csrfSecretBytes(cfg CSRFConfig) []byte {
 	if s := strings.TrimSpace(cfg.Secret); s != "" {
@@ -46,9 +54,7 @@ func csrfSecretBytes(cfg CSRFConfig) []byte {
 	}
 	csrfProcessSecretOnce.Do(func() {
 		b := make([]byte, 32)
-		if _, err := rand.Read(b); err != nil {
-			panic("csrf: crypto/rand failed: " + err.Error())
-		}
+		mustCSRFRand(b)
 		csrfProcessSecret = b
 	})
 	return csrfProcessSecret
@@ -174,9 +180,7 @@ func csrfTokenMatch(a, b string) bool {
 
 func newCSRFToken(secret []byte) string {
 	nonce := make([]byte, 32)
-	if _, err := rand.Read(nonce); err != nil {
-		panic("csrf: crypto/rand failed: " + err.Error())
-	}
+	mustCSRFRand(nonce)
 	n := hex.EncodeToString(nonce)
 	mac := hmac.New(sha256.New, secret)
 	_, _ = mac.Write([]byte(n))

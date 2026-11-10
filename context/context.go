@@ -22,6 +22,11 @@ import (
 
 const rawBodyKey = "_kvolt_raw_body"
 
+// absPath / pathRel / evalSymlinks are overridable in tests for hard FS error paths.
+var absPath = filepath.Abs
+var pathRel = filepath.Rel
+var evalSymlinks = filepath.EvalSymlinks
+
 // validate holds the global validator instance.
 var validate = validator.New()
 
@@ -416,15 +421,15 @@ func (c *Context) AttachmentFrom(root, name, filename string) error {
 }
 
 func safeJoinRoot(root, name string) (string, error) {
-	root = filepath.Clean(root)
-	if root == "" {
+	if strings.TrimSpace(root) == "" {
 		return "", httperr.BadRequest("invalid_path", "empty root")
 	}
-	absRoot, err := filepath.Abs(root)
+	root = filepath.Clean(root)
+	absRoot, err := absPath(root)
 	if err != nil {
 		return "", httperr.BadRequest("invalid_path", "invalid root")
 	}
-	if resolved, err := filepath.EvalSymlinks(absRoot); err == nil {
+	if resolved, err := evalSymlinks(absRoot); err == nil {
 		absRoot = resolved
 	}
 
@@ -435,7 +440,7 @@ func safeJoinRoot(root, name string) (string, error) {
 	// If the path exists (file, dir, or symlink), require successful symlink resolution
 	// so a link inside root cannot point outside. Missing paths stay lexical-only (404 later).
 	if _, err := os.Lstat(target); err == nil {
-		resolved, err := filepath.EvalSymlinks(target)
+		resolved, err := evalSymlinks(target)
 		if err != nil {
 			return "", httperr.BadRequest("invalid_path", "path escapes root")
 		}
@@ -448,7 +453,7 @@ func safeJoinRoot(root, name string) (string, error) {
 }
 
 func underRoot(root, target string) bool {
-	rel, err := filepath.Rel(root, target)
+	rel, err := pathRel(root, target)
 	if err != nil {
 		return false
 	}

@@ -275,6 +275,9 @@ func (e *Engine) RunWithServer(srv *http.Server) error {
 	return e.serveAndWait(srv, "", "")
 }
 
+// testServeQuit, when closed/sent, triggers graceful shutdown (tests only; nil in production).
+var testServeQuit <-chan struct{}
+
 // serveAndWait binds first, then serves. certFile/keyFile non-empty enables TLS via ServeTLS.
 func (e *Engine) serveAndWait(srv *http.Server, certFile, keyFile string) error {
 	if srv.Addr == "" {
@@ -318,6 +321,7 @@ func (e *Engine) serveAndWait(srv *http.Server, certFile, keyFile string) error 
 		}
 		return nil
 	case <-quit:
+	case <-testServeQuit:
 	}
 
 	fmt.Println("\nShutting down server...")
@@ -332,12 +336,18 @@ func (e *Engine) serveAndWait(srv *http.Server, certFile, keyFile string) error 
 	return nil
 }
 
+// testListenHook, when set, receives the bound listener (tests close it to unblock Serve).
+var testListenHook func(net.Listener)
+
 // ListenAndServe starts HTTP with net/http defaults (no extra timeouts).
 // Use Run() in production for slowloris timeouts and graceful shutdown.
 func (e *Engine) ListenAndServe(addr string) error {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", addr, err)
+	}
+	if testListenHook != nil {
+		testListenHook(ln)
 	}
 	fmt.Println("⚡ KVolt is running on " + formatListenURL("http", addr))
 	return http.Serve(ln, e)

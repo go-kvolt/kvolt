@@ -48,7 +48,8 @@ func (r *Request) WithBody(body []byte) *Request {
 func (r *Request) WithJSON(obj interface{}) *Request {
 	b, err := json.Marshal(obj)
 	if err != nil {
-		r.t.Fatalf("Failed to marshal JSON body: %v", err)
+		r.t.Errorf("Failed to marshal JSON body: %v", err)
+		return r
 	}
 	r.header.Set("Content-Type", "application/json")
 	return r.WithBody(b)

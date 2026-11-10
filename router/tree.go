@@ -44,12 +44,23 @@ type Node struct {
 	priority  uint32
 }
 
+// addChild appends a child, keeping any wildcard child at the end so static
+// indices stay aligned with children[0:len(indices)].
+func (n *Node) addChild(child *Node) {
+	if n.wildChild && len(n.children) > 0 {
+		wildcard := n.children[len(n.children)-1]
+		n.children = append(n.children[:len(n.children)-1], child, wildcard)
+		return
+	}
+	n.children = append(n.children, child)
+}
+
 // incrementPriority increases the priority of the node and reorders children
 func (n *Node) incrementPriority(pos int) {
 	n.children[pos].priority++
 	prio := n.children[pos].priority
 
-	// Adjust position (move to front)
+	// Adjust position (move to front) among static children only.
 	newPos := pos
 	for newPos > 0 && n.children[newPos-1].priority < prio {
 		// swap
@@ -107,18 +118,6 @@ walk:
 		// Make new node a child of this node
 		if i < len(path) {
 			path = path[i:]
-
-			if n.wildChild {
-				n = n.children[0]
-				n.priority++
-
-				if len(path) >= len(n.path) && n.path == path[:len(n.path)] &&
-					n.nType != catchAll &&
-					(len(n.path) >= len(path) || path[len(n.path)] == '/') {
-					continue walk
-				}
-			}
-
 			c := path[0]
 
 			// Continue static suffix after a param via its single continuation node.
@@ -128,7 +127,7 @@ walk:
 				continue walk
 			}
 
-			// Check if a child with the next path byte exists
+			// Check if a static child with the next path byte exists
 			for i, max := 0, len(n.indices); i < max; i++ {
 				if n.indices[i] == c {
 					i = n.incrementChildPrio(i)
@@ -137,14 +136,30 @@ walk:
 				}
 			}
 
-			// Otherwise insert it
-			if c != ':' && c != '*' {
-				// []byte for proper unicode handling could be better
+			// Insert a new static child (keep wildcard at end via addChild).
+			if c != ':' && c != '*' && n.nType != catchAll {
 				n.indices += string([]byte{c})
 				child := &Node{}
-				n.children = append(n.children, child)
+				n.addChild(child)
 				n.incrementPriority(len(n.indices) - 1)
 				n = child
+			} else if n.wildChild {
+				// Inserting another wildcard — must match the existing one.
+				n = n.children[len(n.children)-1]
+				n.priority++
+				if len(path) >= len(n.path) && n.path == path[:len(n.path)] &&
+					n.nType != catchAll &&
+					(len(n.path) >= len(path) || path[len(n.path)] == '/') {
+					continue walk
+				}
+				pathSeg := path
+				if n.nType != catchAll {
+					if j := stringsIndexByte(pathSeg, '/'); j >= 0 {
+						pathSeg = pathSeg[:j]
+					}
+				}
+				panic("'" + pathSeg + "' in new path '" + fullPath +
+					"' conflicts with existing wildcard '" + n.path + "'")
 			}
 			n.insertChild(path, fullPath, handle)
 			return
@@ -174,15 +189,13 @@ func (n *Node) insertChild(path, fullPath string, handle Handler) {
 				wildcard + "' in path '" + fullPath + "'")
 		}
 
-		// Check if the wildcard has an existing node
-		if len(n.children) > 0 {
-			// If we are here, we exist, and since we are a wildcard,
-			// we must have only one child.
-			if len(n.children) != 1 {
-				// Logic error or conflict
+		// Conflicting wildcard names at the same level are not allowed.
+		if n.wildChild && len(n.children) > 0 {
+			existing := n.children[len(n.children)-1]
+			if (existing.nType == param || existing.nType == catchAll) && existing.path != wildcard {
+				panic("'" + wildcard + "' in new path '" + fullPath +
+					"' conflicts with existing wildcard '" + existing.path + "'")
 			}
-			// Validate if the existing wildcard matches the new one?
-			// For simplicity, assuming no conflicting wildcard names at same level for now.
 		}
 
 		if wildcard[0] == ':' { // param
@@ -195,7 +208,7 @@ func (n *Node) insertChild(path, fullPath string, handle Handler) {
 				nType: param,
 				path:  wildcard,
 			}
-			n.children = []*Node{child}
+			n.addChild(child)
 			n.wildChild = true
 			n = child
 			n.priority++
@@ -204,7 +217,7 @@ func (n *Node) insertChild(path, fullPath string, handle Handler) {
 			if len(wildcard) < len(path) {
 				path = path[len(wildcard):]
 				child := &Node{priority: 1}
-				n.children = []*Node{child}
+				n.addChild(child)
 				n = child
 				continue
 			}
@@ -232,7 +245,7 @@ func (n *Node) insertChild(path, fullPath string, handle Handler) {
 				nType: catchAll,
 				path:  wildcard,
 			}
-			n.children = []*Node{child}
+			n.addChild(child)
 			n.wildChild = true
 			n = child
 			n.priority++
@@ -258,21 +271,21 @@ walk: // Outer loop for walking the tree
 			if path[:len(prefix)] == prefix {
 				path = path[len(prefix):]
 
-				// If this node does not have a wildcard (param or catchAll)
-				// child,  we must look up the next child node
-				if !n.wildChild {
-					idxc := path[0]
-					for i := 0; i < len(n.indices); i++ {
-						if n.indices[i] == idxc {
-							n = n.children[i]
-							continue walk
-						}
+				// Prefer static children (indices) over wildcard so
+				// /user/new wins over /user/:id.
+				idxc := path[0]
+				for i := 0; i < len(n.indices); i++ {
+					if n.indices[i] == idxc {
+						n = n.children[i]
+						continue walk
 					}
+				}
+				if !n.wildChild {
 					return nil, p, false, ""
 				}
 
-				// Handle wildcard child
-				n = n.children[0]
+				// Wildcard child is always last.
+				n = n.children[len(n.children)-1]
 				switch n.nType {
 				case param:
 					var pathLeft string
@@ -283,9 +296,6 @@ walk: // Outer loop for walking the tree
 						if handle != nil {
 							return handle, p, false, n.fullPath
 						}
-						return nil, p, false, ""
-					}
-					if nextN == nil {
 						return nil, p, false, ""
 					}
 					path, n = pathLeft, nextN
@@ -311,10 +321,6 @@ walk: // Outer loop for walking the tree
 			}
 		} else if len(path)+1 == len(prefix) && prefix[len(path)] == '/' && path == prefix[:len(path)] {
 			// Request missing trailing slash that node has
-			if n.handle != nil {
-				return nil, p, true, ""
-			}
-		} else if len(prefix)+1 == len(path) && path[len(prefix)] == '/' && prefix == path[:len(prefix)] {
 			if n.handle != nil {
 				return nil, p, true, ""
 			}
@@ -373,6 +379,15 @@ func (n *Node) incrementChildPrio(pos int) int {
 	}
 
 	return newPos
+}
+
+func stringsIndexByte(s string, c byte) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == c {
+			return i
+		}
+	}
+	return -1
 }
 
 func longestCommonPrefix(a, b string) int {

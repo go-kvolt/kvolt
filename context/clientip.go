@@ -26,11 +26,16 @@ func (c *Context) ClientIP() string {
 			return ip
 		}
 	}
+	// X-Real-IP is only trusted when it itself is not a TrustedProxies hop
+	// (proxies should put the real client there). Never return a trusted proxy
+	// address as the client IP — fall back to the peer.
 	if xri := strings.TrimSpace(c.Request.Header.Get("X-Real-IP")); xri != "" {
 		if h, _, err := net.SplitHostPort(xri); err == nil {
 			xri = h
 		}
-		return xri
+		if !isTrustedProxy(xri, c.TrustedProxies) {
+			return xri
+		}
 	}
 	return host
 }

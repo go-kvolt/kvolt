@@ -19,9 +19,15 @@ var (
 )
 
 func init() {
+	loadSecretFromEnv()
+}
+
+func loadSecretFromEnv() {
 	if env := os.Getenv("JWT_SECRET"); env != "" {
+		mu.Lock()
 		secretKey = []byte(env)
 		secretSet = true
+		mu.Unlock()
 	}
 }
 
@@ -67,7 +73,8 @@ func ParseToken(tokenString string) (Claims, error) {
 	if err != nil {
 		return nil, err
 	}
-	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
+	parser := jwt.NewParser(jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
+	token, err := parser.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
@@ -76,6 +83,10 @@ func ParseToken(tokenString string) (Claims, error) {
 	if err != nil {
 		return nil, err
 	}
+	return claimsFromToken(token)
+}
+
+func claimsFromToken(token *jwt.Token) (Claims, error) {
 	if !token.Valid {
 		return nil, errors.New("invalid token")
 	}

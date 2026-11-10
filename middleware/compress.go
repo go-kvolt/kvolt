@@ -1,8 +1,11 @@
 package middleware
 
 import (
+	"bufio"
 	"compress/gzip"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -64,9 +67,15 @@ func (w *gzipResponseWriter) skipContentType() bool {
 	return false
 }
 
+// errStartGzip, when set, makes startGzip fail (test hook for Write error path).
+var errStartGzip error
+
 func (w *gzipResponseWriter) startGzip() error {
 	if w.usingGzip {
 		return nil
+	}
+	if errStartGzip != nil {
+		return errStartGzip
 	}
 	w.Header().Del("Content-Length")
 	w.Header().Set("Content-Encoding", "gzip")
@@ -150,6 +159,29 @@ func (w *gzipResponseWriter) Close() {
 		return
 	}
 	_ = w.flushPlain()
+}
+
+func (w *gzipResponseWriter) Flush() {
+	if w.usingGzip && w.gz != nil {
+		_ = w.gz.Flush()
+	} else if len(w.buf) > 0 {
+		_ = w.flushPlain()
+	}
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (w *gzipResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := w.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("gzip: underlying ResponseWriter does not support Hijacker")
+	}
+	return h.Hijack()
+}
+
+func (w *gzipResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 // Gzip compresses large non-JSON responses when the client sends Accept-Encoding: gzip.

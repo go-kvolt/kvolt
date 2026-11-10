@@ -11,15 +11,15 @@ import (
 	"time"
 )
 
-const stopTimeout = 5 * time.Second
+var stopTimeout = 5 * time.Second
 
 // devBinaryPath returns a stable temp path for the dev build of entryPoint.
 func devBinaryPath(entryPoint string) (string, error) {
-	abs, err := filepath.Abs(entryPoint)
+	abs, err := filepathAbs(entryPoint)
 	if err != nil {
 		return "", err
 	}
-	wd, err := os.Getwd()
+	wd, err := osGetwd()
 	if err != nil {
 		return "", err
 	}

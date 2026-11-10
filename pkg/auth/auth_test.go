@@ -67,3 +67,16 @@ func TestGenerateToken_RequiresSecret(t *testing.T) {
 	}
 	SetSecret("test-secret")
 }
+
+func TestParseToken_RequiresExp(t *testing.T) {
+	SetSecret("test-secret")
+	// Hand-roll HS256 token without exp via GenerateToken is always with exp;
+	// craft via signing a map without going through GenerateToken.
+	tok, err := GenerateToken(Claims{"sub": "x"}, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParseToken(tok); err != nil {
+		t.Fatalf("valid token: %v", err)
+	}
+}

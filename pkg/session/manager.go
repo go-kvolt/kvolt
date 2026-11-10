@@ -52,8 +52,10 @@ func (m *Manager) Create(data interface{}) (string, error) {
 	}
 	if m.MaxAge > 0 {
 		m.mu.Lock()
+		stale := m.pruneCreatedLocked(time.Now())
 		m.created[token] = time.Now()
 		m.mu.Unlock()
+		m.deleteStoreKeys(stale)
 	}
 	return token, nil
 }
@@ -63,8 +65,11 @@ func (m *Manager) Get(token string) (interface{}, error) {
 	if m.MaxAge > 0 {
 		m.mu.Lock()
 		created, ok := m.created[token]
+		expired := ok && time.Since(created) > m.MaxAge
+		stale := m.pruneCreatedLocked(time.Now())
 		m.mu.Unlock()
-		if ok && time.Since(created) > m.MaxAge {
+		m.deleteStoreKeys(stale)
+		if expired {
 			_ = m.Destroy(token)
 			return nil, ErrSessionNotFound
 		}
@@ -84,7 +89,6 @@ func (m *Manager) Get(token string) (interface{}, error) {
 			if errors.Is(err, cache.ErrKeyNotFound) || errors.Is(err, cache.ErrExpired) {
 				return nil, ErrSessionNotFound
 			}
-			// Non-fatal: return value even if touch failed for other reasons.
 		}
 	}
 
@@ -97,4 +101,25 @@ func (m *Manager) Destroy(token string) error {
 	delete(m.created, token)
 	m.mu.Unlock()
 	return m.store.Delete(token)
+}
+
+// pruneCreatedLocked removes expired MaxAge bookkeeping entries and returns their tokens.
+func (m *Manager) pruneCreatedLocked(now time.Time) []string {
+	if m.MaxAge <= 0 || len(m.created) == 0 {
+		return nil
+	}
+	var stale []string
+	for tok, created := range m.created {
+		if now.Sub(created) > m.MaxAge {
+			delete(m.created, tok)
+			stale = append(stale, tok)
+		}
+	}
+	return stale
+}
+
+func (m *Manager) deleteStoreKeys(keys []string) {
+	for _, k := range keys {
+		_ = m.store.Delete(k)
+	}
 }

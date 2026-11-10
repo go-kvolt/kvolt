@@ -37,6 +37,12 @@ func FromEngine(e *kvolt.Engine) (*Server, bool) {
 	return s, ok
 }
 
+// testRunQuit triggers graceful shutdown from tests (nil in production).
+var testRunQuit <-chan struct{}
+
+// signalNotify is signal.Notify; tests may override to capture the quit channel.
+var signalNotify = signal.Notify
+
 // Run starts the attached gRPC server with graceful shutdown.
 func Run(e *kvolt.Engine, addr string) error {
 	s, ok := FromEngine(e)
@@ -50,18 +56,27 @@ func Run(e *kvolt.Engine, addr string) error {
 	}()
 
 	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	signalNotify(quit, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(quit)
 
 	select {
 	case sig := <-quit:
-		fmt.Printf("\nReceived %v, shutting down gRPC server...\n", sig)
+		return shutdownRun(s, sig)
+	case <-testRunQuit:
+		fmt.Println("\nReceived test quit, shutting down gRPC server...")
 		s.GracefulStop()
 		fmt.Println("gRPC server exited")
 		return nil
 	case err := <-errCh:
 		return err
 	}
+}
+
+func shutdownRun(s *Server, sig os.Signal) error {
+	fmt.Printf("\nReceived %v, shutting down gRPC server...\n", sig)
+	s.GracefulStop()
+	fmt.Println("gRPC server exited")
+	return nil
 }
 
 // RunDual starts HTTP (via Engine) and gRPC concurrently with unified shutdown.
@@ -90,12 +105,14 @@ func RunDual(e *kvolt.Engine, httpAddr, grpcAddr string) error {
 	}()
 
 	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	signalNotify(quit, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(quit)
 
 	select {
 	case sig := <-quit:
 		fmt.Printf("\nReceived %v, shutting down...\n", sig)
+	case <-testRunQuit:
+		fmt.Println("\nReceived test quit, shutting down...")
 	case err := <-errCh:
 		fmt.Printf("Server error: %v — shutting down...\n", err)
 	}

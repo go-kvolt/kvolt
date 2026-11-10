@@ -33,7 +33,7 @@ func JWTOptional(config JWTConfig) context.HandlerFunc {
 			}
 			return config.ErrorHandler(c, err)
 		}
-		claims, ok := token.Claims.(jwt.MapClaims)
+		claims, ok := jwtMapClaims(token)
 		if !ok {
 			if config.SkipOnInvalid {
 				c.Next()

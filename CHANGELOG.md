@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- **Router**: prefer static siblings over `:param` / `*catchAll` (e.g. `/user/new` wins over `/user/:id`).
 - **`Tenant`**: when `Claim` is set, ignore header as tenant source; reject header≠claim with 403.
 - **`CSRF`**: HMAC-signed tokens (process secret or `CSRFConfig.Secret`) so planted cookies without the secret fail.
 - **`JWT` / `JWTOptional`**: optional `KeyFunc` / `SigningMethod` (e.g. RS256), `Issuer` / `Audience`, `RequireExp` (default true), case-insensitive `Bearer`, `SkipOnInvalid` on optional.
@@ -24,7 +25,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`Limiter`**: no background goroutine; O(1) eviction when full.
 - **`Audit`**: `defer` (panic-safe), sets `Err` on panic, async `OnAudit` (use `Sync` in tests).
 - **`Recovery`**: re-raise `http.ErrAbortHandler`; larger stack dump (64KiB).
-- **`CORS`**: only short-circuit preflight `OPTIONS` (with `Access-Control-Request-Method`); do not shadow app OPTIONS routes.
+- **`CORS`**: only short-circuit preflight `OPTIONS` (with `Access-Control-Request-Method`); flush 204 headers; do not shadow app OPTIONS routes.
+- **`ClientIP`**: do not treat a TrustedProxies address from `X-Real-IP` as the client.
+- **`pkg/auth.ParseToken`**: require `exp` (aligned with JWT middleware).
+- **`Gzip`**: expose `Flusher` / `Hijacker` / `Unwrap`.
+- **`queue/redis`**: reclaim processing orphans missing an inflight deadline (crash between BRPOPLPUSH and ZADD).
+- **`Timeout`**: bound response wait (504 + drop late writes); still cancel via request context.
+- **Router**: panic on conflicting `:param` / catch-all names at the same level.
+- **`session.Manager`**: prune expired MaxAge entries to bound memory.
+- **BasicAuth** / **gRPC Auth**: case-insensitive `Basic` / `Bearer` scheme.
 
 ## [v2.2.0] - 2026-11-07
 

@@ -37,10 +37,12 @@ func (o onlyFilesFS) Open(name string) (http.File, error) {
 	}
 	if st.IsDir() {
 		// Allow only if index.html exists; otherwise no directory listing.
-		if _, err := o.fs.Open(strings.TrimSuffix(name, "/") + "/index.html"); err != nil {
+		idx, err := o.fs.Open(strings.TrimSuffix(name, "/") + "/index.html")
+		if err != nil {
 			_ = f.Close()
 			return nil, fs.ErrNotExist
 		}
+		_ = idx.Close()
 	}
 	return f, nil
 }
