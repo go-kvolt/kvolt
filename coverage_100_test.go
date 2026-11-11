@@ -22,11 +22,11 @@ func (statFailFS) Open(name string) (http.File, error) {
 
 type statFailFile struct{}
 
-func (*statFailFile) Close() error                                 { return nil }
-func (*statFailFile) Read([]byte) (int, error)                     { return 0, io.EOF }
-func (*statFailFile) Seek(int64, int) (int64, error)               { return 0, nil }
-func (*statFailFile) Readdir(int) ([]os.FileInfo, error)           { return nil, nil }
-func (*statFailFile) Stat() (os.FileInfo, error)                   { return nil, errors.New("stat fail") }
+func (*statFailFile) Close() error                       { return nil }
+func (*statFailFile) Read([]byte) (int, error)           { return 0, io.EOF }
+func (*statFailFile) Seek(int64, int) (int64, error)     { return 0, nil }
+func (*statFailFile) Readdir(int) ([]os.FileInfo, error) { return nil, nil }
+func (*statFailFile) Stat() (os.FileInfo, error)         { return nil, errors.New("stat fail") }
 
 func TestOnlyFilesFS_OpenEdges(t *testing.T) {
 	dir := t.TempDir()

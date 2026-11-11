@@ -104,7 +104,11 @@ func TestSchemaFromSample_Kinds(t *testing.T) {
 		Skip string  `json:"-"`
 		priv int
 	}
-	_ = SchemaFromSample(&nested{})
+	n := &nested{priv: 1}
+	if n.priv != 1 {
+		t.Fatal("priv")
+	}
+	_ = SchemaFromSample(n)
 	_ = SchemaFromSample((*nested)(nil))
 	ch := make(chan int)
 	if SchemaFromSample(ch)["type"] != "object" {

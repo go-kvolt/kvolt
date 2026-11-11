@@ -19,7 +19,7 @@ import (
 // flushHijackWriter implements Flusher + Hijacker for wrapper tests.
 type flushHijackWriter struct {
 	http.ResponseWriter
-	flushed bool
+	flushed  bool
 	hijacked bool
 }
 
@@ -561,7 +561,7 @@ func TestTimeout_ZeroDurationAndHeaderAfterWrite(t *testing.T) {
 		Timeout(time.Second),
 		func(c *context.Context) error {
 			_, _ = c.Writer.Write([]byte("x"))
-			_ = c.Writer.Header() // wroteHeader path
+			_ = c.Writer.Header()     // wroteHeader path
 			c.Writer.WriteHeader(201) // ignored after write
 			return nil
 		},
@@ -577,8 +577,8 @@ func TestAudit_PanicErrorPath(t *testing.T) {
 	c.Handlers = []context.HandlerFunc{
 		Recovery(),
 		Audit(AuditConfig{
-			Sync: true,
-			OnAudit: func(e AuditEvent) { ev = e },
+			Sync:      true,
+			OnAudit:   func(e AuditEvent) { ev = e },
 			ActorFunc: func(c *context.Context) string { return "actor" },
 		}),
 		func(c *context.Context) error { panic(errors.New("audit-panic")) },

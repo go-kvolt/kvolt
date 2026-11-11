@@ -56,9 +56,9 @@ func TestParseToken_EmptyString(t *testing.T) {
 
 type nonHMACHS256 struct{}
 
-func (nonHMACHS256) Alg() string                                                  { return "HS256" }
-func (nonHMACHS256) Sign(string, interface{}) ([]byte, error)                     { return []byte("sig"), nil }
-func (nonHMACHS256) Verify(string, []byte, interface{}) error                     { return nil }
+func (nonHMACHS256) Alg() string                              { return "HS256" }
+func (nonHMACHS256) Sign(string, interface{}) ([]byte, error) { return []byte("sig"), nil }
+func (nonHMACHS256) Verify(string, []byte, interface{}) error { return nil }
 
 func TestParseToken_UnexpectedMethodViaCustomAlg(t *testing.T) {
 	jwt.RegisterSigningMethod("HS256", func() jwt.SigningMethod { return nonHMACHS256{} })
