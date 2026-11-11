@@ -132,11 +132,19 @@ func TestWatcherLoopAndRestart(t *testing.T) {
 	_ = w.Add(dir)
 	timer := time.NewTimer(time.Hour)
 	timer.Stop()
-	go runWatcherLoop(w.Events, w.Errors, timer)
+	loopDone := make(chan struct{})
+	go func() {
+		defer close(loopDone)
+		runWatcherLoop(w.Events, w.Errors, timer)
+	}()
 	_ = os.WriteFile(filepath.Join(dir, "x.go"), []byte("package tmpdev\n"), 0o644)
 	time.Sleep(100 * time.Millisecond)
 	_ = w.Close()
-	time.Sleep(50 * time.Millisecond)
+	select {
+	case <-loopDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("watcher loop did not exit after Close")
+	}
 }
 
 func TestPrintHelpDirect(t *testing.T) {
