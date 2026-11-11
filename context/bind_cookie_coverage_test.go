@@ -20,18 +20,22 @@ func TestBindQueryFormURI_Edges(t *testing.T) {
 	}
 
 	type Q struct {
-		Name   string  `query:"name"`
-		Age    int     `form:"age"`
-		Ok     bool    `query:"ok"`
-		Skip   string  `query:"-"`
-		hidden string  // unexported
-		Score  float64 `query:"score"`
-		Count  uint    `query:"count"`
+		Name   string   `query:"name"`
+		Age    int      `form:"age"`
+		Ok     bool     `query:"ok"`
+		Skip   string   `query:"-"`
+		hidden string   // unexported
+		Score  float64  `query:"score"`
+		Count  uint     `query:"count"`
 		Tags   []string `query:"tags"`
 	}
 	r := httptest.NewRequest("GET", "/?name=a&age=2&ok=true&score=1.5&count=3&tags=%5B%22x%22%5D", nil)
 	c := New(httptest.NewRecorder(), r)
 	var q Q
+	q.hidden = "secret"
+	if q.hidden != "secret" {
+		t.Fatal("hidden")
+	}
 	if err := c.BindQuery(&q); err != nil {
 		t.Fatal(err)
 	}

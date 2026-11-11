@@ -159,7 +159,7 @@ func TestCoverage100_ContextGaps(t *testing.T) {
 		}
 		pathRel = oldRel
 		if runtime.GOOS == "windows" {
-			if underRoot(`C:\root`, `D:\other`) {
+			if underRoot(`C:\root`, `D:\diff`) {
 				t.Fatal("cross-volume should be false")
 			}
 		}

@@ -10,7 +10,9 @@ func TestBindForm_ParseErrors(t *testing.T) {
 	r := httptest.NewRequest("POST", "/", strings.NewReader("x"))
 	r.Header.Set("Content-Type", "multipart/form-data; boundary=bad")
 	c := New(httptest.NewRecorder(), r)
-	if err := c.BindForm(&struct{ A string `form:"a"` }{}); err == nil {
+	if err := c.BindForm(&struct {
+		A string `form:"a"`
+	}{}); err == nil {
 		t.Fatal("want multipart parse error")
 	}
 }
