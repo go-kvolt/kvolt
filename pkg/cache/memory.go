@@ -70,7 +70,7 @@ func NewMemoryStoreSized(cleanupInterval time.Duration, maxKeys int) *MemoryStor
 func (m *MemoryStore) getShard(key string) *shard {
 	var h maphash.Hash
 	h.SetSeed(m.seed)
-	h.WriteString(key)
+	_, _ = h.WriteString(key)
 	return m.shards[uint(h.Sum64()%shardCount)]
 }
 

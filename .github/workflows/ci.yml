@@ -39,6 +39,12 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
 
+      - name: gosec
+        if: runner.os != 'Windows'
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec -exclude-dir=benchmarks -fmt=text ./...
+
       - name: Build
         run: go build -v ./...
 

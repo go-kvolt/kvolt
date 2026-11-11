@@ -12,5 +12,5 @@ func main() {
 	app.GET("/version", func(c *context.Context) error {
 		return c.String(200, version)
 	})
-	app.Run(":19876")
+	_ = app.Run(":19876")
 }

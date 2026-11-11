@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log"
+
 	"github.com/go-kvolt/kvolt/v2"
 	"github.com/go-kvolt/kvolt/v2/context"
 	"github.com/go-kvolt/kvolt/v2/middleware"
@@ -20,5 +22,7 @@ func main() {
 		return c.String(200, "pong")
 	})
 
-	app.Run(":8080")
+	if err := app.Run(":8080"); err != nil {
+		log.Fatal(err)
+	}
 }

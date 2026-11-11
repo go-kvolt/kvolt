@@ -193,6 +193,16 @@ cd benchmarks/live; ./run10.ps1
 
 ---
 
+## API Stability & Semantic Versioning
+
+KVolt strictly adheres to [Semantic Versioning (SemVer 2.0.0)](https://semver.org):
+
+- **v2.x.y**: All minor (`v2.x.0`) and patch (`v2.x.y`) updates maintain complete backward compatibility. No public APIs will be removed or broken within `v2`.
+- **Breaking Changes**: Any breaking architectural change will only occur with a major version increment (`v3.0.0`) and an explicit deprecation timeline.
+- **Security & Quality**: Every release passes automated race detection, 100% test coverage gates, `govulncheck`, `gosec` static analysis, and fuzz tests.
+
+---
+
 ## License
 
 [MIT](LICENSE)

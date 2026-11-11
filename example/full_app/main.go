@@ -109,5 +109,5 @@ func main() {
 	}))
 
 	fmt.Println("listening on :8080  (docs /swagger/index.html, metrics /metrics)")
-	app.Run(":8080")
+	log.Fatal(app.Run(":8080"))
 }

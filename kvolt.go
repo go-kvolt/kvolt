@@ -350,6 +350,7 @@ func (e *Engine) ListenAndServe(addr string) error {
 		testListenHook(ln)
 	}
 	fmt.Println("⚡ KVolt is running on " + formatListenURL("http", addr))
+	// #nosec G114 -- ListenAndServe provides bare net/http behavior; use Run() for production timeouts
 	return http.Serve(ln, e)
 }
 

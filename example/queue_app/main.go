@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/go-kvolt/kvolt/v2"
@@ -42,5 +43,7 @@ func main() {
 		return c.String(200, "Job Dispatched!")
 	})
 
-	app.Run(":8080")
+	if err := app.Run(":8080"); err != nil {
+		log.Fatal(err)
+	}
 }
