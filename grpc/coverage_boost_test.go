@@ -193,22 +193,18 @@ func TestRun_OSInterrupt(t *testing.T) {
 	addr := ln.Addr().String()
 	_ = ln.Close()
 
-	var captured chan<- os.Signal
+	capturedCh := make(chan chan<- os.Signal, 1)
 	prev := signalNotify
-	signalNotify = func(c chan<- os.Signal, sig ...os.Signal) { captured = c }
+	signalNotify = func(c chan<- os.Signal, sig ...os.Signal) { capturedCh <- c }
 	defer func() { signalNotify = prev }()
 
 	done := make(chan error, 1)
 	go func() { done <- Run(e, addr) }()
 
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if captured != nil {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if captured == nil {
+	var captured chan<- os.Signal
+	select {
+	case captured = <-capturedCh:
+	case <-time.After(2 * time.Second):
 		t.Fatal("signal channel not captured")
 	}
 	captured <- os.Interrupt
@@ -247,22 +243,18 @@ func TestRunDual_OSInterrupt(t *testing.T) {
 	grpcAddr := grpcLn.Addr().String()
 	_ = grpcLn.Close()
 
-	var captured chan<- os.Signal
+	capturedCh := make(chan chan<- os.Signal, 1)
 	prev := signalNotify
-	signalNotify = func(c chan<- os.Signal, sig ...os.Signal) { captured = c }
+	signalNotify = func(c chan<- os.Signal, sig ...os.Signal) { capturedCh <- c }
 	defer func() { signalNotify = prev }()
 
 	done := make(chan error, 1)
 	go func() { done <- RunDual(e, httpAddr, grpcAddr) }()
 
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if captured != nil {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if captured == nil {
+	var captured chan<- os.Signal
+	select {
+	case captured = <-capturedCh:
+	case <-time.After(2 * time.Second):
 		t.Fatal("signal channel not captured")
 	}
 	captured <- os.Interrupt

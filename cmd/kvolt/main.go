@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -455,6 +456,7 @@ func writeFile(path, content string) {
 // ---------------------------------------------------------------------
 
 var (
+	cmdMu      sync.Mutex
 	cmdProcess *exec.Cmd
 )
 
@@ -587,14 +589,20 @@ func restartApp(entryPoint string) {
 
 	stopApp()
 
-	cmdProcess = execCommand(bin)
-	cmdProcess.Stdout = os.Stdout
-	cmdProcess.Stderr = os.Stderr
-	cmdProcess.Stdin = os.Stdin
-	cmdProcess.SysProcAttr = procAttrsForDev()
+	cmd := execCommand(bin)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	cmd.SysProcAttr = procAttrsForDev()
 
-	if err := cmdProcess.Start(); err != nil {
+	if err := cmd.Start(); err != nil {
 		fmt.Printf("❌ Failed to start app: %v\n", err)
+		cmdMu.Lock()
 		cmdProcess = nil
+		cmdMu.Unlock()
+	} else {
+		cmdMu.Lock()
+		cmdProcess = cmd
+		cmdMu.Unlock()
 	}
 }

@@ -25,9 +25,11 @@ func Timeout(d time.Duration) func(c *context.Context) error {
 		defer cancel()
 		c.Request = c.Request.WithContext(ctx)
 
+		preH := make(http.Header)
 		tw := &timeoutWriter{ResponseWriter: c.Writer, h: make(http.Header)}
 		for k, vv := range c.Writer.Header() {
 			tw.h[k] = append([]string(nil), vv...)
+			preH[k] = append([]string(nil), vv...)
 		}
 		c.Writer = tw
 
@@ -53,7 +55,7 @@ func Timeout(d time.Duration) func(c *context.Context) error {
 				return nil
 			}
 			tw.timedOut = true
-			for k, vv := range tw.h {
+			for k, vv := range preH {
 				dst := tw.ResponseWriter.Header()
 				dst.Del(k)
 				for _, v := range vv {

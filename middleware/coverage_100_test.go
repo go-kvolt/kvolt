@@ -14,14 +14,24 @@ import (
 
 func TestCoverage100_MiddlewareGaps(t *testing.T) {
 	t.Run("flush_logger_empty_and_sleep", func(t *testing.T) {
+		logMu.Lock()
 		old := logChan
 		// Empty channel the worker is not draining → immediate empty return.
 		logChan = make(chan string, 2)
+		logMu.Unlock()
+
 		FlushLogger()
+
 		// Non-empty → sleep-until-deadline path.
+		logMu.Lock()
 		logChan <- "stuck"
+		logMu.Unlock()
+
 		FlushLogger()
+
+		logMu.Lock()
 		logChan = old
+		logMu.Unlock()
 	})
 
 	t.Run("audit_panic_nil_OnAudit", func(t *testing.T) {

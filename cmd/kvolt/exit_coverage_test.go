@@ -153,8 +153,11 @@ func TestRestartApp_Paths(t *testing.T) {
 	restartApp("main.go")
 	time.Sleep(150 * time.Millisecond)
 	// Force-kill path: simulate hung Wait by using short path via killProcessTree hard.
-	if cmdProcess != nil {
-		_ = killProcessTree(cmdProcess, true)
+	cmdMu.Lock()
+	p := cmdProcess
+	cmdMu.Unlock()
+	if p != nil {
+		_ = killProcessTree(p, true)
 	}
 	stopApp()
 	stopApp() // nil process
