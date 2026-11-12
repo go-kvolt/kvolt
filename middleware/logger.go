@@ -11,6 +11,7 @@ import (
 )
 
 var (
+	logMu   sync.RWMutex
 	logChan = make(chan string, 10000)
 	logOnce sync.Once
 	logWg   sync.WaitGroup
@@ -22,7 +23,14 @@ func ensureLogWorker() {
 		logWg.Add(1)
 		go func() {
 			defer logWg.Done()
-			for msg := range logChan {
+			for {
+				logMu.RLock()
+				ch := logChan
+				logMu.RUnlock()
+				msg, ok := <-ch
+				if !ok {
+					return
+				}
 				_, _ = fmt.Fprint(os.Stdout, msg)
 			}
 		}()
@@ -31,8 +39,11 @@ func ensureLogWorker() {
 
 func enqueueLog(msg string) {
 	ensureLogWorker()
+	logMu.RLock()
+	ch := logChan
+	logMu.RUnlock()
 	select {
-	case logChan <- msg:
+	case ch <- msg:
 	default:
 		// Channel full: write synchronously so lines are not silently dropped.
 		_, _ = fmt.Fprint(os.Stdout, msg)
@@ -46,7 +57,10 @@ func FlushLogger() {
 	// until process exit. Closing the channel is process-lifetime once.
 	deadline := time.Now().Add(200 * time.Millisecond)
 	for time.Now().Before(deadline) {
-		if len(logChan) == 0 {
+		logMu.RLock()
+		ch := logChan
+		logMu.RUnlock()
+		if len(ch) == 0 {
 			return
 		}
 		time.Sleep(5 * time.Millisecond)

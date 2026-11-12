@@ -153,7 +153,10 @@ func TestRunDevUntil_DebounceFires(t *testing.T) {
 	// restartApp (build+start) can take a few seconds before the select loop runs.
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
-		if cmdProcess != nil && cmdProcess.Process != nil {
+		cmdMu.Lock()
+		p := cmdProcess
+		cmdMu.Unlock()
+		if p != nil && p.Process != nil {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -249,10 +252,15 @@ func TestStopApp_ForceTimeout(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
+	cmdMu.Lock()
 	cmdProcess = cmd
+	cmdMu.Unlock()
 	// Soft kill may or may not work quickly; timeout path uses force kill.
 	stopApp()
-	if cmdProcess != nil {
+	cmdMu.Lock()
+	cleared := cmdProcess == nil
+	cmdMu.Unlock()
+	if !cleared {
 		t.Fatal("expected cleared")
 	}
 }

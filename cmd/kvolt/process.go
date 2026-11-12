@@ -34,25 +34,28 @@ func devBinaryPath(entryPoint string) (string, error) {
 
 // stopApp terminates the running dev server and its child processes.
 func stopApp() {
-	if cmdProcess == nil || cmdProcess.Process == nil {
-		cmdProcess = nil
+	cmdMu.Lock()
+	cmd := cmdProcess
+	cmdProcess = nil
+	cmdMu.Unlock()
+
+	if cmd == nil || cmd.Process == nil {
 		return
 	}
-	_ = killProcessTree(cmdProcess)
+	_ = killProcessTree(cmd)
 
 	done := make(chan struct{})
 	go func() {
-		_ = cmdProcess.Wait()
+		_ = cmd.Wait()
 		close(done)
 	}()
 
 	select {
 	case <-done:
 	case <-time.After(stopTimeout):
-		_ = killProcessTree(cmdProcess, true)
+		_ = killProcessTree(cmd, true)
 		<-done
 	}
-	cmdProcess = nil
 }
 
 func killProcessTree(cmd *exec.Cmd, force ...bool) error {

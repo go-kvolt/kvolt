@@ -26,9 +26,6 @@ func TestServeAndWait_EmptyAddrDefault(t *testing.T) {
 			t.Fatal("want listen error for :http (or unexpected success)")
 		}
 	case <-time.After(400 * time.Millisecond):
-		if srv.Addr != ":http" {
-			t.Fatalf("Addr after defaulting=%q", srv.Addr)
-		}
 		close(quit)
 		select {
 		case err := <-done:
@@ -37,6 +34,9 @@ func TestServeAndWait_EmptyAddrDefault(t *testing.T) {
 			}
 		case <-time.After(5 * time.Second):
 			t.Fatal("timeout shutting down")
+		}
+		if srv.Addr != ":http" {
+			t.Fatalf("Addr after defaulting=%q", srv.Addr)
 		}
 	}
 }

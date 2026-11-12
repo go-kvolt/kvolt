@@ -79,21 +79,17 @@ func TestListenAndServeAndShutdown(t *testing.T) {
 	addr := ln.Addr().String()
 	_ = ln.Close()
 
-	var got net.Listener
-	testListenHook = func(l net.Listener) { got = l }
+	gotCh := make(chan net.Listener, 1)
+	testListenHook = func(l net.Listener) { gotCh <- l }
 	defer func() { testListenHook = nil }()
 
 	done := make(chan error, 1)
 	go func() { done <- app.ListenAndServe(addr) }()
 
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if got != nil {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if got == nil {
+	var got net.Listener
+	select {
+	case got = <-gotCh:
+	case <-time.After(2 * time.Second):
 		t.Fatal("hook not called")
 	}
 	_ = got.Close()
