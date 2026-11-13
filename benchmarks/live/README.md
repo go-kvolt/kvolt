@@ -3,7 +3,6 @@
 End-to-end localhost load test (real TCP + JSON `/ping`) for:
 
 - **kvolt** (`net/http`)
-- **bunrouter** (`net/http` router)
 - **gin** (`net/http`)
 - **echo** (`net/http`)
 - **chi** (`net/http`)

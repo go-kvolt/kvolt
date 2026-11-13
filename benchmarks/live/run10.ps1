@@ -13,9 +13,8 @@ $frameworks = @(
     @{ Name = "gin";    Port = 18081; Path = "servers/gin" },
     @{ Name = "echo";   Port = 18082; Path = "servers/echo" },
     @{ Name = "chi";    Port = 18083; Path = "servers/chi" },
-    @{ Name = "stdlib";    Port = 18084; Path = "servers/stdlib" },
-    @{ Name = "bunrouter"; Port = 18086; Path = "servers/bunrouter" },
-    @{ Name = "fiber";     Port = 18085; Path = "servers/fiber" }
+    @{ Name = "stdlib"; Port = 18084; Path = "servers/stdlib" },
+    @{ Name = "fiber";  Port = 18085; Path = "servers/fiber" }
 )
 
 function Stop-Tree([int]$ProcId) {
