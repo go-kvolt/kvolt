@@ -4,19 +4,24 @@ All notable changes to KVolt will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [v2.3.0] - 2026-11-13
+
+Production-grade release: 100% test coverage, comprehensive race condition fixes, automated `gosec` static analysis in CI, SemVer 2.0.0 stability guarantee, and security hardening across all core modules.
 
 ### Security
 
+- **Static Analysis**: Integrated `gosec` into CI workflow with zero security issues.
 - **Router**: prefer static siblings over `:param` / `*catchAll` (e.g. `/user/new` wins over `/user/:id`).
 - **`Tenant`**: when `Claim` is set, ignore header as tenant source; reject header≠claim with 403.
 - **`CSRF`**: HMAC-signed tokens (process secret or `CSRFConfig.Secret`) so planted cookies without the secret fail.
 - **`JWT` / `JWTOptional`**: optional `KeyFunc` / `SigningMethod` (e.g. RS256), `Issuer` / `Audience`, `RequireExp` (default true), case-insensitive `Bearer`, `SkipOnInvalid` on optional.
 - **`session.Manager`**: sliding TTL via `Touch` (no Set-resurrect race); optional `MaxAge` absolute cap.
-- **Repo**: `SECURITY.md`, Dependabot (gomod + Actions); ignore `/bin/` (binary removed from git in prior commit).
+- **Toolchain**: Updated Go toolchain to 1.27.4 to fix GO-2026-6859.
+- **Repo**: `SECURITY.md`, Dependabot (gomod + Actions); ignore `/bin/`.
 
 ### Fixed
 
+- **Data Races**: Fixed all data races in coverage tests across server, middleware, gRPC, and CLI watcher loops.
 - **`Engine.Run` / `RunTLS`**: bind (`Listen`) first and return the error; print “running” only after the listen succeeds.
 - **`middleware.Idempotency`**: no 5xx cache; strip `Set-Cookie`; actor + body hash in default key; reject oversized keys; bound memory store; single-flight; preserve `Flusher`/`Hijacker`; Redis body size cap.
 - **`Static`**: block directory listings (no index) and dotfile path segments (e.g. `.env`).

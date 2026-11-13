@@ -4,6 +4,7 @@
 
 | Version | Supported |
 | ------- | --------- |
+| 2.3.x   | Yes |
 | 2.2.x   | Yes |
 | < 2.2   | Best-effort patches only |
 
