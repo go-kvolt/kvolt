@@ -42,6 +42,7 @@ func (m *MetricsStore) AvgLatency() time.Duration {
 	if n == 0 {
 		return 0
 	}
+	// #nosec G115 -- safe duration conversion from nanoseconds
 	return time.Duration(m.totalNanos.Load() / n)
 }
 
@@ -70,6 +71,7 @@ func MetricsWithConfig(cfg MetricsConfig) func(c *context.Context) error {
 
 		d := time.Since(start)
 		cfg.Store.requests.Add(1)
+		// #nosec G115 -- duration nanoseconds is positive
 		cfg.Store.totalNanos.Add(uint64(d.Nanoseconds()))
 		status := c.StatusCode()
 		if status >= 500 {

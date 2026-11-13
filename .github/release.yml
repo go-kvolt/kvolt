@@ -1,0 +1,25 @@
+changelog:
+  categories:
+    - title: 🚀 Features & Enhancements
+      labels:
+        - enhancement
+        - feature
+    - title: 🐛 Bug Fixes
+      labels:
+        - bug
+        - fix
+    - title: 🔒 Security Hardening
+      labels:
+        - security
+    - title: ⚡ Performance & Benchmarks
+      labels:
+        - performance
+        - benchmark
+    - title: 🧪 Testing & CI
+      labels:
+        - testing
+        - ci
+    - title: 📖 Documentation
+      labels:
+        - documentation
+        - docs

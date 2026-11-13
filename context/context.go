@@ -321,7 +321,7 @@ func (c *Context) FormFileMax(name string, maxMemory int64) (*multipart.FileHead
 	if err != nil {
 		return nil, err
 	}
-	f.Close()
+	_ = f.Close()
 	return fh, nil
 }
 

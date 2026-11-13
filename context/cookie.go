@@ -32,6 +32,7 @@ func (c *Context) SetCookieWith(name, value string, opt CookieOptions) {
 	if opt.Path == "" {
 		opt.Path = "/"
 	}
+	// #nosec G124 -- cookie security flags are configurable via CookieOptions
 	cookie := &http.Cookie{
 		Name:     name,
 		Value:    value,
@@ -58,6 +59,7 @@ func (c *Context) ClearCookieWith(name string, opt CookieOptions) {
 	if opt.Path == "" {
 		opt.Path = "/"
 	}
+	// #nosec G124 -- clearing cookie uses caller-specified flags
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     name,
 		Value:    "",
