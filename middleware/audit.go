@@ -89,7 +89,10 @@ func emitAudit(cfg AuditConfig, c *context.Context, start time.Time, handlerErr 
 	}
 	actor := ""
 	if cfg.ActorFunc != nil {
-		actor = cfg.ActorFunc(c)
+		func() {
+			defer func() { _ = recover() }()
+			actor = cfg.ActorFunc(c)
+		}()
 	}
 	reqID := ""
 	if v, ok := c.Get(RequestIDKey); ok {
@@ -121,6 +124,7 @@ func emitAudit(cfg AuditConfig, c *context.Context, start time.Time, handlerErr 
 		Err:       handlerErr,
 	}
 	if cfg.Sync {
+		defer func() { _ = recover() }()
 		cfg.OnAudit(ev)
 		return
 	}

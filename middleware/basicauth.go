@@ -63,12 +63,20 @@ func BasicAuthWithConfig(cfg BasicAuthConfig) func(c *context.Context) error {
 		if len(auth) <= len(basic) || !strings.EqualFold(auth[:len(basic)-1], "Basic") || auth[len(basic)-1] != ' ' {
 			return unauthorizedBasic(c, cfg.Realm)
 		}
-		raw, err := base64.StdEncoding.DecodeString(auth[len(basic):])
+		raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(auth[len(basic):]))
 		if err != nil {
 			return unauthorizedBasic(c, cfg.Realm)
 		}
 		parts := strings.SplitN(string(raw), ":", 2)
-		if len(parts) != 2 || !cfg.Validator(parts[0], parts[1]) {
+		if len(parts) != 2 {
+			return unauthorizedBasic(c, cfg.Realm)
+		}
+		valid := false
+		func() {
+			defer func() { _ = recover() }()
+			valid = cfg.Validator(parts[0], parts[1])
+		}()
+		if !valid {
 			return unauthorizedBasic(c, cfg.Realm)
 		}
 		c.Set(cfg.ContextKey, parts[0])

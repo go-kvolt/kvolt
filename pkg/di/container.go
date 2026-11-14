@@ -127,7 +127,10 @@ func (c *Container) ProvideFunc(constructor interface{}) error {
 		return fmt.Errorf("di: constructor returned nil instance")
 	}
 	c.mu.Lock()
-	c.services[instance.Type()] = instance
+	c.services[ft.Out(0)] = instance
+	if ft.Out(0) != instance.Type() {
+		c.services[instance.Type()] = instance
+	}
 	c.mu.Unlock()
 	return nil
 }

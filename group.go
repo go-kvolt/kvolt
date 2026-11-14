@@ -62,6 +62,11 @@ func (group *RouterGroup) Group(prefix string) *RouterGroup {
 	if group == nil {
 		return nil
 	}
+	prefix = strings.TrimSpace(prefix)
+	if prefix != "" && !strings.HasPrefix(prefix, "/") {
+		prefix = "/" + prefix
+	}
+	prefix = strings.TrimSuffix(prefix, "/")
 	md := append([]context.HandlerFunc(nil), group.middleware...)
 	return &RouterGroup{
 		prefix:     group.prefix + prefix,
@@ -235,6 +240,14 @@ func (group *RouterGroup) Static(relativePath, root string) *Route {
 func (group *RouterGroup) addRoute(method, path string, handler context.HandlerFunc) *Route {
 	if group == nil || group.engine == nil || group.engine.router == nil {
 		return nil
+	}
+	path = strings.TrimSpace(path)
+	if path == "" {
+		if group.prefix == "" {
+			path = "/"
+		}
+	} else if !strings.HasPrefix(path, "/") {
+		path = "/" + path
 	}
 	fullPath := group.prefix + path
 

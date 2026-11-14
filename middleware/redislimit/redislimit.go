@@ -4,7 +4,6 @@ package redislimit
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -58,8 +57,18 @@ func NewWithConfig(cfg Config) func(c *kvctx.Context) error {
 			}
 			return nil
 		}
-		key := cfg.KeyPrefix + cfg.KeyFunc(c)
+		keyPart := ""
+		if cfg.KeyFunc != nil {
+			func() {
+				defer func() { _ = recover() }()
+				keyPart = cfg.KeyFunc(c)
+			}()
+		}
+		key := cfg.KeyPrefix + keyPart
 		ctx := context.Background()
+		if c.Request != nil && c.Request.Context() != nil {
+			ctx = c.Request.Context()
+		}
 		n, err := cfg.Client.Incr(ctx, key).Result()
 		if err != nil {
 			return httperr.Internal("rate limiter unavailable")
@@ -77,7 +86,11 @@ func NewWithConfig(cfg Config) func(c *kvctx.Context) error {
 		c.Writer.Header().Set("X-RateLimit-Limit", strconv.Itoa(cfg.Limit))
 		c.Writer.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
 		if int(n) > cfg.Limit {
-			c.Writer.Header().Set("Retry-After", fmt.Sprintf("%d", int(cfg.Window.Seconds())))
+			retrySec := int(cfg.Window.Seconds())
+			if retrySec <= 0 {
+				retrySec = 1
+			}
+			c.Writer.Header().Set("Retry-After", strconv.Itoa(retrySec))
 			return cfg.ErrorHandler(c)
 		}
 		c.Next()

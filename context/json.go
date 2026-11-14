@@ -38,21 +38,28 @@ func (c *Context) JSON(code int, obj interface{}) error {
 	if c == nil || c.Writer == nil {
 		return fmt.Errorf("nil writer")
 	}
-	c.Writer.Header().Set("Content-Type", contentTypeJSON)
-	c.writeHeader(code)
 	bp := jsonOutPool.Get().(*[]byte)
 	buf := (*bp)[:0]
 	err := encoder.EncodeInto(&buf, obj, jsonEncodeOpts)
-	if err == nil {
-		_, err = c.Writer.Write(buf)
+	if err != nil {
+		if cap(buf) <= maxPooledJSONBufSize {
+			*bp = buf
+		} else {
+			*bp = make([]byte, 0, 256)
+		}
+		jsonOutPool.Put(bp)
+		return err
 	}
+	c.Writer.Header().Set("Content-Type", contentTypeJSON)
+	c.writeHeader(code)
+	_, writeErr := c.Writer.Write(buf)
 	if cap(buf) <= maxPooledJSONBufSize {
 		*bp = buf
 	} else {
 		*bp = make([]byte, 0, 256)
 	}
 	jsonOutPool.Put(bp)
-	return err
+	return writeErr
 }
 
 func (c *Context) writeJSONBytes(code int, body []byte) {

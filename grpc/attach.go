@@ -29,6 +29,9 @@ func Attach(e *kvolt.Engine, opts ...Option) *Server {
 
 // FromEngine returns the gRPC server previously attached to e.
 func FromEngine(e *kvolt.Engine) (*Server, bool) {
+	if e == nil {
+		return nil, false
+	}
 	v, ok := e.Attachment(engineAttachKey)
 	if !ok {
 		return nil, false

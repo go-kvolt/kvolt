@@ -191,10 +191,10 @@ func extractToken(ctx context.Context) (string, error) {
 	if len(values) == 0 {
 		return "", status.Error(codes.Unauthenticated, "missing authorization token")
 	}
-	token := values[0]
+	token := strings.TrimSpace(values[0])
 	// Strip "Bearer " prefix if present (case-insensitive).
 	if len(token) > 7 && strings.EqualFold(token[:6], "Bearer") && token[6] == ' ' {
-		token = token[7:]
+		token = strings.TrimSpace(token[7:])
 	}
 	return token, nil
 }

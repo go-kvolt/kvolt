@@ -28,6 +28,9 @@ type kvoltAdapter struct {
 }
 
 func (a *kvoltAdapter) Routes() []RouteInfo {
+	if a == nil || a.engine == nil {
+		return nil
+	}
 	kvoltRoutes := a.engine.Routes()
 	var routes []RouteInfo
 	for _, r := range kvoltRoutes {

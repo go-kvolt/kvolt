@@ -64,7 +64,11 @@ func extractToken(c *context.Context, lookup string) string {
 			return cookie.Value
 		}
 	case "header":
-		return c.Request.Header.Get(key)
+		val := strings.TrimSpace(c.Request.Header.Get(key))
+		if strings.EqualFold(key, "authorization") && len(val) > 7 && strings.EqualFold(val[:7], "bearer ") {
+			val = strings.TrimSpace(val[7:])
+		}
+		return val
 	case "query":
 		// Discouraged: session tokens in query strings leak via logs/Referer/history.
 		if c.Request.URL == nil {

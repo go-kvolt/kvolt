@@ -106,7 +106,13 @@ func LimiterWithConfig(cfg LimiterConfig) func(c *context.Context) error {
 			}
 			return nil
 		}
-		key := cfg.KeyFunc(c)
+		key := ""
+		if cfg.KeyFunc != nil {
+			func() {
+				defer func() { _ = recover() }()
+				key = cfg.KeyFunc(c)
+			}()
+		}
 		if key == "" {
 			key = clientIP(c.Request.RemoteAddr)
 		}
@@ -157,7 +163,17 @@ func LimiterWithConfig(cfg LimiterConfig) func(c *context.Context) error {
 		if c.Writer != nil {
 			c.Writer.Header().Set("Retry-After", "1")
 		}
-		err := cfg.ErrorHandler(c)
+		var err error
+		if cfg.ErrorHandler != nil {
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						err = httperr.TooManyRequests("Too Many Requests")
+					}
+				}()
+				err = cfg.ErrorHandler(c)
+			}()
+		}
 		if err != nil && !c.HeaderWritten() {
 			if he, ok := httperr.As(err); ok {
 				return c.JSON(he.Status, he)

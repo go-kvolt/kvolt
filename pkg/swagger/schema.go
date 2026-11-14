@@ -62,13 +62,26 @@ func schemaFromType(t reflect.Type, v reflect.Value, seen map[reflect.Type]bool)
 			if f.PkgPath != "" { // unexported
 				continue
 			}
-			name, skip, req := jsonFieldName(f)
-			if skip {
-				continue
-			}
 			var fv reflect.Value
 			if v.IsValid() && v.Kind() == reflect.Struct {
 				fv = v.Field(i)
+			}
+			// Flatten embedded anonymous structs (matches encoding/json default serialization)
+			if f.Anonymous && (f.Tag.Get("json") == "" || strings.HasPrefix(f.Tag.Get("json"), ",")) {
+				subSchema := schemaFromType(f.Type, fv, seen)
+				if subProps, ok := subSchema["properties"].(map[string]interface{}); ok {
+					for subName, subProp := range subProps {
+						props[subName] = subProp
+					}
+				}
+				if subReq, ok := subSchema["required"].([]string); ok {
+					required = append(required, subReq...)
+				}
+				continue
+			}
+			name, skip, req := jsonFieldName(f)
+			if skip {
+				continue
 			}
 			props[name] = schemaFromType(f.Type, fv, seen)
 			if req {

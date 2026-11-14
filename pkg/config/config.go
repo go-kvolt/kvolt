@@ -3,6 +3,7 @@ package config
 import (
 	"reflect"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 )
@@ -23,29 +24,7 @@ func Load(target interface{}) error {
 	if val.Kind() == reflect.Ptr && !val.IsNil() {
 		elem := val.Elem()
 		if elem.Kind() == reflect.Struct {
-			typ := elem.Type()
-			for i := 0; i < elem.NumField(); i++ {
-				field := typ.Field(i)
-
-				key := field.Tag.Get("mapstructure")
-				if key == "" {
-					key = field.Name
-				}
-
-				// Handle "env" tag
-				tag := field.Tag.Get("env")
-				if tag != "" {
-					if err := v.BindEnv(key, tag); err != nil {
-						// In case of error binding, we just continue, but it's unlikely.
-					}
-				}
-
-				// Handle "default" tag
-				def := field.Tag.Get("default")
-				if def != "" {
-					v.SetDefault(key, def)
-				}
-			}
+			bindViperTags(v, elem)
 		}
 	}
 
@@ -64,5 +43,44 @@ func Load(target interface{}) error {
 	}
 
 	// 6. Unmarshal
-	return v.Unmarshal(target)
+	return v.Unmarshal(target, func(dc *mapstructure.DecoderConfig) {
+		dc.Squash = true
+	})
+}
+
+func bindViperTags(v *viper.Viper, elem reflect.Value) {
+	typ := elem.Type()
+	for i := 0; i < elem.NumField(); i++ {
+		field := typ.Field(i)
+		if field.PkgPath != "" {
+			continue
+		}
+		if field.Anonymous {
+			fieldVal := elem.Field(i)
+			if fieldVal.Kind() == reflect.Ptr && !fieldVal.IsNil() {
+				fieldVal = fieldVal.Elem()
+			}
+			if fieldVal.Kind() == reflect.Struct {
+				bindViperTags(v, fieldVal)
+				continue
+			}
+		}
+
+		key := field.Tag.Get("mapstructure")
+		if key == "" {
+			key = field.Name
+		}
+
+		// Handle "env" tag
+		tag := field.Tag.Get("env")
+		if tag != "" {
+			_ = v.BindEnv(key, tag)
+		}
+
+		// Handle "default" tag
+		def := field.Tag.Get("default")
+		if def != "" {
+			v.SetDefault(key, def)
+		}
+	}
 }
