@@ -109,6 +109,54 @@ func TestAPIKey_ConstantTimePath(t *testing.T) {
 	if w2.Code == 200 {
 		t.Fatal("expected rejection")
 	}
+
+	// Cookie lookup test
+	mwCookie := APIKeyWithConfig(APIKeyConfig{Keys: []string{"secret-key"}, Lookup: "cookie:kvolt_api"})
+	reqCookie := httptest.NewRequest("GET", "/", nil)
+	reqCookie.AddCookie(&http.Cookie{Name: "kvolt_api", Value: "secret-key"})
+	wCookie := httptest.NewRecorder()
+	cCookie := context.New(wCookie, reqCookie)
+	cCookie.Handlers = []context.HandlerFunc{mwCookie, func(c *context.Context) error { return c.String(200, "ok") }}
+	cCookie.Next()
+	if wCookie.Code != 200 {
+		t.Fatalf("cookie lookup want 200 got %d", wCookie.Code)
+	}
+}
+
+func TestGzip_PanicRestoresWriter(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+	c := context.New(w, req)
+	c.Handlers = []context.HandlerFunc{
+		Recovery(),
+		Gzip(),
+		func(c *context.Context) error {
+			panic("unexpected downstream panic")
+		},
+	}
+	c.Next()
+	if c.Writer != w {
+		t.Fatal("expected c.Writer to be restored to original recorder")
+	}
+}
+
+func TestIdempotency_PanicRestoresWriter(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/payments", nil)
+	req.Header.Set("Idempotency-Key", "idem-panic-123")
+	c := context.New(w, req)
+	c.Handlers = []context.HandlerFunc{
+		Recovery(),
+		Idempotency(IdempotencyConfig{Store: NewMemoryIdempotencyStore()}),
+		func(c *context.Context) error {
+			panic("payment panic")
+		},
+	}
+	c.Next()
+	if c.Writer != w {
+		t.Fatal("expected c.Writer to be restored to original recorder")
+	}
 }
 
 func TestCSRF_SecureAutoOnHTTPS(t *testing.T) {

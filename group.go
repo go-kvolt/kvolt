@@ -17,6 +17,9 @@ type onlyFilesFS struct {
 }
 
 func (o onlyFilesFS) Open(name string) (http.File, error) {
+	if o.fs == nil {
+		return nil, os.ErrNotExist
+	}
 	cleaned := path.Clean("/" + name)
 	for _, seg := range strings.Split(cleaned, "/") {
 		if seg == "" || seg == "." {
@@ -56,6 +59,9 @@ type RouterGroup struct {
 
 // Group creates a new child group.
 func (group *RouterGroup) Group(prefix string) *RouterGroup {
+	if group == nil {
+		return nil
+	}
 	md := append([]context.HandlerFunc(nil), group.middleware...)
 	return &RouterGroup{
 		prefix:     group.prefix + prefix,
@@ -66,6 +72,9 @@ func (group *RouterGroup) Group(prefix string) *RouterGroup {
 
 // Use adds middleware to the group.
 func (group *RouterGroup) Use(h ...context.HandlerFunc) {
+	if group == nil {
+		return
+	}
 	group.middleware = append(group.middleware, h...)
 	if group.engine != nil && group.engine.RouterGroup == group {
 		group.engine.noRouteMu.Lock()
@@ -192,6 +201,9 @@ func (group *RouterGroup) Any(path string, handler context.HandlerFunc) []*Route
 // relativePath: The path pattern (e.g. "/assets")
 // root: The file system root (e.g. "./public")
 func (group *RouterGroup) Static(relativePath, root string) *Route {
+	if group == nil || group.engine == nil {
+		return nil
+	}
 	// Construct the full prefix path to strip (e.g. /v1/assets)
 	absolutePrefix := group.prefix + relativePath
 
@@ -221,6 +233,9 @@ func (group *RouterGroup) Static(relativePath, root string) *Route {
 }
 
 func (group *RouterGroup) addRoute(method, path string, handler context.HandlerFunc) *Route {
+	if group == nil || group.engine == nil || group.engine.router == nil {
+		return nil
+	}
 	fullPath := group.prefix + path
 
 	// Combine middleware: Group Middleware + Route Handler

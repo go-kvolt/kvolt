@@ -232,11 +232,13 @@ func Idempotency(cfg IdempotencyConfig) func(c *context.Context) error {
 		origWriter := c.Writer
 		cw := &captureResponseWriter{ResponseWriter: origWriter, status: http.StatusOK}
 		c.Writer = cw
+		defer func() {
+			c.Writer = origWriter
+		}()
 		c.Next()
 		if !cw.wroteHeader && c.StatusCode() != 0 {
 			cw.status = c.StatusCode()
 		}
-		c.Writer = origWriter
 
 		// Do not cache 5xx — retries should re-execute after transient failures.
 		if cw.status > 0 && cw.status < 500 {

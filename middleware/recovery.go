@@ -36,6 +36,9 @@ func RecoveryWithConfig(config RecoveryConfig) func(c *context.Context) error {
 		config.StackSize = 64 << 10
 	}
 	return func(c *context.Context) error {
+		if c == nil {
+			return nil
+		}
 		defer func() {
 			if err := recover(); err != nil {
 				// Client disconnect / hijack abort — do not treat as a server bug.

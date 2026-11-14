@@ -26,7 +26,7 @@ func MaxBodySizeBytes(maxBytes int64) func(c *context.Context) error {
 			}
 			return nil
 		}
-		if maxBytes > 0 && c.Request.Body != nil {
+		if maxBytes > 0 && c.Request.Body != nil && c.Writer != nil {
 			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBytes)
 		}
 		c.Next()

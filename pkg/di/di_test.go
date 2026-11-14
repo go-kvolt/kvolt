@@ -120,3 +120,15 @@ func TestContainer_InterfaceResolution(t *testing.T) {
 		t.Fatalf("Consumer not properly resolved: %+v", cons)
 	}
 }
+
+func TestContainer_NilSafety(t *testing.T) {
+	var c *Container
+	c.Provide("str")
+	if c.Invoke(new(string)) {
+		t.Fatal("want false on nil container invoke")
+	}
+	if err := c.ProvideFunc(func() string { return "x" }); err == nil {
+		t.Fatal("want error on nil container ProvideFunc")
+	}
+	c.MustProvideFunc(func() string { return "x" })
+}

@@ -93,10 +93,17 @@ func (c *Context) Flush() error {
 	if c == nil || c.Writer == nil {
 		return fmt.Errorf("nil writer")
 	}
-	f, ok := c.Writer.(http.Flusher)
-	if !ok {
-		return fmt.Errorf("sse: ResponseWriter does not support Flush")
+	w := c.Writer
+	for {
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+			return nil
+		}
+		if u, ok := w.(interface{ Unwrap() http.ResponseWriter }); ok {
+			w = u.Unwrap()
+		} else {
+			break
+		}
 	}
-	f.Flush()
-	return nil
+	return fmt.Errorf("sse: ResponseWriter does not support Flush")
 }

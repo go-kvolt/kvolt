@@ -104,3 +104,16 @@ func TestValidate_IntMinMax(t *testing.T) {
 		t.Fatalf("valid int range: %v", err)
 	}
 }
+
+func TestValidate_NilAndNilPointer(t *testing.T) {
+	type S struct {
+		Name string `validate:"required"`
+	}
+	var nilPtr *S
+	if err := Validate(nilPtr); err != nil {
+		t.Fatalf("expected nil error for nil pointer, got: %v", err)
+	}
+	if err := Validate(nil); err != nil {
+		t.Fatalf("expected nil error for nil interface, got: %v", err)
+	}
+}

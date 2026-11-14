@@ -137,6 +137,10 @@ func APIKeyWithConfig(cfg APIKeyConfig) func(c *context.Context) error {
 		switch source {
 		case "query":
 			got = c.Query(name)
+		case "cookie":
+			if cookie, err := c.Request.Cookie(name); err == nil {
+				got = cookie.Value
+			}
 		default:
 			got = c.Request.Header.Get(name)
 		}

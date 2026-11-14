@@ -74,3 +74,23 @@ type plainWriter struct {
 func (p *plainWriter) Header() http.Header         { return p.header }
 func (p *plainWriter) Write(b []byte) (int, error) { p.body = append(p.body, b...); return len(b), nil }
 func (p *plainWriter) WriteHeader(statusCode int)  { p.code = statusCode }
+
+type wrappingWriter struct {
+	http.ResponseWriter
+}
+
+func (w *wrappingWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
+func TestFlush_Unwrap(t *testing.T) {
+	rec := &flushRecorder{ResponseRecorder: httptest.NewRecorder()}
+	wrapped := &wrappingWriter{ResponseWriter: rec}
+	c := New(wrapped, httptest.NewRequest(http.MethodGet, "/", nil))
+	if err := c.Flush(); err != nil {
+		t.Fatalf("expected Flush through Unwrap: %v", err)
+	}
+	if rec.flushed != 1 {
+		t.Fatalf("want 1 flush got %d", rec.flushed)
+	}
+}

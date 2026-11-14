@@ -19,12 +19,18 @@ var (
 
 // Validate validates a struct.
 func Validate(s interface{}) error {
+	if s == nil {
+		return nil
+	}
 	v := reflect.ValueOf(s)
 	if v.Kind() == reflect.Ptr {
+		if v.IsNil() {
+			return nil
+		}
 		v = v.Elem()
 	}
 
-	if v.Kind() != reflect.Struct {
+	if !v.IsValid() || v.Kind() != reflect.Struct {
 		return nil // strict: error?
 	}
 

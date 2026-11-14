@@ -243,3 +243,23 @@ func TestRun_NilEngine(t *testing.T) {
 		t.Fatal("RunDual(nil) want error, got nil")
 	}
 }
+
+func TestInterceptors_NilSafety(t *testing.T) {
+	logInt := LoggingInterceptor()
+	_, _ = logInt(context.Background(), "req", nil, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return "ok", nil
+	})
+
+	recInt := RecoveryInterceptor()
+	_, _ = recInt(context.Background(), "req", nil, func(ctx context.Context, req interface{}) (interface{}, error) {
+		panic("boom")
+	})
+
+	authNil := AuthInterceptor(nil)
+	resp, _ := authNil(context.Background(), "req", nil, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return "ok", nil
+	})
+	if resp != "ok" {
+		t.Fatalf("auth nil validate want ok, got %v", resp)
+	}
+}

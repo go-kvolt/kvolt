@@ -196,6 +196,12 @@ func GzipWithConfig(cfg GzipConfig) func(c *context.Context) error {
 		cfg.MinSize = defaultGzipMinSize
 	}
 	return func(c *context.Context) error {
+		if c == nil || c.Request == nil || c.Writer == nil {
+			if c != nil {
+				c.Next()
+			}
+			return nil
+		}
 		if strings.EqualFold(c.Request.Header.Get("Upgrade"), "websocket") {
 			c.Next()
 			return nil
@@ -208,12 +214,14 @@ func GzipWithConfig(cfg GzipConfig) func(c *context.Context) error {
 		orig := c.Writer
 		gw := &gzipResponseWriter{ResponseWriter: orig, cfg: cfg, status: 0}
 		c.Writer = gw
+		defer func() {
+			if gw.status == 0 && c.StatusCode() != 0 {
+				gw.status = c.StatusCode()
+			}
+			gw.Close()
+			c.Writer = orig
+		}()
 		c.Next()
-		if gw.status == 0 && c.StatusCode() != 0 {
-			gw.status = c.StatusCode()
-		}
-		gw.Close()
-		c.Writer = orig
 		return nil
 	}
 }

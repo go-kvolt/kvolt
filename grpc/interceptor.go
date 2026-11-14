@@ -33,7 +33,11 @@ func LoggingInterceptor() grpc.UnaryServerInterceptor {
 		if err != nil {
 			code = status.Code(err)
 		}
-		fmt.Printf("[gRPC] %s | %s | %s\n", info.FullMethod, code, dur)
+		method := ""
+		if info != nil {
+			method = info.FullMethod
+		}
+		fmt.Printf("[gRPC] %s | %s | %s\n", method, code, dur)
 		return resp, err
 	}
 }
@@ -55,7 +59,11 @@ func StreamLoggingInterceptor() grpc.StreamServerInterceptor {
 		if err != nil {
 			code = status.Code(err)
 		}
-		fmt.Printf("[gRPC-Stream] %s | %s | %s\n", info.FullMethod, code, dur)
+		method := ""
+		if info != nil {
+			method = info.FullMethod
+		}
+		fmt.Printf("[gRPC-Stream] %s | %s | %s\n", method, code, dur)
 		return err
 	}
 }
@@ -73,7 +81,11 @@ func RecoveryInterceptor() grpc.UnaryServerInterceptor {
 	) (_ interface{}, err error) {
 		defer func() {
 			if r := recover(); r != nil {
-				fmt.Printf("[gRPC-Recovery] panic in %s: %v\n%s\n", info.FullMethod, r, debug.Stack())
+				method := ""
+				if info != nil {
+					method = info.FullMethod
+				}
+				fmt.Printf("[gRPC-Recovery] panic in %s: %v\n%s\n", method, r, debug.Stack())
 				err = status.Errorf(codes.Internal, "internal server error")
 			}
 		}()
@@ -92,7 +104,11 @@ func StreamRecoveryInterceptor() grpc.StreamServerInterceptor {
 	) (err error) {
 		defer func() {
 			if r := recover(); r != nil {
-				fmt.Printf("[gRPC-Recovery] panic in stream %s: %v\n%s\n", info.FullMethod, r, debug.Stack())
+				method := ""
+				if info != nil {
+					method = info.FullMethod
+				}
+				fmt.Printf("[gRPC-Recovery] panic in stream %s: %v\n%s\n", method, r, debug.Stack())
 				err = status.Errorf(codes.Internal, "internal server error")
 			}
 		}()
@@ -118,12 +134,19 @@ func AuthInterceptor(validate AuthFunc) grpc.UnaryServerInterceptor {
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
+		if validate == nil {
+			return handler(ctx, req)
+		}
 		token, err := extractToken(ctx)
 		if err != nil {
 			return nil, err
 		}
 		if err := validate(ctx, token); err != nil {
-			fmt.Printf("[gRPC-Auth] %s: %v\n", info.FullMethod, err)
+			method := ""
+			if info != nil {
+				method = info.FullMethod
+			}
+			fmt.Printf("[gRPC-Auth] %s: %v\n", method, err)
 			return nil, status.Error(codes.Unauthenticated, "unauthenticated")
 		}
 		return handler(ctx, req)
@@ -139,12 +162,19 @@ func StreamAuthInterceptor(validate AuthFunc) grpc.StreamServerInterceptor {
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
 	) error {
+		if validate == nil {
+			return handler(srv, ss)
+		}
 		token, err := extractToken(ss.Context())
 		if err != nil {
 			return err
 		}
 		if err := validate(ss.Context(), token); err != nil {
-			fmt.Printf("[gRPC-Auth] %s: %v\n", info.FullMethod, err)
+			method := ""
+			if info != nil {
+				method = info.FullMethod
+			}
+			fmt.Printf("[gRPC-Auth] %s: %v\n", method, err)
 			return status.Error(codes.Unauthenticated, "unauthenticated")
 		}
 		return handler(srv, ss)

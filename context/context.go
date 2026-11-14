@@ -283,6 +283,9 @@ func (c *Context) AbortWithError(err *httperr.Error) error {
 // Status stores the HTTP status code. Headers are not written until the body is sent,
 // so Content-Type can still be set afterward (Gin/Echo behavior).
 func (c *Context) Status(code int) *Context {
+	if c == nil {
+		return nil
+	}
 	if !c.headerWritten {
 		c.status = code
 	}
@@ -291,13 +294,16 @@ func (c *Context) Status(code int) *Context {
 
 // FlushHeaders writes a pending Status() when the handler sent no body.
 func (c *Context) FlushHeaders() {
+	if c == nil {
+		return
+	}
 	if !c.headerWritten && c.status != 0 {
 		c.writeHeader(c.status)
 	}
 }
 
 func (c *Context) writeHeader(code int) {
-	if c.headerWritten {
+	if c == nil || c.Writer == nil || c.headerWritten {
 		return
 	}
 	if code == 0 {

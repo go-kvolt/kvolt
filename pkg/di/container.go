@@ -22,6 +22,9 @@ func NewContainer() *Container {
 // Provide registers a service instance (Singleton).
 // Usage: container.Provide(&MyService{})
 func (c *Container) Provide(service interface{}) {
+	if c == nil {
+		return
+	}
 	if service == nil {
 		panic("di: cannot provide nil service")
 	}
@@ -37,6 +40,9 @@ func (c *Container) Provide(service interface{}) {
 // Invoke looks up a service by type or implemented interface.
 // Usage: var s *MyService; container.Invoke(&s)
 func (c *Container) Invoke(target interface{}) bool {
+	if c == nil {
+		return false
+	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -71,6 +77,9 @@ func (c *Container) Invoke(target interface{}) bool {
 //	c.Provide(&Dep{})
 //	c.ProvideFunc(func(d *Dep) *Service { return &Service{Dep: d} })
 func (c *Container) ProvideFunc(constructor interface{}) error {
+	if c == nil {
+		return fmt.Errorf("di: container is nil")
+	}
 	fn := reflect.ValueOf(constructor)
 	if fn.Kind() != reflect.Func {
 		return fmt.Errorf("di: ProvideFunc requires a function")
@@ -125,6 +134,9 @@ func (c *Container) ProvideFunc(constructor interface{}) error {
 
 // MustProvideFunc is ProvideFunc that panics on error.
 func (c *Container) MustProvideFunc(constructor interface{}) {
+	if c == nil {
+		return
+	}
 	if err := c.ProvideFunc(constructor); err != nil {
 		panic(err)
 	}

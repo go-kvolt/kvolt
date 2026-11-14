@@ -182,6 +182,9 @@ func JWT(config JWTConfig) context.HandlerFunc {
 	extractor := buildJWTExtractor(config.TokenLookup, config.AuthScheme)
 
 	return func(c *context.Context) error {
+		if c == nil {
+			return nil
+		}
 		tokenString, err := extractor(c)
 		if err != nil {
 			return config.ErrorHandler(c, err)
