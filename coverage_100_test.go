@@ -158,3 +158,10 @@ func TestIsTrustedProxy_BadCIDR(t *testing.T) {
 		t.Fatal("bad cidr")
 	}
 }
+
+func TestEngine_IsTrustedProxyNil(t *testing.T) {
+	var e *Engine
+	if e.IsTrustedProxy("127.0.0.1:8080") {
+		t.Fatal("expected nil engine to return false")
+	}
+}

@@ -38,3 +38,16 @@ func TestClientIP_RejectsTrustedXRealIP(t *testing.T) {
 		t.Fatalf("got %q want peer 10.0.0.5", got)
 	}
 }
+
+func TestClientIP_DiscardsInvalidIPStrings(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.5:443"
+	// Client sent invalid IP injection in XFF, X-Real-IP is also invalid
+	req.Header.Set("X-Forwarded-For", "<script>alert(1)</script>, 10.0.0.5")
+	req.Header.Set("X-Real-IP", "DROP TABLE users;")
+	c := New(httptest.NewRecorder(), req)
+	c.TrustedProxies = []string{"10.0.0.0/8"}
+	if got := c.ClientIP(); got != "10.0.0.5" {
+		t.Fatalf("got %q want peer 10.0.0.5 when headers contain invalid IPs", got)
+	}
+}

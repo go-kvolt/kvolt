@@ -268,6 +268,9 @@ func (e *Engine) shutdownTimeout() time.Duration {
 
 // IsTrustedProxy reports whether remoteAddr's host is in TrustedProxies.
 func (e *Engine) IsTrustedProxy(remoteAddr string) bool {
+	if e == nil {
+		return false
+	}
 	return isTrustedProxy(remoteAddr, e.TrustedProxies)
 }
 

@@ -59,6 +59,9 @@ func (m *Manager) Create(data interface{}) (string, error) {
 	}
 	if m.MaxAge > 0 {
 		m.mu.Lock()
+		if m.created == nil {
+			m.created = make(map[string]time.Time)
+		}
 		stale := m.pruneCreatedLocked(time.Now())
 		m.created[token] = time.Now()
 		m.mu.Unlock()

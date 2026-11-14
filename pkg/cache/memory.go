@@ -71,6 +71,9 @@ func NewMemoryStoreSized(cleanupInterval time.Duration, maxKeys int) *MemoryStor
 }
 
 func (m *MemoryStore) getShard(key string) *shard {
+	if m == nil || len(m.shards) == 0 {
+		return nil
+	}
 	var h maphash.Hash
 	h.SetSeed(m.seed)
 	_, _ = h.WriteString(key)
@@ -114,6 +117,9 @@ func (m *MemoryStore) Get(key string) (interface{}, error) {
 		return nil, ErrKeyNotFound
 	}
 	s := m.getShard(key)
+	if s == nil {
+		return nil, ErrKeyNotFound
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -135,6 +141,9 @@ func (m *MemoryStore) Set(key string, value interface{}, ttl time.Duration) erro
 		return ErrKeyNotFound
 	}
 	s := m.getShard(key)
+	if s == nil {
+		return ErrKeyNotFound
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -163,6 +172,9 @@ func (m *MemoryStore) Delete(key string) error {
 		return nil
 	}
 	s := m.getShard(key)
+	if s == nil {
+		return nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.removeLocked(key)
@@ -175,6 +187,9 @@ func (m *MemoryStore) Touch(key string, ttl time.Duration) error {
 		return ErrKeyNotFound
 	}
 	s := m.getShard(key)
+	if s == nil {
+		return ErrKeyNotFound
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	it, exists := s.items[key]

@@ -2,6 +2,7 @@ package cache
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/bytedance/sonic"
@@ -30,6 +31,12 @@ type Store interface {
 // GetInto loads a key and JSON-decodes it into dest (useful for Redis round-trips).
 // Memory stores that hold native values will re-marshal via JSON.
 func GetInto(store Store, key string, dest interface{}) error {
+	if store == nil {
+		return fmt.Errorf("cache: store is nil")
+	}
+	if dest == nil {
+		return fmt.Errorf("cache: dest is nil")
+	}
 	val, err := store.Get(key)
 	if err != nil {
 		return err

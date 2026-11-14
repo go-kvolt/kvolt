@@ -246,6 +246,9 @@ func (q *Queue) workerLoop(id int) {
 
 func (q *Queue) reaperLoop() {
 	defer q.wg.Done()
+	if q == nil || q.client == nil {
+		return
+	}
 	vis := q.visibility
 	if vis < 2*time.Second {
 		vis = 2 * time.Second
@@ -263,6 +266,9 @@ func (q *Queue) reaperLoop() {
 }
 
 func (q *Queue) reclaimExpired(ctx context.Context) {
+	if q == nil || q.client == nil {
+		return
+	}
 	now := float64(time.Now().UnixMilli())
 	members, err := q.client.ZRangeByScore(ctx, q.inflightKey(), &goredis.ZRangeBy{
 		Min: "-inf",
@@ -286,6 +292,9 @@ func (q *Queue) reclaimExpired(ctx context.Context) {
 
 // reclaimOrphans moves processing-list entries that have no inflight score back to ready.
 func (q *Queue) reclaimOrphans(ctx context.Context) {
+	if q == nil || q.client == nil {
+		return
+	}
 	items, err := q.client.LRange(ctx, q.processingKey(), 0, -1).Result()
 	if err != nil || len(items) == 0 {
 		return
@@ -307,6 +316,9 @@ func (q *Queue) reclaimOrphans(ctx context.Context) {
 }
 
 func (q *Queue) promoteDelayed(ctx context.Context) {
+	if q == nil || q.client == nil {
+		return
+	}
 	now := float64(time.Now().UnixMilli())
 	members, err := q.client.ZRangeByScore(ctx, q.delayedKey(), &goredis.ZRangeBy{
 		Min: "-inf",
@@ -325,6 +337,9 @@ func (q *Queue) promoteDelayed(ctx context.Context) {
 }
 
 func (q *Queue) ack(ctx context.Context, data string) {
+	if q == nil || q.client == nil {
+		return
+	}
 	_ = q.client.LRem(ctx, q.processingKey(), 1, data).Err()
 	_ = q.client.ZRem(ctx, q.inflightKey(), data).Err()
 }
@@ -377,23 +392,27 @@ func (q *Queue) processAndAck(ctx context.Context, data string) {
 			if e := q.enqueueDelayed(wire, q.retryWait); e != nil {
 				log.Printf("Job %s requeue failed: %v\n", job.ID, e)
 				if q.onDead != nil {
-					defer func() {
-						if r := recover(); r != nil {
-							log.Printf("queue redis onDead panic: %v\n", r)
-						}
+					func() {
+						defer func() {
+							if r := recover(); r != nil {
+								log.Printf("queue redis onDead panic: %v\n", r)
+							}
+						}()
+						q.onDead(job, err)
 					}()
-					q.onDead(job, err)
 				}
 			}
 			return
 		}
 		if q.onDead != nil {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("queue redis onDead panic: %v\n", r)
-				}
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("queue redis onDead panic: %v\n", r)
+					}
+				}()
+				q.onDead(job, err)
 			}()
-			q.onDead(job, err)
 		}
 	}
 }

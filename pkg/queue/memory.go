@@ -179,24 +179,28 @@ func (q *MemoryQueue) process(job Job) {
 				if e := q.enqueue(next); e != nil {
 					log.Printf("❌ Job %s requeue failed: %v\n", job.ID, e)
 					if q.onDead != nil {
-						defer func() {
-							if r := recover(); r != nil {
-								log.Printf("❌ onDead panic: %v\n", r)
-							}
+						func() {
+							defer func() {
+								if r := recover(); r != nil {
+									log.Printf("❌ onDead panic: %v\n", r)
+								}
+							}()
+							q.onDead(job, err)
 						}()
-						q.onDead(job, err)
 					}
 				}
 			})
 			return
 		}
 		if q.onDead != nil {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("❌ onDead panic: %v\n", r)
-				}
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("❌ onDead panic: %v\n", r)
+					}
+				}()
+				q.onDead(job, err)
 			}()
-			q.onDead(job, err)
 		}
 		return
 	}
