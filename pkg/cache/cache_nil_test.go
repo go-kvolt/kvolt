@@ -70,3 +70,32 @@ func TestMemoryStore_Uninitialized(t *testing.T) {
 		t.Fatalf("expected 0 on sparse shards Len, got %d", n)
 	}
 }
+
+func TestGetInto_BytesAndString(t *testing.T) {
+	s := NewMemoryStore(0)
+	// Storing []byte
+	_ = s.Set("raw_bytes", []byte(`{"id": 123, "name": "product"}`), 0)
+	var dest1 struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := GetInto(s, "raw_bytes", &dest1); err != nil {
+		t.Fatalf("GetInto with []byte failed: %v", err)
+	}
+	if dest1.ID != 123 || dest1.Name != "product" {
+		t.Fatalf("dest1 mismatch: %+v", dest1)
+	}
+
+	// Storing string
+	_ = s.Set("raw_string", `{"id": 456, "name": "service"}`, 0)
+	var dest2 struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := GetInto(s, "raw_string", &dest2); err != nil {
+		t.Fatalf("GetInto with string failed: %v", err)
+	}
+	if dest2.ID != 456 || dest2.Name != "service" {
+		t.Fatalf("dest2 mismatch: %+v", dest2)
+	}
+}

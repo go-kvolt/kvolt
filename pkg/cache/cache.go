@@ -41,9 +41,18 @@ func GetInto(store Store, key string, dest interface{}) error {
 	if err != nil {
 		return err
 	}
-	b, err := sonic.Marshal(val)
-	if err != nil {
-		return err
+	var b []byte
+	switch v := val.(type) {
+	case []byte:
+		b = v
+	case string:
+		b = []byte(v)
+	default:
+		var marshalErr error
+		b, marshalErr = sonic.Marshal(val)
+		if marshalErr != nil {
+			return marshalErr
+		}
 	}
 	return sonic.Unmarshal(b, dest)
 }
