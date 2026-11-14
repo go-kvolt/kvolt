@@ -181,7 +181,9 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !c.HeaderWritten() {
 		c.FlushHeaders()
 	}
-	e.pool.Put(c)
+	if !c.IsDetached() {
+		e.pool.Put(c)
+	}
 }
 
 func alternatePath(path string) string {

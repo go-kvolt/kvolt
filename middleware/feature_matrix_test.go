@@ -33,6 +33,9 @@ func TestTimeout_Returns504WhenHandlerIgnoresDeadline(t *testing.T) {
 	if w.Code != 504 {
 		t.Fatalf("want 504 got %d body=%s", w.Code, w.Body.String())
 	}
+	if !c.IsDetached() {
+		t.Fatal("expected context to be marked detached on timeout")
+	}
 	if elapsed > 200*time.Millisecond {
 		t.Fatalf("timeout did not bound wait: elapsed=%v", elapsed)
 	}

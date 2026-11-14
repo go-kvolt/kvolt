@@ -48,6 +48,7 @@ func Timeout(d time.Duration) func(c *context.Context) error {
 			}
 			return nil
 		case <-ctx.Done():
+			c.SetDetached()
 			tw.mu.Lock()
 			if tw.wroteHeader {
 				tw.timedOut = true
@@ -67,6 +68,7 @@ func Timeout(d time.Duration) func(c *context.Context) error {
 			_, _ = tw.ResponseWriter.Write([]byte(`{"error":"Gateway Timeout"}`))
 			tw.wroteHeader = true
 			tw.status = http.StatusGatewayTimeout
+			c.Status(http.StatusGatewayTimeout)
 			tw.mu.Unlock()
 			return nil
 		}

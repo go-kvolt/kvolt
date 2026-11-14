@@ -66,7 +66,8 @@ type Context struct {
 	// RoutePath is an optional metrics/debug label set by the Engine.
 	RoutePath string
 
-	aborted bool
+	aborted  bool
+	detached bool
 }
 
 // New creates a new Context.
@@ -112,6 +113,18 @@ func (c *Context) Reset(w http.ResponseWriter, r *http.Request) {
 	c.status = 0
 	c.headerWritten = false
 	c.aborted = false
+	c.detached = false
+}
+
+// SetDetached marks the context as detached, signaling that an async goroutine
+// may outlive the main handler and this context instance must not be returned to sync.Pool.
+func (c *Context) SetDetached() {
+	c.detached = true
+}
+
+// IsDetached reports whether the context is detached.
+func (c *Context) IsDetached() bool {
+	return c.detached
 }
 
 // Set is used to store a new key/value pair exclusively for this context.
