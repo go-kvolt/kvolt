@@ -26,10 +26,15 @@ func Load(target interface{}) error {
 		for i := 0; i < elem.NumField(); i++ {
 			field := typ.Field(i)
 
+			key := field.Tag.Get("mapstructure")
+			if key == "" {
+				key = field.Name
+			}
+
 			// Handle "env" tag
 			tag := field.Tag.Get("env")
 			if tag != "" {
-				if err := v.BindEnv(field.Name, tag); err != nil {
+				if err := v.BindEnv(key, tag); err != nil {
 					// In case of error binding, we just continue, but it's unlikely.
 				}
 			}
@@ -37,7 +42,7 @@ func Load(target interface{}) error {
 			// Handle "default" tag
 			def := field.Tag.Get("default")
 			if def != "" {
-				v.SetDefault(field.Name, def)
+				v.SetDefault(key, def)
 			}
 		}
 	}

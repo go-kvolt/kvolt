@@ -103,11 +103,17 @@ func LoggerWithConfig(cfg LoggerConfig) func(c *context.Context) error {
 		}
 
 		ip := c.ClientIP()
-		if ip == "" {
+		if ip == "" && c.Request != nil {
 			ip = c.Request.RemoteAddr
 		}
-		path := sanitizeLogPath(c.Request.URL.Path)
-		method := c.Request.Method
+		path := ""
+		method := ""
+		if c.Request != nil {
+			method = c.Request.Method
+			if c.Request.URL != nil {
+				path = sanitizeLogPath(c.Request.URL.Path)
+			}
+		}
 
 		var msg string
 		if strings.EqualFold(cfg.Format, "json") {

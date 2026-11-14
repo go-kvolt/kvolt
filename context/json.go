@@ -13,6 +13,8 @@ var errInternalJSON = []byte(`{"error":"Internal Server Error"}`)
 
 const jsonEncodeOpts = encoder.NoValidateJSONMarshaler | encoder.NoEncoderNewline
 
+const maxPooledJSONBufSize = 64 * 1024 // 64 KiB
+
 var jsonOutPool = sync.Pool{
 	New: func() interface{} {
 		b := make([]byte, 0, 256)
@@ -37,7 +39,11 @@ func (c *Context) JSON(code int, obj interface{}) error {
 	if err == nil {
 		_, err = c.Writer.Write(buf)
 	}
-	*bp = buf
+	if cap(buf) <= maxPooledJSONBufSize {
+		*bp = buf
+	} else {
+		*bp = make([]byte, 0, 256)
+	}
 	jsonOutPool.Put(bp)
 	return err
 }

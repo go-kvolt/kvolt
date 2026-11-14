@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/go-kvolt/kvolt/v2"
 	"github.com/go-kvolt/kvolt/v2/context"
@@ -83,7 +84,10 @@ func Handler(cfg Config) func(c *context.Context) error {
 		cfg.Title = "KVolt API Docs"
 	}
 
-	var cachedSpec []byte
+	var (
+		cachedSpec []byte
+		specOnce   sync.Once
+	)
 
 	if !cfg.Disabled {
 		baseURL := cfg.Host
@@ -112,9 +116,11 @@ func Handler(cfg Config) func(c *context.Context) error {
 				return err
 			}
 
-			if len(cachedSpec) == 0 && cfg.RoutesProvider != nil {
-				routes := cfg.RoutesProvider.Routes()
-				cachedSpec = generateOpenAPI(routes, cfg.Title)
+			if cfg.RoutesProvider != nil {
+				specOnce.Do(func() {
+					routes := cfg.RoutesProvider.Routes()
+					cachedSpec = generateOpenAPI(routes, cfg.Title)
+				})
 			}
 
 			if len(cachedSpec) > 0 {

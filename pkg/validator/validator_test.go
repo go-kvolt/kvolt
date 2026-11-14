@@ -30,6 +30,14 @@ func TestValidate_Email(t *testing.T) {
 	if err != nil {
 		t.Errorf("valid email: %v", err)
 	}
+	err = Validate(&S{Email: "Admin@Company.ONLINE"})
+	if err != nil {
+		t.Errorf("uppercase and long TLD email should be valid: %v", err)
+	}
+	err = Validate(&S{Email: "erp.user@enterprise.internal"})
+	if err != nil {
+		t.Errorf("enterprise internal email should be valid: %v", err)
+	}
 }
 
 func TestValidate_Min(t *testing.T) {

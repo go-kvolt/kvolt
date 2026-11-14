@@ -25,6 +25,7 @@ type Engine struct {
 	pool            sync.Pool
 	htmlTemplates   *template.Template
 	attachments     sync.Map // optional features (e.g. gRPC) without hard imports
+	noRouteMu       sync.Mutex
 	noRoute         []context.HandlerFunc
 	notFoundHandler context.HandlerFunc
 	noMethodHandler context.HandlerFunc
@@ -103,6 +104,8 @@ func Default() *Engine {
 
 // NoRoute sets the handler used when no route matches.
 func (e *Engine) NoRoute(h context.HandlerFunc) {
+	e.noRouteMu.Lock()
+	defer e.noRouteMu.Unlock()
 	if h != nil {
 		e.notFoundHandler = h
 	}
@@ -110,6 +113,8 @@ func (e *Engine) NoRoute(h context.HandlerFunc) {
 }
 
 func (e *Engine) handlers404() []context.HandlerFunc {
+	e.noRouteMu.Lock()
+	defer e.noRouteMu.Unlock()
 	if e.noRoute == nil || e.noRouteDirty {
 		h := make([]context.HandlerFunc, 0, len(e.RouterGroup.middleware)+1)
 		h = append(h, e.RouterGroup.middleware...)

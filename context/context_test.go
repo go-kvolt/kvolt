@@ -154,3 +154,29 @@ func TestContext_BindJSON_SkipsValidation(t *testing.T) {
 		t.Errorf("BindJSON: %+v", req)
 	}
 }
+
+func TestContext_Data(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/", nil)
+	c := New(w, r)
+
+	err := c.Data(http.StatusCreated, "application/octet-stream", []byte("hello-binary"))
+	if err != nil {
+		t.Fatalf("Data returned error: %v", err)
+	}
+	if w.Code != http.StatusCreated {
+		t.Errorf("want 201, got %d", w.Code)
+	}
+	if w.Header().Get("Content-Type") != "application/octet-stream" {
+		t.Errorf("want application/octet-stream, got %s", w.Header().Get("Content-Type"))
+	}
+	if w.Body.String() != "hello-binary" {
+		t.Errorf("want hello-binary, got %s", w.Body.String())
+	}
+	if !c.HeaderWritten() {
+		t.Error("expected HeaderWritten() to be true")
+	}
+	if c.StatusCode() != http.StatusCreated {
+		t.Errorf("want StatusCode 201, got %d", c.StatusCode())
+	}
+}

@@ -22,6 +22,9 @@ func NewContainer() *Container {
 // Provide registers a service instance (Singleton).
 // Usage: container.Provide(&MyService{})
 func (c *Container) Provide(service interface{}) {
+	if service == nil {
+		panic("di: cannot provide nil service")
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

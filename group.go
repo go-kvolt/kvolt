@@ -68,7 +68,9 @@ func (group *RouterGroup) Group(prefix string) *RouterGroup {
 func (group *RouterGroup) Use(h ...context.HandlerFunc) {
 	group.middleware = append(group.middleware, h...)
 	if group.engine != nil && group.engine.RouterGroup == group {
+		group.engine.noRouteMu.Lock()
 		group.engine.noRouteDirty = true
+		group.engine.noRouteMu.Unlock()
 	}
 }
 

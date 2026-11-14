@@ -281,6 +281,16 @@ func (c *Context) HTML(code int, html string) error {
 	return err
 }
 
+// Data writes raw bytes with the specified status code and optional content type.
+func (c *Context) Data(code int, contentType string, data []byte) error {
+	if contentType != "" {
+		c.Writer.Header().Set("Content-Type", contentType)
+	}
+	c.writeHeader(code)
+	_, err := c.Writer.Write(data)
+	return err
+}
+
 // RawBody reads the full request body once and restores Request.Body so Bind/BindJSON still work.
 // Useful for webhook signature verification (Razorpay, Stripe, couriers).
 func (c *Context) RawBody() ([]byte, error) {
@@ -566,5 +576,10 @@ func SetWebsocketCheckOrigin(fn func(*http.Request) bool) {
 // Upgrade upgrades the HTTP connection to a WebSocket connection.
 // Returns the *websocket.Conn and any error.
 func (c *Context) Upgrade() (*websocket.Conn, error) {
-	return upgrader.Upgrade(c.Writer, c.Request, nil)
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err == nil {
+		c.headerWritten = true
+		c.status = http.StatusSwitchingProtocols
+	}
+	return conn, err
 }

@@ -72,3 +72,14 @@ func TestContainer_ProvideFuncMissingDep(t *testing.T) {
 		t.Fatal("expected missing dependency error")
 	}
 }
+
+func TestContainer_ProvideNilPanic(t *testing.T) {
+	c := NewContainer()
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic on nil service")
+		}
+	}()
+	c.Provide(nil)
+}

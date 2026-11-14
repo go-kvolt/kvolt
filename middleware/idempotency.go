@@ -329,10 +329,7 @@ func replayIdempotency(c *context.Context, rec IdempotencyRecord) {
 		}
 	}
 	dst.Set("Idempotent-Replayed", "true")
-	c.Writer.WriteHeader(rec.Status)
-	if len(rec.Body) > 0 {
-		_, _ = c.Writer.Write(rec.Body)
-	}
+	_ = c.Data(rec.Status, "", rec.Body)
 }
 
 type captureResponseWriter struct {

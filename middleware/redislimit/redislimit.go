@@ -59,7 +59,10 @@ func NewWithConfig(cfg Config) func(c *kvctx.Context) error {
 			return httperr.Internal("rate limiter unavailable")
 		}
 		if n == 1 {
-			_ = cfg.Client.Expire(ctx, key, cfg.Window).Err()
+			if expErr := cfg.Client.Expire(ctx, key, cfg.Window).Err(); expErr != nil {
+				_ = cfg.Client.Del(ctx, key).Err()
+				return httperr.Internal("rate limiter unavailable")
+			}
 		}
 		remaining := cfg.Limit - int(n)
 		if remaining < 0 {

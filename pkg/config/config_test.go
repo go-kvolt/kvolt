@@ -6,15 +6,19 @@ import (
 
 func TestLoad_ValidStruct(t *testing.T) {
 	type Cfg struct {
-		AppName string `mapstructure:"app_name"`
-		Port    int    `mapstructure:"port"`
+		AppName string `mapstructure:"app_name" default:"kvolt-erp"`
+		Port    int    `mapstructure:"port" env:"TEST_PORT" default:"9000"`
 	}
+	t.Setenv("TEST_PORT", "8888")
 	var cfg Cfg
 	err := Load(&cfg)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	// No config file in test; defaults/zero values are fine
-	_ = cfg.AppName
-	_ = cfg.Port
+	if cfg.AppName != "kvolt-erp" {
+		t.Errorf("want default app_name kvolt-erp, got %s", cfg.AppName)
+	}
+	if cfg.Port != 8888 {
+		t.Errorf("want env port 8888, got %d", cfg.Port)
+	}
 }
