@@ -182,7 +182,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	case e.RedirectTrailingSlash && res.TSR && r.Method != http.MethodConnect:
 		code := http.StatusMovedPermanently
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			code = http.StatusPermanentRedirect
 		}
 		target := alternatePath(r.URL.Path)

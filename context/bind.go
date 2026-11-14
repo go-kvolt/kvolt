@@ -3,6 +3,7 @@ package context
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"reflect"
 	"strconv"
@@ -45,6 +46,20 @@ func (c *Context) BindURI(obj interface{}) error {
 	return bindMap(obj, values, "uri", "param")
 }
 
+// BindHeader binds HTTP request headers into obj using `header` tags (fallback: field name).
+func (c *Context) BindHeader(obj interface{}) error {
+	if c == nil || c.Request == nil {
+		return fmt.Errorf("nil request")
+	}
+	values := make(url.Values)
+	for k, v := range c.Request.Header {
+		values[k] = v
+		values[strings.ToLower(k)] = v
+		values[http.CanonicalHeaderKey(k)] = v
+	}
+	return bindMap(obj, values, "header")
+}
+
 func bindMap(obj interface{}, values url.Values, tags ...string) error {
 	v := reflect.ValueOf(obj)
 	if v.Kind() != reflect.Ptr || v.IsNil() {
@@ -85,6 +100,12 @@ func bindStruct(v reflect.Value, values url.Values, tags ...string) error {
 			continue
 		}
 		rawSlice, ok := values[name]
+		if !ok {
+			rawSlice, ok = values[strings.ToLower(name)]
+		}
+		if !ok {
+			rawSlice, ok = values[http.CanonicalHeaderKey(name)]
+		}
 		if !ok || len(rawSlice) == 0 {
 			continue
 		}

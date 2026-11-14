@@ -14,6 +14,7 @@ func TestServeHTTP_TSRAndMethodNotAllowedAndFlush(t *testing.T) {
 	app.RedirectTrailingSlash = true
 	app.HandleMethodNotAllowed = true
 	app.GET("/dir/", func(c *context.Context) error { return c.String(200, "ok") })
+	app.HEAD("/dir/", func(c *context.Context) error { return c.NoContent() })
 	app.POST("/form/", func(c *context.Context) error { return c.String(200, "f") })
 	app.POST("/onlypost", func(c *context.Context) error { return c.String(200, "p") })
 
@@ -31,6 +32,12 @@ func TestServeHTTP_TSRAndMethodNotAllowedAndFlush(t *testing.T) {
 	}
 	if loc := wQuery.Header().Get("Location"); loc != "/dir/?sort=desc&page=2" {
 		t.Fatalf("TSR query want /dir/?sort=desc&page=2 got %q", loc)
+	}
+
+	wHead := httptest.NewRecorder()
+	app.ServeHTTP(wHead, httptest.NewRequest("HEAD", "/dir", nil))
+	if wHead.Code != http.StatusMovedPermanently {
+		t.Fatalf("HEAD TSR want 301 got %d", wHead.Code)
 	}
 
 	w2 := httptest.NewRecorder()

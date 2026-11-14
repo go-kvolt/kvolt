@@ -235,3 +235,49 @@ func TestValidate_MapRecursionAndMinMax(t *testing.T) {
 		t.Fatalf("unexpected error on valid catalog: %v", err)
 	}
 }
+
+func TestValidate_WhitespaceAndUTF8(t *testing.T) {
+	type Form struct {
+		Name    string `validate:" required , min=3 , max=10 "`
+		Ignore  string `validate:"-"`
+		Comment string `validate:"min=2, max=5"`
+	}
+
+	// Leading/trailing whitespace in tag rules
+	if err := Validate(&Form{Name: ""}); err == nil {
+		t.Fatal("expected error on empty required name with whitespace in tag")
+	}
+	if err := Validate(&Form{Name: "ab"}); err == nil {
+		t.Fatal("expected error on name shorter than min=3")
+	}
+	if err := Validate(&Form{Name: "toolongnamehere"}); err == nil {
+		t.Fatal("expected error on name longer than max=10")
+	}
+
+	// UTF-8 multi-byte rune length: "café" is 4 characters (runes), but 5 bytes in UTF-8
+	// min=2, max=5 allows "café" (4 runes) and "こんにちは" (5 runes)
+	validForm := &Form{
+		Name:    "Alice",
+		Ignore:  "can be anything",
+		Comment: "café",
+	}
+	if err := Validate(validForm); err != nil {
+		t.Fatalf("unexpected error on valid form with UTF-8 runes: %v", err)
+	}
+
+	cjkForm := &Form{
+		Name:    "Bob",
+		Comment: "こんにちは", // 5 Japanese characters
+	}
+	if err := Validate(cjkForm); err != nil {
+		t.Fatalf("unexpected error on CJK form: %v", err)
+	}
+
+	cjkTooLong := &Form{
+		Name:    "Bob",
+		Comment: "こんにちは世界", // 7 characters > max=5
+	}
+	if err := Validate(cjkTooLong); err == nil {
+		t.Fatal("expected error for 7 Japanese runes when max=5")
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // Validator validates structs based on tags.
@@ -90,12 +91,16 @@ func Validate(s interface{}) error {
 			}
 		}
 
-		if tag == "" {
+		if tag == "" || tag == "-" {
 			continue
 		}
 
 		rules := strings.Split(tag, ",")
-		for _, rule := range rules {
+		for _, rawRule := range rules {
+			rule := strings.TrimSpace(rawRule)
+			if rule == "" {
+				continue
+			}
 			val := v.Field(i)
 
 			// Check Required
@@ -127,11 +132,11 @@ func Validate(s interface{}) error {
 			// Check Min/Max (simplified)
 			// Format: min=5, max=10
 			if strings.HasPrefix(rule, "min=") {
-				limitStr := strings.TrimPrefix(rule, "min=")
+				limitStr := strings.TrimSpace(strings.TrimPrefix(rule, "min="))
 				limit, err := strconv.ParseFloat(limitStr, 64)
 				if err == nil {
 					if checkVal.Kind() == reflect.String {
-						if float64(len(checkVal.String())) < limit {
+						if float64(utf8.RuneCountInString(checkVal.String())) < limit {
 							return fmt.Errorf("field %s must be at least %s characters", field.Name, limitStr)
 						}
 					} else if checkVal.Kind() == reflect.Slice || checkVal.Kind() == reflect.Array || checkVal.Kind() == reflect.Map {
@@ -155,11 +160,11 @@ func Validate(s interface{}) error {
 			}
 
 			if strings.HasPrefix(rule, "max=") {
-				limitStr := strings.TrimPrefix(rule, "max=")
+				limitStr := strings.TrimSpace(strings.TrimPrefix(rule, "max="))
 				limit, err := strconv.ParseFloat(limitStr, 64)
 				if err == nil {
 					if checkVal.Kind() == reflect.String {
-						if float64(len(checkVal.String())) > limit {
+						if float64(utf8.RuneCountInString(checkVal.String())) > limit {
 							return fmt.Errorf("field %s must be at most %s characters", field.Name, limitStr)
 						}
 					} else if checkVal.Kind() == reflect.Slice || checkVal.Kind() == reflect.Array || checkVal.Kind() == reflect.Map {
