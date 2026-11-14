@@ -308,3 +308,27 @@ func TestStreamAuthInterceptor_Panic(t *testing.T) {
 		t.Errorf("want codes.Unauthenticated, got %v", err)
 	}
 }
+
+func TestServer_NilGuards(t *testing.T) {
+	var s *Server
+	if s.Raw() != nil {
+		t.Fatal("expected nil Raw on nil server")
+	}
+	if s.HealthServer() != nil {
+		t.Fatal("expected nil HealthServer on nil server")
+	}
+	if err := s.Serve(nil); err == nil {
+		t.Fatal("expected error on nil server Serve")
+	}
+	if err := s.ListenAndServe(":0"); err == nil {
+		t.Fatal("expected error on nil server ListenAndServe")
+	}
+	s.Stop()
+	s.GracefulStop()
+
+	// Server with nil listener
+	validS := NewServer()
+	if err := validS.Serve(nil); err == nil {
+		t.Fatal("expected error on valid server with nil listener")
+	}
+}

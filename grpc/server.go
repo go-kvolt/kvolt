@@ -68,6 +68,9 @@ func NewServer(opts ...Option) *Server {
 //
 //	pb.RegisterGreeterServer(grpcSrv.Raw(), &myService{})
 func (s *Server) Raw() *grpc.Server {
+	if s == nil {
+		return nil
+	}
 	return s.srv
 }
 
@@ -76,12 +79,21 @@ func (s *Server) Raw() *grpc.Server {
 //
 //	grpcSrv.HealthServer().SetServingStatus("myService", healthpb.HealthCheckResponse_SERVING)
 func (s *Server) HealthServer() *health.Server {
+	if s == nil {
+		return nil
+	}
 	return s.healthSrv
 }
 
 // Serve starts the gRPC server on the given listener.
 // This is a blocking call.
 func (s *Server) Serve(lis net.Listener) error {
+	if s == nil || s.srv == nil {
+		return fmt.Errorf("grpc: server is nil")
+	}
+	if lis == nil {
+		return fmt.Errorf("grpc: listener is nil")
+	}
 	s.mu.Lock()
 	s.listener = lis
 	s.mu.Unlock()
@@ -93,6 +105,9 @@ func (s *Server) Serve(lis net.Listener) error {
 // ListenAndServe creates a TCP listener on addr and starts the gRPC server.
 // This is a blocking call.
 func (s *Server) ListenAndServe(addr string) error {
+	if s == nil || s.srv == nil {
+		return fmt.Errorf("grpc: server is nil")
+	}
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("grpc: failed to listen on %s: %w", addr, err)
