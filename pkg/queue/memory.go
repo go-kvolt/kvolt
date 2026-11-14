@@ -15,6 +15,7 @@ type MemoryQueue struct {
 	handlers    map[string]HandlerFunc
 	workerCount int
 	quit        chan bool
+	stopOnce    sync.Once
 	wg          sync.WaitGroup
 	mu          sync.RWMutex
 	onDead      DeadLetterFunc
@@ -75,6 +76,13 @@ func (q *MemoryQueue) PushWithOptions(name string, payload interface{}, opts Pus
 
 func (q *MemoryQueue) enqueue(job Job) error {
 	select {
+	case <-q.quit:
+		return fmt.Errorf("queue is stopped")
+	default:
+	}
+	select {
+	case <-q.quit:
+		return fmt.Errorf("queue is stopped")
 	case q.jobChan <- job:
 		return nil
 	default:
@@ -100,9 +108,11 @@ func (q *MemoryQueue) Start() {
 
 // Stop gracefully shuts down workers.
 func (q *MemoryQueue) Stop() {
-	close(q.quit)
-	q.wg.Wait()
-	fmt.Println("🛑 Queue stopped")
+	q.stopOnce.Do(func() {
+		close(q.quit)
+		q.wg.Wait()
+		fmt.Println("🛑 Queue stopped")
+	})
 }
 
 func (q *MemoryQueue) workerLoop(id int) {

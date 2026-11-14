@@ -25,8 +25,9 @@ type Manager struct {
 	// MaxAge is an absolute lifetime from Create (0 = sliding only, no absolute cap).
 	MaxAge time.Duration
 
-	mu      sync.Mutex
-	created map[string]time.Time // token -> createdAt for absolute MaxAge
+	mu        sync.Mutex
+	created   map[string]time.Time // token -> createdAt for absolute MaxAge
+	lastPrune time.Time
 }
 
 // New creates a new Session Manager.
@@ -108,6 +109,14 @@ func (m *Manager) pruneCreatedLocked(now time.Time) []string {
 	if m.MaxAge <= 0 || len(m.created) == 0 {
 		return nil
 	}
+	throttle := m.MaxAge
+	if throttle > time.Second {
+		throttle = time.Second
+	}
+	if !m.lastPrune.IsZero() && now.Sub(m.lastPrune) < throttle {
+		return nil
+	}
+	m.lastPrune = now
 	var stale []string
 	for tok, created := range m.created {
 		if now.Sub(created) > m.MaxAge {

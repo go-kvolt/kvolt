@@ -168,6 +168,12 @@ func Idempotency(cfg IdempotencyConfig) func(c *context.Context) error {
 	var inflight sync.Map // storeKey -> chan struct{}
 
 	return func(c *context.Context) error {
+		if c == nil || c.Request == nil {
+			if c != nil {
+				c.Next()
+			}
+			return nil
+		}
 		if cfg.Skipper != nil && cfg.Skipper(c) {
 			c.Next()
 			return nil
@@ -214,9 +220,14 @@ func Idempotency(cfg IdempotencyConfig) func(c *context.Context) error {
 			}()
 		}
 
-		cw := &captureResponseWriter{ResponseWriter: c.Writer, status: http.StatusOK}
+		origWriter := c.Writer
+		cw := &captureResponseWriter{ResponseWriter: origWriter, status: http.StatusOK}
 		c.Writer = cw
 		c.Next()
+		if c.StatusCode() != 0 {
+			cw.status = c.StatusCode()
+		}
+		c.Writer = origWriter
 
 		// Do not cache 5xx — retries should re-execute after transient failures.
 		if cw.status > 0 && cw.status < 500 {
@@ -234,10 +245,18 @@ func Idempotency(cfg IdempotencyConfig) func(c *context.Context) error {
 func defaultIdempotencyKey(c *context.Context, rawKey string, includeBody bool) string {
 	tenant := TenantID(c)
 	actor := idempotencyActor(c)
+	method := ""
+	path := ""
+	if c != nil && c.Request != nil {
+		method = c.Request.Method
+		if c.Request.URL != nil {
+			path = c.Request.URL.Path
+		}
+	}
 	var b strings.Builder
-	b.WriteString(c.Request.Method)
+	b.WriteString(method)
 	b.WriteByte('\n')
-	b.WriteString(c.Request.URL.Path)
+	b.WriteString(path)
 	b.WriteByte('\n')
 	b.WriteString(actor)
 	b.WriteByte('\n')

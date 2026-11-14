@@ -109,3 +109,15 @@ func TestMemoryQueue_RegisterAndProcess(t *testing.T) {
 		t.Errorf("want at least 2 jobs processed, got %d", n)
 	}
 }
+
+func TestMemoryQueue_MultipleStop(t *testing.T) {
+	q := NewMemoryQueue(10, 1)
+	q.Start()
+	q.Stop()
+	// Second call must not panic
+	q.Stop()
+	err := q.Push("test", "data")
+	if err == nil {
+		t.Fatal("expected error pushing to stopped queue")
+	}
+}

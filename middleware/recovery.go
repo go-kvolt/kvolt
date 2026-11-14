@@ -52,6 +52,14 @@ func RecoveryWithConfig(config RecoveryConfig) func(c *context.Context) error {
 					return
 				}
 				if config.RecoverHandler != nil {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Printf("[Panic in RecoverHandler] %v", r)
+							if !c.HeaderWritten() {
+								_ = c.JSON(http.StatusInternalServerError, httperr.Internal("internal server error"))
+							}
+						}
+					}()
 					config.RecoverHandler(c, err)
 					return
 				}

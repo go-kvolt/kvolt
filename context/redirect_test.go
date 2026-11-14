@@ -52,6 +52,14 @@ func TestRedirectURL_AllowsAbsolute(t *testing.T) {
 	}
 }
 
+func TestRedirectURL_BlocksCRLF(t *testing.T) {
+	rec := httptest.NewRecorder()
+	c := New(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if err := c.RedirectURL(302, "https://example.com/ok\r\nInjected: true"); err == nil {
+		t.Fatal("expected error on CRLF in RedirectURL")
+	}
+}
+
 func TestSanitizeDownloadFilename(t *testing.T) {
 	got := sanitizeDownloadFilename("../../x\n\".bin")
 	if got == "" || strings.ContainsAny(got, "\n\"\\") {

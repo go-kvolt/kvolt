@@ -102,15 +102,14 @@ func (w *gzipResponseWriter) startGzip() error {
 }
 
 func (w *gzipResponseWriter) flushPlain() error {
-	if w.wroteHeader {
-		return nil
+	if !w.wroteHeader {
+		code := w.status
+		if code == 0 {
+			code = http.StatusOK
+		}
+		w.ResponseWriter.WriteHeader(code)
+		w.wroteHeader = true
 	}
-	code := w.status
-	if code == 0 {
-		code = http.StatusOK
-	}
-	w.ResponseWriter.WriteHeader(code)
-	w.wroteHeader = true
 	if len(w.buf) > 0 {
 		_, err := w.ResponseWriter.Write(w.buf)
 		w.buf = w.buf[:0]
@@ -152,10 +151,12 @@ func (w *gzipResponseWriter) Write(b []byte) (int, error) {
 }
 
 func (w *gzipResponseWriter) Close() {
-	if w.usingGzip && w.gz != nil {
-		_ = w.gz.Close()
-		gzipWriterPool.Put(w.gz)
-		w.gz = nil
+	if w.usingGzip {
+		if w.gz != nil {
+			_ = w.gz.Close()
+			gzipWriterPool.Put(w.gz)
+			w.gz = nil
+		}
 		return
 	}
 	_ = w.flushPlain()

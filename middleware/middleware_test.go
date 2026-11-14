@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -195,4 +196,58 @@ func TestGzip_SkipsJSON(t *testing.T) {
 	if w.Header().Get("Content-Encoding") == "gzip" {
 		t.Fatal("Gzip should skip application/json")
 	}
+}
+
+func TestGzip_MultiWriteWithFlush(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("Accept-Encoding", "gzip")
+	c := context.New(w, r)
+	c.Handlers = []context.HandlerFunc{
+		GzipWithConfig(GzipConfig{MinSize: 1000}),
+		func(c *context.Context) error {
+			c.Writer.Write([]byte("first "))
+			if f, ok := c.Writer.(http.Flusher); ok {
+				f.Flush()
+			}
+			c.Writer.Write([]byte("second"))
+			return nil
+		},
+	}
+	c.Next()
+	body := w.Body.String()
+	if body != "first second" {
+		t.Fatalf("want 'first second', got %q", body)
+	}
+}
+
+func TestRecovery_CustomHandlerPanic(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/", nil)
+	c := context.New(w, r)
+	mw := RecoveryWithConfig(RecoveryConfig{
+		RecoverHandler: func(c *context.Context, recovered interface{}) {
+			panic("panic inside recover handler")
+		},
+	})
+	c.Handlers = []context.HandlerFunc{
+		mw,
+		func(c *context.Context) error {
+			panic("initial handler panic")
+		},
+	}
+	c.Next()
+	if w.Code != 500 {
+		t.Fatalf("want 500 after nested recover handler panic, got %d", w.Code)
+	}
+}
+
+func TestMiddlewares_NilContextGuards(t *testing.T) {
+	// Calling middlewares with nil or empty request context should not panic
+	_ = CSRF()(nil)
+	_ = Limiter(10, 10)(nil)
+	_ = BasicAuth(map[string]string{"u": "p"})(nil)
+	_ = APIKey("key")(nil)
+	_ = CORS()(nil)
+	_ = Idempotency(IdempotencyConfig{Store: NewMemoryIdempotencyStore()})(nil)
 }

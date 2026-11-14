@@ -372,7 +372,7 @@ func (c *Context) FormFileAllowed(name string, maxMemory int64, allowedExts ...s
 // Prefer SafeUploadPath(dir, file.Filename) when using the client-provided name.
 func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) error {
 	dst = filepath.Clean(dst)
-	if dst == "." || !filepath.IsLocal(dst) {
+	if !filepath.IsAbs(dst) && (dst == "." || !filepath.IsLocal(dst)) {
 		return httperr.BadRequest("invalid_path", "upload destination must be a local non-escaping path")
 	}
 	src, err := file.Open()
@@ -519,6 +519,9 @@ func (c *Context) Redirect(code int, location string) error {
 func (c *Context) RedirectURL(code int, location string) error {
 	if strings.TrimSpace(location) == "" {
 		return httperr.BadRequest("unsafe_redirect", "empty redirect location")
+	}
+	if strings.ContainsAny(location, "\r\n\x00") {
+		return httperr.BadRequest("unsafe_redirect", "invalid characters in redirect location")
 	}
 	if code < 300 || code > 308 {
 		code = http.StatusFound

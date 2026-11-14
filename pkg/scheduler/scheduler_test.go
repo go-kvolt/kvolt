@@ -35,3 +35,26 @@ func TestScheduler_JobRuns(t *testing.T) {
 	time.Sleep(250 * time.Millisecond) // allow at least one tick
 	s.Stop()
 }
+
+func TestScheduler_Remove(t *testing.T) {
+	s := New()
+	id, err := s.Add("@every 1h", func() {})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	s.Remove(id)
+	s.Stop()
+}
+
+func TestScheduler_PanicRecovery(t *testing.T) {
+	s := New()
+	_, err := s.Add("@every 50ms", func() {
+		panic("job panic")
+	})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	s.Start()
+	time.Sleep(120 * time.Millisecond)
+	s.Stop()
+}

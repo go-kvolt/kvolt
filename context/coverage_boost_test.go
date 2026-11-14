@@ -214,6 +214,11 @@ func TestFormFile_SaveUpload(t *testing.T) {
 	if err := c.SaveUploadedFile(fh, "out.png"); err != nil {
 		t.Fatal(err)
 	}
+	// Absolute path should be accepted cleanly
+	absDst := filepath.Join(td, "abs_out.png")
+	if err := c.SaveUploadedFile(fh, absDst); err != nil {
+		t.Fatalf("absolute dst failed: %v", err)
+	}
 	if err := c.SaveUploadedFile(fh, "../nope"); err == nil {
 		t.Fatal("escape dst")
 	}

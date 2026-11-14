@@ -77,10 +77,16 @@ func LimiterWithConfig(cfg LimiterConfig) func(c *context.Context) error {
 	}
 	if cfg.KeyFunc == nil {
 		cfg.KeyFunc = func(c *context.Context) string {
+			if c == nil {
+				return "unknown"
+			}
 			if ip := c.ClientIP(); ip != "" {
 				return maskIP(ip)
 			}
-			return clientIP(c.Request.RemoteAddr)
+			if c.Request != nil {
+				return clientIP(c.Request.RemoteAddr)
+			}
+			return "unknown"
 		}
 	}
 	if cfg.ErrorHandler == nil {
@@ -94,6 +100,12 @@ func LimiterWithConfig(cfg LimiterConfig) func(c *context.Context) error {
 	lru := list.New()
 
 	return func(c *context.Context) error {
+		if c == nil || c.Request == nil {
+			if c != nil {
+				c.Next()
+			}
+			return nil
+		}
 		key := cfg.KeyFunc(c)
 		if key == "" {
 			key = clientIP(c.Request.RemoteAddr)

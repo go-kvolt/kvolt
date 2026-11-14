@@ -73,6 +73,12 @@ func CORSWithConfig(cfg CORSConfig) func(c *context.Context) error {
 	}
 
 	return func(c *context.Context) error {
+		if c == nil || c.Request == nil {
+			if c != nil {
+				c.Next()
+			}
+			return nil
+		}
 		origin := c.Request.Header.Get("Origin")
 		if allow, ok := originAllowed(origin); ok {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", allow)

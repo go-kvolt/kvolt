@@ -78,6 +78,9 @@ func buildJWTExtractor(lookup, authScheme string) jwtExtractor {
 	case "header":
 		scheme := authScheme
 		return func(c *context.Context) (string, error) {
+			if c == nil || c.Request == nil {
+				return "", errors.New("missing auth header")
+			}
 			auth := c.Request.Header.Get(name)
 			if auth == "" {
 				return "", errors.New("missing auth header")
@@ -96,6 +99,9 @@ func buildJWTExtractor(lookup, authScheme string) jwtExtractor {
 	case "query":
 		// Discouraged: tokens in query strings leak via logs, Referer, and browser history.
 		return func(c *context.Context) (string, error) {
+			if c == nil || c.Request == nil || c.Request.URL == nil {
+				return "", errors.New("missing token in query")
+			}
 			token := c.Request.URL.Query().Get(name)
 			if token == "" {
 				return "", errors.New("missing token in query")
@@ -104,6 +110,9 @@ func buildJWTExtractor(lookup, authScheme string) jwtExtractor {
 		}
 	case "cookie":
 		return func(c *context.Context) (string, error) {
+			if c == nil || c.Request == nil {
+				return "", errors.New("missing token cookie")
+			}
 			cookie, err := c.Request.Cookie(name)
 			if err != nil {
 				return "", errors.New("missing token cookie")

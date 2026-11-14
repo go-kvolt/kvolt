@@ -21,9 +21,11 @@ type item struct {
 
 // MemoryStore is a sharded in-memory cache with LRU eviction.
 type MemoryStore struct {
-	shards  []*shard
-	maxKeys int
-	seed    maphash.Seed
+	shards   []*shard
+	maxKeys  int
+	seed     maphash.Seed
+	stopOnce sync.Once
+	stopChan chan struct{}
 }
 
 type shard struct {
@@ -50,9 +52,10 @@ func NewMemoryStoreSized(cleanupInterval time.Duration, maxKeys int) *MemoryStor
 		}
 	}
 	m := &MemoryStore{
-		shards:  make([]*shard, shardCount),
-		maxKeys: maxKeys,
-		seed:    maphash.MakeSeed(),
+		shards:   make([]*shard, shardCount),
+		maxKeys:  maxKeys,
+		seed:     maphash.MakeSeed(),
+		stopChan: make(chan struct{}),
 	}
 	for i := 0; i < shardCount; i++ {
 		m.shards[i] = &shard{
@@ -193,18 +196,31 @@ func (m *MemoryStore) Flush() error {
 func (m *MemoryStore) janitor(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	for range ticker.C {
-		now := time.Now().UnixNano()
-		for _, s := range m.shards {
-			s.mu.Lock()
-			for k, it := range s.items {
-				if it.expiresAt > 0 && now > it.expiresAt {
-					s.removeLocked(k)
+	for {
+		select {
+		case <-m.stopChan:
+			return
+		case <-ticker.C:
+			now := time.Now().UnixNano()
+			for _, s := range m.shards {
+				s.mu.Lock()
+				for k, it := range s.items {
+					if it.expiresAt > 0 && now > it.expiresAt {
+						s.removeLocked(k)
+					}
 				}
+				s.mu.Unlock()
 			}
-			s.mu.Unlock()
 		}
 	}
+}
+
+// Close stops the background janitor goroutine.
+func (m *MemoryStore) Close() error {
+	m.stopOnce.Do(func() {
+		close(m.stopChan)
+	})
+	return nil
 }
 
 // Len returns the number of live keys (not including expired until janitor/Get).

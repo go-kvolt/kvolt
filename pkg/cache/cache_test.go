@@ -33,6 +33,17 @@ func TestCacheEviction(t *testing.T) {
 	}
 }
 
+func TestMemoryStore_Close(t *testing.T) {
+	c := NewMemoryStore(10 * time.Millisecond)
+	if err := c.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	// Calling Close again should be idempotent
+	if err := c.Close(); err != nil {
+		t.Fatalf("Close again: %v", err)
+	}
+}
+
 func BenchmarkCacheSet(b *testing.B) {
 	c := NewMemoryStore(0)
 	b.RunParallel(func(pb *testing.PB) {

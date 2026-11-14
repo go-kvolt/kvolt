@@ -23,11 +23,24 @@ func New() *Scheduler {
 // - Standard: "0 0 * * *" (Daily at midnight)
 // - Interval: "@every 1h30m"
 func (s *Scheduler) Add(spec string, job func()) (int, error) {
-	id, err := s.c.AddFunc(spec, job)
+	safeJob := func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[Scheduler] panic in job: %v", r)
+			}
+		}()
+		job()
+	}
+	id, err := s.c.AddFunc(spec, safeJob)
 	if err != nil {
 		return 0, err
 	}
 	return int(id), nil
+}
+
+// Remove removes a scheduled job by its ID.
+func (s *Scheduler) Remove(id int) {
+	s.c.Remove(cron.EntryID(id))
 }
 
 // Start starts the scheduler in a background goroutine.

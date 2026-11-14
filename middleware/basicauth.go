@@ -55,6 +55,9 @@ func BasicAuthWithConfig(cfg BasicAuthConfig) func(c *context.Context) error {
 	}
 
 	return func(c *context.Context) error {
+		if c == nil || c.Request == nil {
+			return unauthorizedBasic(c, cfg.Realm)
+		}
 		auth := c.Request.Header.Get("Authorization")
 		const basic = "Basic "
 		if len(auth) <= len(basic) || !strings.EqualFold(auth[:len(basic)-1], "Basic") || auth[len(basic)-1] != ' ' {
@@ -76,7 +79,9 @@ func BasicAuthWithConfig(cfg BasicAuthConfig) func(c *context.Context) error {
 
 func unauthorizedBasic(c *context.Context, realm string) error {
 	realm = sanitizeBasicRealm(realm)
-	c.Writer.Header().Set("WWW-Authenticate", `Basic realm="`+realm+`"`)
+	if c != nil && c.Writer != nil {
+		c.Writer.Header().Set("WWW-Authenticate", `Basic realm="`+realm+`"`)
+	}
 	return httperr.Unauthorized("unauthorized", "basic auth required")
 }
 
@@ -125,6 +130,9 @@ func APIKeyWithConfig(cfg APIKeyConfig) func(c *context.Context) error {
 	}
 
 	return func(c *context.Context) error {
+		if c == nil || c.Request == nil {
+			return httperr.Unauthorized("unauthorized", "api key required")
+		}
 		var got string
 		switch source {
 		case "query":
