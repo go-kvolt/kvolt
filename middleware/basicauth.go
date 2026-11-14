@@ -152,6 +152,7 @@ func APIKeyWithConfig(cfg APIKeyConfig) func(c *context.Context) error {
 		default:
 			got = c.Request.Header.Get(name)
 		}
+		got = strings.TrimSpace(got)
 		if got == "" {
 			return httperr.Unauthorized("unauthorized", "api key required")
 		}

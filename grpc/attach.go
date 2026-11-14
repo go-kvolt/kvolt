@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/go-kvolt/kvolt/v2"
 )
@@ -67,10 +68,10 @@ func Run(e *kvolt.Engine, addr string) error {
 
 	select {
 	case sig := <-quit:
-		return shutdownRun(s, sig)
+		return shutdownRun(e, s, sig)
 	case <-testRunQuit:
 		fmt.Println("\nReceived test quit, shutting down gRPC server...")
-		s.GracefulStop()
+		gracefulStopWithTimeout(s, e.ShutdownTimeout())
 		fmt.Println("gRPC server exited")
 		return nil
 	case err := <-errCh:
@@ -78,11 +79,36 @@ func Run(e *kvolt.Engine, addr string) error {
 	}
 }
 
-func shutdownRun(s *Server, sig os.Signal) error {
+func shutdownRun(e *kvolt.Engine, s *Server, sig os.Signal) error {
 	fmt.Printf("\nReceived %v, shutting down gRPC server...\n", sig)
-	s.GracefulStop()
+	timeout := 5 * time.Second
+	if e != nil {
+		timeout = e.ShutdownTimeout()
+	}
+	gracefulStopWithTimeout(s, timeout)
 	fmt.Println("gRPC server exited")
 	return nil
+}
+
+func gracefulStopWithTimeout(s *Server, timeout time.Duration) {
+	if s == nil {
+		return
+	}
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	stopped := make(chan struct{})
+	go func() {
+		s.GracefulStop()
+		close(stopped)
+	}()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-stopped:
+	case <-timer.C:
+		s.Stop()
+	}
 }
 
 // RunDual starts HTTP (via Engine) and gRPC concurrently with unified shutdown.
@@ -135,7 +161,7 @@ func RunDual(e *kvolt.Engine, httpAddr, grpcAddr string) error {
 	if err := httpSrv.Shutdown(ctx); err != nil {
 		shutdownErr = fmt.Errorf("http shutdown: %w", err)
 	}
-	s.GracefulStop()
+	gracefulStopWithTimeout(s, e.ShutdownTimeout())
 	fmt.Println("All servers exited")
 	if startErr != nil {
 		return startErr

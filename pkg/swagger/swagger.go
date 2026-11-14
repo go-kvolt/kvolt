@@ -3,6 +3,7 @@ package swagger
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"strconv"
 	"strings"
 	"sync"
@@ -140,7 +141,7 @@ func Handler(cfg Config) func(c *context.Context) error {
 		}
 
 		c.Writer.Header().Set("Content-Type", "text/html")
-		html := fmt.Sprintf(uiTemplate, cfg.Title)
+		html := fmt.Sprintf(uiTemplate, template.HTMLEscapeString(cfg.Title))
 		return c.HTML(200, html)
 	}
 }

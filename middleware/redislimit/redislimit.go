@@ -12,6 +12,14 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+var incrExpireScript = redis.NewScript(`
+local current = redis.call('INCR', KEYS[1])
+if current == 1 then
+    redis.call('PEXPIRE', KEYS[1], ARGV[1])
+end
+return current
+`)
+
 // Config configures a Redis fixed-window rate limiter.
 type Config struct {
 	Client       *redis.Client
@@ -69,15 +77,13 @@ func NewWithConfig(cfg Config) func(c *kvctx.Context) error {
 		if c.Request != nil && c.Request.Context() != nil {
 			ctx = c.Request.Context()
 		}
-		n, err := cfg.Client.Incr(ctx, key).Result()
+		windowMs := cfg.Window.Milliseconds()
+		if windowMs <= 0 {
+			windowMs = 1000
+		}
+		n, err := incrExpireScript.Run(ctx, cfg.Client, []string{key}, windowMs).Int64()
 		if err != nil {
 			return httperr.Internal("rate limiter unavailable")
-		}
-		if n == 1 {
-			if expErr := cfg.Client.Expire(ctx, key, cfg.Window).Err(); expErr != nil {
-				_ = cfg.Client.Del(ctx, key).Err()
-				return httperr.Internal("rate limiter unavailable")
-			}
 		}
 		remaining := cfg.Limit - int(n)
 		if remaining < 0 {

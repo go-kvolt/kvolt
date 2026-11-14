@@ -103,10 +103,16 @@ func (s *Server) ListenAndServe(addr string) error {
 // GracefulStop gracefully stops the gRPC server.
 // It stops accepting new connections and RPCs, and blocks until all pending RPCs finish.
 func (s *Server) GracefulStop() {
+	if s == nil || s.srv == nil {
+		return
+	}
 	s.srv.GracefulStop()
 }
 
 // Stop immediately stops the gRPC server.
 func (s *Server) Stop() {
+	if s == nil || s.srv == nil {
+		return
+	}
 	s.srv.Stop()
 }
