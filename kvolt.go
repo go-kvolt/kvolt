@@ -113,7 +113,30 @@ func (e *Engine) NoRoute(h context.HandlerFunc) {
 	e.noRouteDirty = true
 }
 
+func (e *Engine) ensureInit() {
+	if e.router == nil {
+		e.router = router.New()
+	}
+	if e.RouterGroup == nil {
+		e.RouterGroup = &RouterGroup{
+			engine:     e,
+			middleware: make([]context.HandlerFunc, 0),
+		}
+	}
+	if e.notFoundHandler == nil {
+		e.notFoundHandler = func(c *context.Context) error {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "Not Found"})
+		}
+	}
+	if e.noMethodHandler == nil {
+		e.noMethodHandler = func(c *context.Context) error {
+			return c.JSON(http.StatusMethodNotAllowed, map[string]string{"error": "Method Not Allowed"})
+		}
+	}
+}
+
 func (e *Engine) handlers404() []context.HandlerFunc {
+	e.ensureInit()
 	e.noRouteMu.Lock()
 	defer e.noRouteMu.Unlock()
 	if e.noRoute == nil || e.noRouteDirty {
@@ -134,7 +157,14 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	c := e.pool.Get().(*context.Context)
+	e.ensureInit()
+	v := e.pool.Get()
+	var c *context.Context
+	if v == nil {
+		c = context.New(nil, nil)
+	} else {
+		c = v.(*context.Context)
+	}
 	c.Reset(w, r)
 	c.TrustedProxies = e.TrustedProxies
 	if e.htmlTemplates != nil {

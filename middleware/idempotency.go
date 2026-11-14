@@ -91,6 +91,12 @@ func (s *MemoryIdempotencyStore) Set(key string, rec IdempotencyRecord, ttl time
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.items == nil {
+		s.items = make(map[string]memIdemItem)
+	}
+	if s.maxKeys <= 0 {
+		s.maxKeys = defaultIdempotencyMaxKeys
+	}
 	now := time.Now()
 	for k, it := range s.items {
 		if !it.exp.IsZero() && now.After(it.exp) {
@@ -183,7 +189,14 @@ func Idempotency(cfg IdempotencyConfig) func(c *context.Context) error {
 			}
 			return nil
 		}
-		if cfg.Skipper != nil && cfg.Skipper(c) {
+		skip := false
+		if cfg.Skipper != nil {
+			func() {
+				defer func() { _ = recover() }()
+				skip = cfg.Skipper(c)
+			}()
+		}
+		if skip {
 			c.Next()
 			return nil
 		}
@@ -204,7 +217,16 @@ func Idempotency(cfg IdempotencyConfig) func(c *context.Context) error {
 			return nil
 		}
 
-		storeKey := cfg.KeyFunc(c, raw)
+		storeKey := ""
+		if cfg.KeyFunc != nil {
+			func() {
+				defer func() { _ = recover() }()
+				storeKey = cfg.KeyFunc(c, raw)
+			}()
+		}
+		if storeKey == "" {
+			storeKey = defaultIdempotencyKey(c, raw, idempotencyIncludeBody(cfg))
+		}
 		if rec, ok, err := cfg.Store.Get(storeKey); err != nil {
 			return httperr.Internal("idempotency store unavailable")
 		} else if ok {

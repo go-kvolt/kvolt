@@ -70,6 +70,22 @@ func Validate(s interface{}) error {
 							}
 						}
 					}
+				} else if nestedVal.Kind() == reflect.Map {
+					iter := nestedVal.MapRange()
+					for iter.Next() {
+						elem := iter.Value()
+						for elem.Kind() == reflect.Ptr || elem.Kind() == reflect.Interface {
+							if elem.IsNil() {
+								break
+							}
+							elem = elem.Elem()
+						}
+						if elem.IsValid() && elem.Kind() == reflect.Struct && elem.CanInterface() && elem.Type().PkgPath() != "time" {
+							if err := Validate(elem.Interface()); err != nil {
+								return err
+							}
+						}
+					}
 				}
 			}
 		}
@@ -118,7 +134,7 @@ func Validate(s interface{}) error {
 						if float64(len(checkVal.String())) < limit {
 							return fmt.Errorf("field %s must be at least %s characters", field.Name, limitStr)
 						}
-					} else if checkVal.Kind() == reflect.Slice || checkVal.Kind() == reflect.Array {
+					} else if checkVal.Kind() == reflect.Slice || checkVal.Kind() == reflect.Array || checkVal.Kind() == reflect.Map {
 						if float64(checkVal.Len()) < limit {
 							return fmt.Errorf("field %s must contain at least %s items", field.Name, limitStr)
 						}
@@ -146,7 +162,7 @@ func Validate(s interface{}) error {
 						if float64(len(checkVal.String())) > limit {
 							return fmt.Errorf("field %s must be at most %s characters", field.Name, limitStr)
 						}
-					} else if checkVal.Kind() == reflect.Slice || checkVal.Kind() == reflect.Array {
+					} else if checkVal.Kind() == reflect.Slice || checkVal.Kind() == reflect.Array || checkVal.Kind() == reflect.Map {
 						if float64(checkVal.Len()) > limit {
 							return fmt.Errorf("field %s must contain at most %s items", field.Name, limitStr)
 						}

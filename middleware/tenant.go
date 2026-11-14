@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/go-kvolt/kvolt/v2/context"
@@ -65,7 +66,14 @@ func Tenant(cfg TenantConfig) func(c *context.Context) error {
 		id := ""
 		var err error
 		if cfg.Extractor != nil {
-			id, err = cfg.Extractor(c)
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						err = httperr.BadRequest("tenant_invalid", fmt.Sprintf("tenant extractor panic: %v", r))
+					}
+				}()
+				id, err = cfg.Extractor(c)
+			}()
 			if err != nil {
 				return httperr.BadRequest("tenant_invalid", err.Error())
 			}
@@ -103,7 +111,20 @@ func Tenant(cfg TenantConfig) func(c *context.Context) error {
 		}
 		id = strings.TrimSpace(id)
 		if id == "" && cfg.Required {
-			return writeMiddlewareError(c, cfg.ErrorHandler(c))
+			var errRes error
+			if cfg.ErrorHandler != nil {
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							errRes = httperr.BadRequest("tenant_required", "tenant id is required")
+						}
+					}()
+					errRes = cfg.ErrorHandler(c)
+				}()
+			} else {
+				errRes = httperr.BadRequest("tenant_required", "tenant id is required")
+			}
+			return writeMiddlewareError(c, errRes)
 		}
 		if id != "" {
 			c.Set(TenantIDKey, id)

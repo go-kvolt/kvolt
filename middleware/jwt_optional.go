@@ -34,7 +34,7 @@ func JWTOptional(config JWTConfig) context.HandlerFunc {
 				c.Next()
 				return nil
 			}
-			return config.ErrorHandler(c, err)
+			return safeJWTErrorHandler(config, c, err)
 		}
 		claims, ok := jwtMapClaims(token)
 		if !ok {
@@ -42,7 +42,7 @@ func JWTOptional(config JWTConfig) context.HandlerFunc {
 				c.Next()
 				return nil
 			}
-			return config.ErrorHandler(c, errors.New("invalid claims"))
+			return safeJWTErrorHandler(config, c, errors.New("invalid claims"))
 		}
 		c.Set(config.ContextKey, claims)
 		c.Next()

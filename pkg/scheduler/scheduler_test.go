@@ -58,3 +58,27 @@ func TestScheduler_PanicRecovery(t *testing.T) {
 	time.Sleep(120 * time.Millisecond)
 	s.Stop()
 }
+
+func TestScheduler_Uninitialized(t *testing.T) {
+	// Directly allocate &Scheduler{}
+	s := &Scheduler{}
+	id, err := s.Add("@every 10h", func() {})
+	if err != nil {
+		t.Fatalf("Add on uninitialized scheduler failed: %v", err)
+	}
+	if id < 0 {
+		t.Fatalf("want non-negative id, got %d", id)
+	}
+	s.Start()
+	s.Remove(id)
+	s.Stop()
+
+	// Nil scheduler guards
+	var nilS *Scheduler
+	if _, err := nilS.Add("@every 1h", func() {}); err == nil {
+		t.Fatal("expected error on nil scheduler Add")
+	}
+	nilS.Start()
+	nilS.Remove(1)
+	nilS.Stop()
+}

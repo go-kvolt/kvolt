@@ -50,4 +50,23 @@ func TestMemoryStore_Uninitialized(t *testing.T) {
 	if err := m2.Close(); err != nil {
 		t.Fatalf("expected nil on Close, got %v", err)
 	}
+
+	// Flush and Len on nil and uninitialized stores
+	if err := m.Flush(); err != nil {
+		t.Fatalf("expected nil on nil store Flush, got %v", err)
+	}
+	if n := m.Len(); n != 0 {
+		t.Fatalf("expected 0 on nil store Len, got %d", n)
+	}
+
+	// Store with nil/sparse shards
+	m3 := &MemoryStore{
+		shards: make([]*shard, 4), // all nil shards
+	}
+	if err := m3.Flush(); err != nil {
+		t.Fatalf("expected nil on sparse shards Flush, got %v", err)
+	}
+	if n := m3.Len(); n != 0 {
+		t.Fatalf("expected 0 on sparse shards Len, got %d", n)
+	}
 }

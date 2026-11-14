@@ -186,3 +186,52 @@ func TestValidate_FloatMinMax(t *testing.T) {
 		t.Fatalf("unexpected error on valid product: %v", err)
 	}
 }
+
+func TestValidate_MapRecursionAndMinMax(t *testing.T) {
+	type Item struct {
+		Name string `validate:"required"`
+	}
+	type Catalog struct {
+		Items map[string]Item   `validate:"min=1,max=3"`
+		Tags  map[string]string `validate:"max=2"`
+	}
+
+	// Map min validation
+	if err := Validate(&Catalog{Items: map[string]Item{}}); err == nil {
+		t.Fatal("expected error on map min=1 with 0 items")
+	}
+
+	// Map max validation
+	if err := Validate(&Catalog{
+		Items: map[string]Item{
+			"a": {Name: "A"},
+			"b": {Name: "B"},
+			"c": {Name: "C"},
+			"d": {Name: "D"},
+		},
+	}); err == nil {
+		t.Fatal("expected error on map max=3 with 4 items")
+	}
+
+	// Recursive validation inside map value
+	if err := Validate(&Catalog{
+		Items: map[string]Item{
+			"valid": {Name: ""}, // empty name
+		},
+	}); err == nil {
+		t.Fatal("expected error on invalid item inside map")
+	}
+
+	// Valid catalog
+	valid := &Catalog{
+		Items: map[string]Item{
+			"item1": {Name: "Book"},
+		},
+		Tags: map[string]string{
+			"category": "education",
+		},
+	}
+	if err := Validate(valid); err != nil {
+		t.Fatalf("unexpected error on valid catalog: %v", err)
+	}
+}

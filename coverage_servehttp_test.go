@@ -115,3 +115,15 @@ func TestServeHTTP_NilGuards(t *testing.T) {
 	// nil writer
 	app.ServeHTTP(nil, httptest.NewRequest("GET", "/", nil))
 }
+
+func TestServeHTTP_UninitializedEngine(t *testing.T) {
+	// Directly allocate &Engine{} without New()
+	app := &Engine{}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/test", nil)
+	app.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 from uninitialized engine, got %d", rec.Code)
+	}
+}

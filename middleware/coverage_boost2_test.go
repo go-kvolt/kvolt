@@ -1092,3 +1092,121 @@ func TestJWTOptional_InvalidClaimsSkipBranches(t *testing.T) {
 	}()
 	_ = JWTOptional(JWTConfig{})
 }
+
+func TestJWT_ErrorHandlerPanic(t *testing.T) {
+	mw := JWT(JWTConfig{
+		SigningKey: "secret",
+		ErrorHandler: func(c *context.Context, err error) error {
+			panic("jwt error handler boom")
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/", nil)
+	c := context.New(rec, req)
+	c.Handlers = []context.HandlerFunc{mw}
+	err := mw(c)
+	if err == nil {
+		t.Fatal("expected unauthorized error on missing token, got nil")
+	}
+
+	// JWTOptional with panic
+	mwOpt := JWTOptional(JWTConfig{
+		SigningKey: "secret",
+		ErrorHandler: func(c *context.Context, err error) error {
+			panic("jwt optional error handler boom")
+		},
+	})
+	req2 := httptest.NewRequest("GET", "/", nil)
+	req2.Header.Set("Authorization", "Bearer invalid-token")
+	c2 := context.New(rec, req2)
+	err2 := mwOpt(c2)
+	if err2 == nil {
+		t.Fatal("expected unauthorized error on invalid token, got nil")
+	}
+}
+
+func TestTenant_PanicRecovery(t *testing.T) {
+	// Panicking Extractor
+	mwExtractorPanic := Tenant(TenantConfig{
+		Extractor: func(c *context.Context) (string, error) {
+			panic("extractor boom")
+		},
+	})
+	c1 := context.New(httptest.NewRecorder(), httptest.NewRequest("GET", "/", nil))
+	err1 := mwExtractorPanic(c1)
+	if err1 == nil {
+		t.Fatal("expected bad request on panicking extractor")
+	}
+
+	// Panicking ErrorHandler when Required
+	mwErrHandlerPanic := Tenant(TenantConfig{
+		Required: true,
+		ErrorHandler: func(c *context.Context) error {
+			panic("tenant error handler boom")
+		},
+	})
+	rec2 := httptest.NewRecorder()
+	c2 := context.New(rec2, httptest.NewRequest("GET", "/", nil))
+	_ = mwErrHandlerPanic(c2)
+	if rec2.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on panicking error handler, got %d", rec2.Code)
+	}
+}
+
+func TestIdempotency_UninitializedStoreAndCallbackPanics(t *testing.T) {
+	// Uninitialized MemoryIdempotencyStore
+	store := &MemoryIdempotencyStore{}
+	err := store.Set("key1", IdempotencyRecord{Status: 200}, time.Minute)
+	if err != nil {
+		t.Fatalf("unexpected error setting on uninitialized store: %v", err)
+	}
+	rec, ok, err := store.Get("key1")
+	if err != nil || !ok || rec.Status != 200 {
+		t.Fatalf("get mismatch: ok=%v, status=%d, err=%v", ok, rec.Status, err)
+	}
+
+	// Panicking Skipper and KeyFunc
+	mw := Idempotency(IdempotencyConfig{
+		Store: store,
+		Skipper: func(c *context.Context) bool {
+			panic("skipper boom")
+		},
+		KeyFunc: func(c *context.Context, rawKey string) string {
+			panic("keyfunc boom")
+		},
+	})
+	req := httptest.NewRequest("POST", "/orders", nil)
+	req.Header.Set("Idempotency-Key", "uuid-123")
+	c := context.New(httptest.NewRecorder(), req)
+	c.Handlers = []context.HandlerFunc{func(c *context.Context) error {
+		return c.String(200, "ok")
+	}}
+	if err := mw(c); err != nil {
+		t.Fatalf("idempotency with panicking callbacks should recover, got err: %v", err)
+	}
+}
+
+func TestAudit_SkipperPanic(t *testing.T) {
+	audited := false
+	mw := Audit(AuditConfig{
+		OnAudit: func(e AuditEvent) {
+			audited = true
+		},
+		Skipper: func(c *context.Context) bool {
+			panic("audit skipper boom")
+		},
+		Sync: true,
+	})
+	req := httptest.NewRequest("GET", "/ping", nil)
+	c := context.New(httptest.NewRecorder(), req)
+	c.Handlers = []context.HandlerFunc{func(c *context.Context) error {
+		return c.String(200, "pong")
+	}}
+	if err := mw(c); err != nil {
+		t.Fatal(err)
+	}
+	if !audited {
+		t.Fatal("expected audit event to be emitted despite panicking skipper")
+	}
+}

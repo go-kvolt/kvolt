@@ -243,8 +243,11 @@ func (group *RouterGroup) Static(relativePath, root string) *Route {
 }
 
 func (group *RouterGroup) addRoute(method, path string, handler context.HandlerFunc) *Route {
-	if group == nil || group.engine == nil || group.engine.router == nil {
+	if group == nil || group.engine == nil {
 		return nil
+	}
+	if group.engine.router == nil {
+		group.engine.router = router.New()
 	}
 	path = strings.TrimSpace(path)
 	if path == "" {

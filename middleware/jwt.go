@@ -173,6 +173,18 @@ func normalizeJWTConfig(config *JWTConfig) {
 	}
 }
 
+func safeJWTErrorHandler(cfg JWTConfig, c *context.Context, err error) (retErr error) {
+	if cfg.ErrorHandler == nil {
+		return httperrUnauthorized()
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			retErr = httperrUnauthorized()
+		}
+	}()
+	return cfg.ErrorHandler(c, err)
+}
+
 // JWT returns a JWT authentication middleware.
 func JWT(config JWTConfig) context.HandlerFunc {
 	if config.KeyFunc == nil && strings.TrimSpace(config.SigningKey) == "" {
@@ -187,17 +199,17 @@ func JWT(config JWTConfig) context.HandlerFunc {
 		}
 		tokenString, err := extractor(c)
 		if err != nil {
-			return config.ErrorHandler(c, err)
+			return safeJWTErrorHandler(config, c, err)
 		}
 
 		token, err := parseJWTToken(tokenString, config)
 		if err != nil || token == nil || !token.Valid {
-			return config.ErrorHandler(c, err)
+			return safeJWTErrorHandler(config, c, err)
 		}
 
 		claims, ok := jwtMapClaims(token)
 		if !ok {
-			return config.ErrorHandler(c, errors.New("invalid claims"))
+			return safeJWTErrorHandler(config, c, errors.New("invalid claims"))
 		}
 
 		c.Set(config.ContextKey, claims)

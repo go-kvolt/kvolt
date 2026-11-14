@@ -46,7 +46,14 @@ func Audit(cfg AuditConfig) func(c *context.Context) error {
 		if c == nil {
 			return nil
 		}
-		if cfg.Skipper != nil && cfg.Skipper(c) {
+		skip := false
+		if cfg.Skipper != nil {
+			func() {
+				defer func() { _ = recover() }()
+				skip = cfg.Skipper(c)
+			}()
+		}
+		if skip {
 			c.Next()
 			return nil
 		}

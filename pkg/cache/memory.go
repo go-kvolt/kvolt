@@ -215,6 +215,9 @@ func (m *MemoryStore) Flush() error {
 		return nil
 	}
 	for _, s := range m.shards {
+		if s == nil {
+			continue
+		}
 		s.mu.Lock()
 		s.items = make(map[string]*item)
 		s.lru = list.New()
@@ -233,6 +236,9 @@ func (m *MemoryStore) janitor(interval time.Duration) {
 		case <-ticker.C:
 			now := time.Now().UnixNano()
 			for _, s := range m.shards {
+				if s == nil {
+					continue
+				}
 				s.mu.Lock()
 				for k, it := range s.items {
 					if it.expiresAt > 0 && now > it.expiresAt {
@@ -265,6 +271,9 @@ func (m *MemoryStore) Len() int {
 	}
 	n := 0
 	for _, s := range m.shards {
+		if s == nil {
+			continue
+		}
 		s.mu.Lock()
 		n += len(s.items)
 		s.mu.Unlock()

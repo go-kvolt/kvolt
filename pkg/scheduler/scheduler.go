@@ -19,14 +19,21 @@ func New() *Scheduler {
 	}
 }
 
+func (s *Scheduler) ensureCron() {
+	if s.c == nil {
+		s.c = cron.New()
+	}
+}
+
 // Add schedules a function to run at a specific interval/cron exp.
 // Syntax:
 // - Standard: "0 0 * * *" (Daily at midnight)
 // - Interval: "@every 1h30m"
 func (s *Scheduler) Add(spec string, job func()) (int, error) {
-	if s == nil || s.c == nil {
+	if s == nil {
 		return 0, fmt.Errorf("scheduler: not initialized")
 	}
+	s.ensureCron()
 	if job == nil {
 		return 0, fmt.Errorf("scheduler: job cannot be nil")
 	}
@@ -55,9 +62,10 @@ func (s *Scheduler) Remove(id int) {
 
 // Start starts the scheduler in a background goroutine.
 func (s *Scheduler) Start() {
-	if s == nil || s.c == nil {
+	if s == nil {
 		return
 	}
+	s.ensureCron()
 	s.c.Start()
 	log.Println("⏰ Scheduler started")
 }
