@@ -1,5 +1,7 @@
 package router
 
+import "slices"
+
 // RouteDoc holds OpenAPI-oriented metadata for a registered route.
 type RouteDoc struct {
 	Summary   string
@@ -106,6 +108,7 @@ func (r *Router) AllowedMethods(path string) []string {
 			}
 		}
 	}
+	slices.Sort(methods)
 	return methods
 }
 

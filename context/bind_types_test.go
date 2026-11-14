@@ -115,3 +115,22 @@ func TestBindForm_ParseErrorsAndBadTypes(t *testing.T) {
 		t.Fatal(err, u2)
 	}
 }
+
+func TestBindQuery_CommaSeparatedSlices(t *testing.T) {
+	type Filter struct {
+		Statuses []string `query:"status"`
+		UserIDs  []int    `query:"ids"`
+	}
+	r := httptest.NewRequest("GET", "/invoices?status=paid,pending&ids=10,20,30", nil)
+	c := New(httptest.NewRecorder(), r)
+	var f Filter
+	if err := c.BindQuery(&f); err != nil {
+		t.Fatalf("BindQuery: %v", err)
+	}
+	if len(f.Statuses) != 2 || f.Statuses[0] != "paid" || f.Statuses[1] != "pending" {
+		t.Errorf("Statuses mismatch: %+v", f.Statuses)
+	}
+	if len(f.UserIDs) != 3 || f.UserIDs[0] != 10 || f.UserIDs[1] != 20 || f.UserIDs[2] != 30 {
+		t.Errorf("UserIDs mismatch: %+v", f.UserIDs)
+	}
+}

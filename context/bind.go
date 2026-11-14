@@ -123,6 +123,26 @@ func setField(fv reflect.Value, raw string) error {
 		}
 		fv.SetFloat(n)
 	case reflect.Struct, reflect.Slice, reflect.Map:
+		trimmed := strings.TrimSpace(raw)
+		if fv.Kind() == reflect.Slice && !strings.HasPrefix(trimmed, "[") && !strings.HasPrefix(trimmed, "{") {
+			parts := strings.Split(raw, ",")
+			elemKind := fv.Type().Elem().Kind()
+			if elemKind == reflect.String {
+				fv.Set(reflect.ValueOf(parts))
+				return nil
+			} else if elemKind >= reflect.Int && elemKind <= reflect.Int64 {
+				slice := reflect.MakeSlice(fv.Type(), len(parts), len(parts))
+				for idx, p := range parts {
+					n, parseErr := strconv.ParseInt(strings.TrimSpace(p), 10, fv.Type().Elem().Bits())
+					if parseErr != nil {
+						return fmt.Errorf("bind %s: %w", fv.Type().String(), parseErr)
+					}
+					slice.Index(idx).SetInt(n)
+				}
+				fv.Set(slice)
+				return nil
+			}
+		}
 		ptr := reflect.New(fv.Type())
 		if err := json.Unmarshal([]byte(raw), ptr.Interface()); err != nil {
 			return fmt.Errorf("bind %s: %w", fv.Type().String(), err)

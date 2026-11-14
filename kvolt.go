@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -153,7 +154,11 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}}
 	case e.HandleMethodNotAllowed:
 		if allowed := e.router.AllowedMethods(r.URL.Path); len(allowed) > 0 {
-			w.Header().Set("Allow", strings.Join(append(allowed, http.MethodOptions), ", "))
+			if !slices.Contains(allowed, http.MethodOptions) {
+				allowed = append(allowed, http.MethodOptions)
+				slices.Sort(allowed)
+			}
+			w.Header().Set("Allow", strings.Join(allowed, ", "))
 			c.Handlers = append(append([]context.HandlerFunc{}, e.RouterGroup.middleware...), e.noMethodHandler)
 		} else {
 			c.Handlers = e.handlers404()
