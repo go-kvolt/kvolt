@@ -85,6 +85,11 @@ func (c *Context) HeaderWritten() bool {
 	return c.headerWritten
 }
 
+// SetHeaderWritten marks that response headers have been written.
+func (c *Context) SetHeaderWritten() {
+	c.headerWritten = true
+}
+
 // StatusCode returns the status that will be / was written. 0 if nothing was set yet.
 func (c *Context) StatusCode() int {
 	if c.status != 0 {

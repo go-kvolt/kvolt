@@ -69,6 +69,7 @@ func Timeout(d time.Duration) func(c *context.Context) error {
 			tw.wroteHeader = true
 			tw.status = http.StatusGatewayTimeout
 			c.Status(http.StatusGatewayTimeout)
+			c.SetHeaderWritten()
 			tw.mu.Unlock()
 			return nil
 		}

@@ -43,12 +43,6 @@ func (c *Context) BindURI(obj interface{}) error {
 }
 
 func bindMap(obj interface{}, values url.Values, tags ...string) error {
-	return bindFromGetter(obj, func(key string) string {
-		return values.Get(key)
-	}, tags...)
-}
-
-func bindFromGetter(obj interface{}, get func(string) string, tags ...string) error {
 	v := reflect.ValueOf(obj)
 	if v.Kind() != reflect.Ptr || v.IsNil() {
 		return fmt.Errorf("bind target must be a non-nil pointer")
@@ -67,11 +61,11 @@ func bindFromGetter(obj interface{}, get func(string) string, tags ...string) er
 		if name == "" || name == "-" {
 			continue
 		}
-		raw := get(name)
-		if raw == "" {
+		rawSlice, ok := values[name]
+		if !ok || len(rawSlice) == 0 {
 			continue
 		}
-		if err := setField(v.Field(i), raw); err != nil {
+		if err := setFieldSlice(v.Field(i), rawSlice); err != nil {
 			return err
 		}
 	}
@@ -88,9 +82,14 @@ func fieldBindName(f reflect.StructField, tags ...string) string {
 }
 
 func setField(fv reflect.Value, raw string) error {
-	if !fv.CanSet() {
+	return setFieldSlice(fv, []string{raw})
+}
+
+func setFieldSlice(fv reflect.Value, rawSlice []string) error {
+	if !fv.CanSet() || len(rawSlice) == 0 {
 		return nil
 	}
+	raw := rawSlice[0]
 	switch fv.Kind() {
 	case reflect.String:
 		fv.SetString(raw)
@@ -122,27 +121,84 @@ func setField(fv reflect.Value, raw string) error {
 			return err
 		}
 		fv.SetFloat(n)
-	case reflect.Struct, reflect.Slice, reflect.Map:
+	case reflect.Slice:
+		parts := rawSlice
 		trimmed := strings.TrimSpace(raw)
-		if fv.Kind() == reflect.Slice && !strings.HasPrefix(trimmed, "[") && !strings.HasPrefix(trimmed, "{") {
-			parts := strings.Split(raw, ",")
-			elemKind := fv.Type().Elem().Kind()
-			if elemKind == reflect.String {
-				fv.Set(reflect.ValueOf(parts))
-				return nil
-			} else if elemKind >= reflect.Int && elemKind <= reflect.Int64 {
-				slice := reflect.MakeSlice(fv.Type(), len(parts), len(parts))
-				for idx, p := range parts {
-					n, parseErr := strconv.ParseInt(strings.TrimSpace(p), 10, fv.Type().Elem().Bits())
-					if parseErr != nil {
-						return fmt.Errorf("bind %s: %w", fv.Type().String(), parseErr)
-					}
-					slice.Index(idx).SetInt(n)
+		if len(rawSlice) == 1 {
+			if strings.HasPrefix(trimmed, "[") || strings.HasPrefix(trimmed, "{") {
+				ptr := reflect.New(fv.Type())
+				if err := json.Unmarshal([]byte(raw), ptr.Interface()); err != nil {
+					return fmt.Errorf("bind %s: %w", fv.Type().String(), err)
 				}
-				fv.Set(slice)
+				fv.Set(ptr.Elem())
 				return nil
 			}
+			parts = strings.Split(raw, ",")
 		}
+		elemType := fv.Type().Elem()
+		elemKind := elemType.Kind()
+		if elemKind == reflect.String {
+			slice := reflect.MakeSlice(fv.Type(), len(parts), len(parts))
+			for idx, p := range parts {
+				slice.Index(idx).SetString(p)
+			}
+			fv.Set(slice)
+			return nil
+		} else if elemKind >= reflect.Int && elemKind <= reflect.Int64 {
+			slice := reflect.MakeSlice(fv.Type(), len(parts), len(parts))
+			for idx, p := range parts {
+				n, parseErr := strconv.ParseInt(strings.TrimSpace(p), 10, elemType.Bits())
+				if parseErr != nil {
+					return fmt.Errorf("bind %s: %w", fv.Type().String(), parseErr)
+				}
+				slice.Index(idx).SetInt(n)
+			}
+			fv.Set(slice)
+			return nil
+		} else if elemKind >= reflect.Uint && elemKind <= reflect.Uint64 {
+			slice := reflect.MakeSlice(fv.Type(), len(parts), len(parts))
+			for idx, p := range parts {
+				n, parseErr := strconv.ParseUint(strings.TrimSpace(p), 10, elemType.Bits())
+				if parseErr != nil {
+					return fmt.Errorf("bind %s: %w", fv.Type().String(), parseErr)
+				}
+				slice.Index(idx).SetUint(n)
+			}
+			fv.Set(slice)
+			return nil
+		} else if elemKind == reflect.Float32 || elemKind == reflect.Float64 {
+			slice := reflect.MakeSlice(fv.Type(), len(parts), len(parts))
+			bitSize := 64
+			if elemKind == reflect.Float32 {
+				bitSize = 32
+			}
+			for idx, p := range parts {
+				n, parseErr := strconv.ParseFloat(strings.TrimSpace(p), bitSize)
+				if parseErr != nil {
+					return fmt.Errorf("bind %s: %w", fv.Type().String(), parseErr)
+				}
+				slice.Index(idx).SetFloat(n)
+			}
+			fv.Set(slice)
+			return nil
+		} else if elemKind == reflect.Bool {
+			slice := reflect.MakeSlice(fv.Type(), len(parts), len(parts))
+			for idx, p := range parts {
+				b, parseErr := strconv.ParseBool(strings.TrimSpace(p))
+				if parseErr != nil {
+					return fmt.Errorf("bind %s: %w", fv.Type().String(), parseErr)
+				}
+				slice.Index(idx).SetBool(b)
+			}
+			fv.Set(slice)
+			return nil
+		}
+		ptr := reflect.New(fv.Type())
+		if err := json.Unmarshal([]byte(raw), ptr.Interface()); err != nil {
+			return fmt.Errorf("bind %s: %w", fv.Type().String(), err)
+		}
+		fv.Set(ptr.Elem())
+	case reflect.Struct, reflect.Map:
 		ptr := reflect.New(fv.Type())
 		if err := json.Unmarshal([]byte(raw), ptr.Interface()); err != nil {
 			return fmt.Errorf("bind %s: %w", fv.Type().String(), err)

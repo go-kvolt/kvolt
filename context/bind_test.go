@@ -62,3 +62,29 @@ func TestBindQuery_RejectsInvalidJSONField(t *testing.T) {
 		t.Fatal("want JSON unmarshal error")
 	}
 }
+
+func TestBindQuery_RepeatedParamsAndSlices(t *testing.T) {
+	r := httptest.NewRequest("GET", "/?tags=go&tags=kvolt&ids=10&ids=20&rates=1.5&rates=2.5&flags=true&flags=false", nil)
+	c := New(httptest.NewRecorder(), r)
+	var q struct {
+		Tags  []string  `query:"tags"`
+		IDs   []int     `query:"ids"`
+		Rates []float64 `query:"rates"`
+		Flags []bool    `query:"flags"`
+	}
+	if err := c.BindQuery(&q); err != nil {
+		t.Fatalf("BindQuery: %v", err)
+	}
+	if len(q.Tags) != 2 || q.Tags[0] != "go" || q.Tags[1] != "kvolt" {
+		t.Errorf("Tags want [go kvolt], got %v", q.Tags)
+	}
+	if len(q.IDs) != 2 || q.IDs[0] != 10 || q.IDs[1] != 20 {
+		t.Errorf("IDs want [10 20], got %v", q.IDs)
+	}
+	if len(q.Rates) != 2 || q.Rates[0] != 1.5 || q.Rates[1] != 2.5 {
+		t.Errorf("Rates want [1.5 2.5], got %v", q.Rates)
+	}
+	if len(q.Flags) != 2 || !q.Flags[0] || q.Flags[1] {
+		t.Errorf("Flags want [true false], got %v", q.Flags)
+	}
+}

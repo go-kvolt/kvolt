@@ -176,13 +176,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		c.RoutePath = "unmatched"
 	}
 
-	if len(c.Handlers) == 1 {
-		if err := c.Handlers[0](c); err != nil {
-			c.WriteHandlerError(err)
-		}
-	} else {
-		c.Next()
-	}
+	c.Next()
 	if !c.HeaderWritten() {
 		c.FlushHeaders()
 	}

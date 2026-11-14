@@ -29,6 +29,9 @@ func (c *Context) SetCookie(name, value string, maxAge int, path, domain string,
 
 // SetCookieWith sets a cookie with full options (including SameSite).
 func (c *Context) SetCookieWith(name, value string, opt CookieOptions) {
+	if c == nil || c.Writer == nil {
+		return
+	}
 	if opt.Path == "" {
 		opt.Path = "/"
 	}
@@ -56,6 +59,9 @@ func (c *Context) ClearCookie(name, path, domain string) {
 
 // ClearCookieWith expires a cookie using the same flags that were used when setting it.
 func (c *Context) ClearCookieWith(name string, opt CookieOptions) {
+	if c == nil || c.Writer == nil {
+		return
+	}
 	if opt.Path == "" {
 		opt.Path = "/"
 	}

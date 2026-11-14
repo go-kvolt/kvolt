@@ -39,6 +39,11 @@ func (c *Context) Event(event, data string) error {
 // SSEvent writes a full SSE frame.
 // Event and ID are sanitized (CR/LF stripped) so untrusted values cannot inject frames.
 func (c *Context) SSEvent(ev SSEvent) error {
+	if !c.headerWritten {
+		if err := c.SSE(); err != nil {
+			return err
+		}
+	}
 	var b strings.Builder
 	if id := sanitizeSSEField(ev.ID); id != "" {
 		b.WriteString("id: ")
