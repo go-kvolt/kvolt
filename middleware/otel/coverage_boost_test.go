@@ -65,3 +65,23 @@ func TestMiddleware_SkipperNilRequestDefaultsAnd5xx(t *testing.T) {
 		t.Fatal("want span for ok path")
 	}
 }
+
+func TestMiddleware_SkipperPanic(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	t.Cleanup(func() { _ = tp.Shutdown(t.Context()) })
+
+	mw := Middleware(Config{
+		TracerProvider: tp,
+		Skipper: func(c *context.Context) bool {
+			panic("otel skipper boom")
+		},
+	})
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/test", nil)
+	c := context.New(w, r)
+	c.Handlers = []context.HandlerFunc{func(c *context.Context) error { return c.String(200, "ok") }}
+	if err := mw(c); err != nil {
+		t.Fatal(err)
+	}
+}

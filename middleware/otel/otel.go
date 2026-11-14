@@ -46,7 +46,14 @@ func Middleware(cfg Config) func(c *context.Context) error {
 			}
 			return nil
 		}
-		if cfg.Skipper != nil && cfg.Skipper(c) {
+		skip := false
+		if cfg.Skipper != nil {
+			func() {
+				defer func() { _ = recover() }()
+				skip = cfg.Skipper(c)
+			}()
+		}
+		if skip {
 			c.Next()
 			return nil
 		}

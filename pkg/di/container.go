@@ -118,7 +118,19 @@ func (c *Container) ProvideFunc(constructor interface{}) error {
 	}
 	c.mu.RUnlock()
 
-	results := fn.Call(args)
+	var results []reflect.Value
+	var callErr error
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				callErr = fmt.Errorf("di: constructor panicked: %v", r)
+			}
+		}()
+		results = fn.Call(args)
+	}()
+	if callErr != nil {
+		return callErr
+	}
 	if numOut == 2 {
 		if errVal := results[1]; !errVal.IsNil() {
 			return errVal.Interface().(error)

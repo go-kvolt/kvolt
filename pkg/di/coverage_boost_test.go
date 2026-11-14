@@ -49,3 +49,13 @@ func TestContainer_Uninitialized(t *testing.T) {
 		t.Fatalf("expected 99, got %d", n)
 	}
 }
+
+func TestProvideFunc_ConstructorPanic(t *testing.T) {
+	c := NewContainer()
+	err := c.ProvideFunc(func() int {
+		panic("database init failed")
+	})
+	if err == nil {
+		t.Fatal("expected error on constructor panic, got nil")
+	}
+}
