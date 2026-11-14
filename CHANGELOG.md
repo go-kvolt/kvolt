@@ -42,7 +42,7 @@ Production-grade release: 100% test coverage, comprehensive race condition fixes
 
 ## [v2.2.0] - 2026-11-07
 
-Production-promising platform release: multi-tenant helpers, idempotency, audit, optional OpenTelemetry, and dependency security bumps. Tested (fmt/vet/govulncheck/race/lint) before tag.
+Pre-production platform release: multi-tenant helpers, idempotency, audit, optional OpenTelemetry, and dependency security bumps. Tested (fmt/vet/govulncheck/race/lint) before tag.
 
 ### Added
 
@@ -65,7 +65,7 @@ Production-promising platform release: multi-tenant helpers, idempotency, audit,
 
 - **`example/full_app`**: no hardcoded JWT secret; limiter uses `ClientIP`; CSRF not mis-skipped on API routes.
 - **`redislimit`**: unit tests (allow/block + fail-closed).
-- Docs: remove sunset Go Report Card badge; maturity wording production-promising.
+- Docs: remove sunset Go Report Card badge; maturity wording pre-production.
 
 ## [v2.1.1] - 2026-11-04
 
