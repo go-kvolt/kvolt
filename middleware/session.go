@@ -45,6 +45,9 @@ func Session(config SessionConfig) func(c *context.Context) error {
 }
 
 func extractToken(c *context.Context, lookup string) string {
+	if c == nil || c.Request == nil {
+		return ""
+	}
 	parts := strings.SplitN(lookup, ":", 2)
 	if len(parts) != 2 {
 		return ""
@@ -61,6 +64,9 @@ func extractToken(c *context.Context, lookup string) string {
 		return c.Request.Header.Get(key)
 	case "query":
 		// Discouraged: session tokens in query strings leak via logs/Referer/history.
+		if c.Request.URL == nil {
+			return ""
+		}
 		return c.Request.URL.Query().Get(key)
 	}
 	return ""
