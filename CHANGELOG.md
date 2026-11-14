@@ -4,6 +4,25 @@ All notable changes to KVolt will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v2.3.1] - 2026-11-14
+
+Hardening patch release for production enterprise deployment: resolves concurrency traps, background worker resilience, dual server error handling, and nil-pointer edge cases.
+
+### Fixed
+
+- **`middleware.Compress`**: Fixed data loss in `flushPlain()` where trailing buffered data below `MinSize` was dropped when headers were already committed; fixed double-close on gzip streams.
+- **`grpc.RunDual`**: Captured startup errors on both HTTP and gRPC listener channels and returned them to caller/supervisor instead of silently dropping the error on exit.
+- **`pkg/queue`**: Memory and Redis queue workers now safely recover from handler panics without terminating worker goroutines or leaking unacknowledged jobs.
+- **`pkg/swagger`**: OpenAPI schema generator now correctly isolates cycle detection to active ancestor stacks, preserving sibling struct reuse across request/response models.
+- **`middleware.Prometheus` & `middleware.Metrics`**: Deferred gauge and in-flight decrements so downstream panics do not permanently leak in-flight request counts.
+- **`context.Context`**: Added nil-pointer protection across `SaveUploadedFile`, `FormFile`, `RawBody`, `File`, `Attachment`, `Redirect`, `Upgrade`, `JSON`, and `SSE`.
+- **`context.BindQuery` / `BindForm`**: Added multi-value repeated parameter and comma-separated slice binding for integers, floats, booleans, and unsigned integers.
+- **`pkg/di`**: Added interface resolution in `Invoke` and `ProvideFunc` (`sType.Implements(elemType)`).
+- **`pkg/config`**: Guarded against reflection panics on non-struct pointer targets.
+- **`pkg/scheduler`**: Added panic recovery in cron job execution and added `Remove(id int)` for dynamic job cancellation.
+- **`pkg/cache`**: Added `Close()` with stop channel to gracefully terminate memory cache background janitor goroutine.
+- **`middleware.Health`**: Wrapped readiness checker callbacks with panic recovery to prevent probe failures from taking down the server.
+
 ## [v2.3.0] - 2026-11-13
 
 Production-grade release: 100% test coverage, comprehensive race condition fixes, automated `gosec` static analysis in CI, SemVer 2.0.0 stability guarantee, and security hardening across all core modules.

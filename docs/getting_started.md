@@ -15,11 +15,11 @@ The KVolt CLI is the easiest way to start a new project. It scaffolds a practica
 1.  **Install the CLI:**
 
     ```bash
-    go install github.com/go-kvolt/kvolt/v2/cmd/kvolt@v2.3.0
+    go install github.com/go-kvolt/kvolt/v2/cmd/kvolt@v2.3.1
     kvolt version
 ```
 
-Use `@v2.3.0` (or `@latest`). The `v2.0.0` tag is not a valid Go module (path was not `/v2`).
+Use `@v2.3.1` (or `@latest`). The `v2.0.0` tag is not a valid Go module (path was not `/v2`).
 
 2.  **Verify Installation:**
 
@@ -63,7 +63,7 @@ If you prefer to start from scratch or integrate KVolt into an existing project:
 2.  **Install KVolt:**
 
     ```bash
-    go get github.com/go-kvolt/kvolt/v2@v2.3.0
+    go get github.com/go-kvolt/kvolt/v2@v2.3.1
     ```
 
 3.  **Create `main.go`:**
