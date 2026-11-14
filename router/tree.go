@@ -313,6 +313,14 @@ walk: // Outer loop for walking the tree
 			if handle = n.handle; handle != nil {
 				return handle, p, false, n.fullPath
 			}
+			// Catch-all child: path matches prefix exactly (e.g. /files/ for /files/*filepath)
+			if n.wildChild && len(n.children) > 0 {
+				child := n.children[len(n.children)-1]
+				if child.nType == catchAll && child.handle != nil {
+					handle, p = child.getValueCatchAll("", p)
+					return handle, p, false, child.fullPath
+				}
+			}
 			// Path matches a node without a handle — trailing slash redirect?
 			if path != "/" && len(path) > 0 && path[len(path)-1] != '/' {
 				for _, child := range n.children {
@@ -322,9 +330,15 @@ walk: // Outer loop for walking the tree
 				}
 			}
 		} else if len(path)+1 == len(prefix) && prefix[len(path)] == '/' && path == prefix[:len(path)] {
-			// Request missing trailing slash that node has
+			// Request missing trailing slash that node has (or node has catch-all child with handle)
 			if n.handle != nil {
 				return nil, p, true, ""
+			}
+			if n.wildChild && len(n.children) > 0 {
+				child := n.children[len(n.children)-1]
+				if child.nType == catchAll && child.handle != nil {
+					return nil, p, true, ""
+				}
 			}
 		}
 		return nil, p, false, ""

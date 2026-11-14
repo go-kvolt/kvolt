@@ -223,17 +223,18 @@ func csrfTokenValid(secret []byte, token string, ttl time.Duration, now time.Tim
 	if ttl <= 0 {
 		ttl = 24 * time.Hour
 	}
-	// Verify timestamp if present: payload format is <nonce>:<unix_secs>
+	// Verify timestamp: payload format is <nonce>:<unix_secs>
 	subparts := strings.Split(parts[0], ":")
-	if len(subparts) == 2 {
-		ts, err := strconv.ParseInt(subparts[1], 10, 64)
-		if err != nil {
-			return false
-		}
-		tokenTime := time.Unix(ts, 0)
-		if now.Sub(tokenTime) > ttl || tokenTime.After(now.Add(5*time.Minute)) {
-			return false
-		}
+	if len(subparts) != 2 {
+		return false
+	}
+	ts, err := strconv.ParseInt(subparts[1], 10, 64)
+	if err != nil {
+		return false
+	}
+	tokenTime := time.Unix(ts, 0)
+	if now.Sub(tokenTime) > ttl || tokenTime.After(now.Add(5*time.Minute)) {
+		return false
 	}
 	return true
 }

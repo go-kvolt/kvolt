@@ -137,7 +137,15 @@ func (q *MemoryQueue) workerLoop(id int) {
 		case job := <-q.jobChan:
 			q.process(job)
 		case <-q.quit:
-			return
+			// Drain remaining jobs before exiting
+			for {
+				select {
+				case job := <-q.jobChan:
+					q.process(job)
+				default:
+					return
+				}
+			}
 		}
 	}
 }

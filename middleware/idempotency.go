@@ -262,6 +262,9 @@ func defaultIdempotencyKey(c *context.Context, rawKey string, includeBody bool) 
 		method = c.Request.Method
 		if c.Request.URL != nil {
 			path = c.Request.URL.Path
+			if c.Request.URL.RawQuery != "" {
+				path += "?" + c.Request.URL.RawQuery
+			}
 		}
 	}
 	var b strings.Builder
@@ -390,17 +393,33 @@ func (w *captureResponseWriter) Write(b []byte) (int, error) {
 }
 
 func (w *captureResponseWriter) Flush() {
-	if f, ok := w.ResponseWriter.(http.Flusher); ok {
-		f.Flush()
+	rw := w.ResponseWriter
+	for rw != nil {
+		if f, ok := rw.(http.Flusher); ok {
+			f.Flush()
+			return
+		}
+		if u, ok := rw.(interface{ Unwrap() http.ResponseWriter }); ok {
+			rw = u.Unwrap()
+		} else {
+			break
+		}
 	}
 }
 
 func (w *captureResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	h, ok := w.ResponseWriter.(http.Hijacker)
-	if !ok {
-		return nil, nil, errors.New("idempotency: underlying ResponseWriter does not support Hijacker")
+	rw := w.ResponseWriter
+	for rw != nil {
+		if h, ok := rw.(http.Hijacker); ok {
+			return h.Hijack()
+		}
+		if u, ok := rw.(interface{ Unwrap() http.ResponseWriter }); ok {
+			rw = u.Unwrap()
+		} else {
+			break
+		}
 	}
-	return h.Hijack()
+	return nil, nil, errors.New("idempotency: underlying ResponseWriter does not support Hijacker")
 }
 
 func (w *captureResponseWriter) Unwrap() http.ResponseWriter {

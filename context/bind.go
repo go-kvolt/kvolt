@@ -54,12 +54,32 @@ func bindMap(obj interface{}, values url.Values, tags ...string) error {
 	if v.Kind() != reflect.Struct {
 		return fmt.Errorf("bind target must be a struct pointer")
 	}
+	return bindStruct(v, values, tags...)
+}
+
+func bindStruct(v reflect.Value, values url.Values, tags ...string) error {
 	t := v.Type()
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		if f.PkgPath != "" {
 			continue
 		}
+		if f.Anonymous {
+			fieldVal := v.Field(i)
+			if fieldVal.Kind() == reflect.Ptr {
+				if fieldVal.IsNil() {
+					fieldVal.Set(reflect.New(fieldVal.Type().Elem()))
+				}
+				fieldVal = fieldVal.Elem()
+			}
+			if fieldVal.Kind() == reflect.Struct {
+				if err := bindStruct(fieldVal, values, tags...); err != nil {
+					return err
+				}
+				continue
+			}
+		}
+
 		name := fieldBindName(f, tags...)
 		if name == "" || name == "-" {
 			continue
@@ -91,6 +111,12 @@ func setField(fv reflect.Value, raw string) error {
 func setFieldSlice(fv reflect.Value, rawSlice []string) error {
 	if !fv.CanSet() || len(rawSlice) == 0 {
 		return nil
+	}
+	if fv.Kind() == reflect.Ptr {
+		if fv.IsNil() {
+			fv.Set(reflect.New(fv.Type().Elem()))
+		}
+		return setFieldSlice(fv.Elem(), rawSlice)
 	}
 	raw := rawSlice[0]
 	switch fv.Kind() {

@@ -459,10 +459,17 @@ func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) error
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func() {
+		_ = out.Close()
+		if err != nil {
+			_ = os.Remove(dst)
+		}
+	}()
 
-	_, err = io.Copy(out, src)
-	return err
+	if _, err = io.Copy(out, src); err != nil {
+		return err
+	}
+	return out.Close()
 }
 
 // SafeUploadPath joins dir with the base name of filename (blocks path traversal).
@@ -499,7 +506,7 @@ func (c *Context) FileFrom(root, name string) error {
 
 // Attachment serves a file as a download with Content-Disposition attachment.
 func (c *Context) Attachment(path, filename string) {
-	if c == nil || c.Writer == nil {
+	if c == nil || c.Writer == nil || c.Request == nil {
 		return
 	}
 	if filename == "" {

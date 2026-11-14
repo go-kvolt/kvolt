@@ -27,6 +27,9 @@ func New() *Router {
 
 // AddRoute registers a new request handler with the given path and method.
 func (r *Router) AddRoute(method, path string, handle Handler) {
+	if r == nil {
+		return
+	}
 	root := r.trees[method]
 	if root == nil {
 		root = &Node{}
@@ -42,6 +45,9 @@ func (r *Router) Find(method, path string) (Handler, Params, bool) {
 
 // FindInto is Find with a reusable Params buffer (pass c.Params[:0] from the context pool).
 func (r *Router) FindInto(method, path string, p Params) (Handler, Params, bool) {
+	if r == nil {
+		return nil, p[:0], false
+	}
 	root := r.trees[method]
 	if root == nil {
 		return nil, p[:0], false
@@ -65,6 +71,9 @@ type FindResult struct {
 
 // FindEx looks up a route and reports trailing-slash redirect hints.
 func (r *Router) FindEx(method, path string, p Params) FindResult {
+	if r == nil {
+		return FindResult{Params: p[:0]}
+	}
 	root := r.trees[method]
 	if root == nil {
 		return FindResult{Params: p[:0]}
@@ -98,8 +107,14 @@ func alternateSlash(path string) string {
 
 // AllowedMethods returns HTTP methods registered for path (for 405 Allow header).
 func (r *Router) AllowedMethods(path string) []string {
+	if r == nil {
+		return nil
+	}
 	var methods []string
 	for method, root := range r.trees {
+		if root == nil {
+			continue
+		}
 		if h, _, _, _ := root.getValue(path, nil); h != nil {
 			methods = append(methods, method)
 		} else if alt := alternateSlash(path); alt != path {
@@ -114,6 +129,12 @@ func (r *Router) AllowedMethods(path string) []string {
 
 // SetDocumentation adds a description for a registered route (backward compatible).
 func (r *Router) SetDocumentation(method, path, desc string) {
+	if r == nil {
+		return
+	}
+	if r.docs == nil {
+		r.docs = make(map[string]RouteDoc)
+	}
 	key := method + " " + path
 	doc := r.docs[key]
 	doc.Summary = desc
@@ -122,6 +143,12 @@ func (r *Router) SetDocumentation(method, path, desc string) {
 
 // UpdateDoc merges fields into the route documentation.
 func (r *Router) UpdateDoc(method, path string, mut func(*RouteDoc)) {
+	if r == nil || mut == nil {
+		return
+	}
+	if r.docs == nil {
+		r.docs = make(map[string]RouteDoc)
+	}
 	key := method + " " + path
 	doc := r.docs[key]
 	mut(&doc)
@@ -130,7 +157,13 @@ func (r *Router) UpdateDoc(method, path string, mut func(*RouteDoc)) {
 
 // Walk iterates over all registered routes.
 func (r *Router) Walk(walkFunc func(method, path string, doc RouteDoc)) {
+	if r == nil || walkFunc == nil {
+		return
+	}
 	for method, root := range r.trees {
+		if root == nil {
+			continue
+		}
 		root.walk(pathStub, func(path string) {
 			key := method + " " + path
 			walkFunc(method, path, r.docs[key])
@@ -141,6 +174,9 @@ func (r *Router) Walk(walkFunc func(method, path string, doc RouteDoc)) {
 const pathStub = ""
 
 func (n *Node) walk(path string, walkFunc func(path string)) {
+	if n == nil || walkFunc == nil {
+		return
+	}
 	fullPath := path + n.path
 	if n.handle != nil {
 		if n.fullPath != "" {

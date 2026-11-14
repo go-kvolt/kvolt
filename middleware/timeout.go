@@ -31,22 +31,33 @@ func Timeout(d time.Duration) func(c *context.Context) error {
 		defer cancel()
 		c.Request = c.Request.WithContext(ctx)
 
+		origWriter := c.Writer
 		preH := make(http.Header)
-		tw := &timeoutWriter{ResponseWriter: c.Writer, h: make(http.Header)}
-		for k, vv := range c.Writer.Header() {
+		tw := &timeoutWriter{ResponseWriter: origWriter, h: make(http.Header)}
+		for k, vv := range origWriter.Header() {
 			tw.h[k] = append([]string(nil), vv...)
 			preH[k] = append([]string(nil), vv...)
 		}
 		c.Writer = tw
 
+		var panicVal interface{}
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
+			defer func() {
+				if r := recover(); r != nil {
+					panicVal = r
+				}
+			}()
 			c.Next()
 		}()
 
 		select {
 		case <-done:
+			c.Writer = origWriter
+			if panicVal != nil {
+				panic(panicVal)
+			}
 			tw.mu.Lock()
 			defer tw.mu.Unlock()
 			if !tw.wroteHeader && tw.status != 0 {
@@ -140,17 +151,33 @@ func (w *timeoutWriter) Flush() {
 	if w.timedOut {
 		return
 	}
-	if f, ok := w.ResponseWriter.(http.Flusher); ok {
-		f.Flush()
+	rw := w.ResponseWriter
+	for rw != nil {
+		if f, ok := rw.(http.Flusher); ok {
+			f.Flush()
+			return
+		}
+		if u, ok := rw.(interface{ Unwrap() http.ResponseWriter }); ok {
+			rw = u.Unwrap()
+		} else {
+			break
+		}
 	}
 }
 
 func (w *timeoutWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	h, ok := w.ResponseWriter.(http.Hijacker)
-	if !ok {
-		return nil, nil, errors.New("timeout: Hijacker not supported")
+	rw := w.ResponseWriter
+	for rw != nil {
+		if h, ok := rw.(http.Hijacker); ok {
+			return h.Hijack()
+		}
+		if u, ok := rw.(interface{ Unwrap() http.ResponseWriter }); ok {
+			rw = u.Unwrap()
+		} else {
+			break
+		}
 	}
-	return h.Hijack()
+	return nil, nil, errors.New("timeout: Hijacker not supported")
 }
 
 func (w *timeoutWriter) Unwrap() http.ResponseWriter {

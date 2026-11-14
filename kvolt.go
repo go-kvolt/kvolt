@@ -163,7 +163,14 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				slices.Sort(allowed)
 			}
 			w.Header().Set("Allow", strings.Join(allowed, ", "))
-			c.Handlers = append(append([]context.HandlerFunc{}, e.RouterGroup.middleware...), e.noMethodHandler)
+			if r.Method == http.MethodOptions {
+				c.Handlers = append(append([]context.HandlerFunc{}, e.RouterGroup.middleware...), func(c *context.Context) error {
+					c.Status(http.StatusNoContent)
+					return nil
+				})
+			} else {
+				c.Handlers = append(append([]context.HandlerFunc{}, e.RouterGroup.middleware...), e.noMethodHandler)
+			}
 		} else {
 			c.Handlers = e.handlers404()
 		}
@@ -220,6 +227,9 @@ func (e *Engine) ShutdownTimeout() time.Duration {
 }
 
 func (e *Engine) httpServer(addr string) *http.Server {
+	if e == nil {
+		return nil
+	}
 	cfg := e.Server
 	if cfg.ReadHeaderTimeout == 0 {
 		cfg.ReadHeaderTimeout = DefaultReadHeaderTimeout
@@ -290,6 +300,12 @@ var testServeQuit <-chan struct{}
 
 // serveAndWait binds first, then serves. certFile/keyFile non-empty enables TLS via ServeTLS.
 func (e *Engine) serveAndWait(srv *http.Server, certFile, keyFile string) error {
+	if e == nil {
+		return fmt.Errorf("kvolt: nil engine")
+	}
+	if srv == nil {
+		return fmt.Errorf("kvolt: nil server")
+	}
 	if srv.Addr == "" {
 		srv.Addr = ":http"
 	}
@@ -352,6 +368,9 @@ var testListenHook func(net.Listener)
 // ListenAndServe starts HTTP with net/http defaults (no extra timeouts).
 // Use Run() in production for slowloris timeouts and graceful shutdown.
 func (e *Engine) ListenAndServe(addr string) error {
+	if e == nil {
+		return fmt.Errorf("kvolt: nil engine")
+	}
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", addr, err)
@@ -366,6 +385,9 @@ func (e *Engine) ListenAndServe(addr string) error {
 
 // LoadHTMLGlob loads HTML templates from a directory pattern.
 func (e *Engine) LoadHTMLGlob(pattern string) {
+	if e == nil {
+		return
+	}
 	e.htmlTemplates = template.Must(template.ParseGlob(pattern))
 }
 
@@ -387,6 +409,9 @@ type RouteInfo struct {
 
 // Routes returns a list of registered routes.
 func (e *Engine) Routes() []RouteInfo {
+	if e == nil || e.router == nil {
+		return nil
+	}
 	var routes []RouteInfo
 	e.router.Walk(func(method, path string, doc router.RouteDoc) {
 		routes = append(routes, RouteInfo{

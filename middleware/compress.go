@@ -168,17 +168,33 @@ func (w *gzipResponseWriter) Flush() {
 	} else if len(w.buf) > 0 {
 		_ = w.flushPlain()
 	}
-	if f, ok := w.ResponseWriter.(http.Flusher); ok {
-		f.Flush()
+	rw := w.ResponseWriter
+	for rw != nil {
+		if f, ok := rw.(http.Flusher); ok {
+			f.Flush()
+			return
+		}
+		if u, ok := rw.(interface{ Unwrap() http.ResponseWriter }); ok {
+			rw = u.Unwrap()
+		} else {
+			break
+		}
 	}
 }
 
 func (w *gzipResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	h, ok := w.ResponseWriter.(http.Hijacker)
-	if !ok {
-		return nil, nil, errors.New("gzip: underlying ResponseWriter does not support Hijacker")
+	rw := w.ResponseWriter
+	for rw != nil {
+		if h, ok := rw.(http.Hijacker); ok {
+			return h.Hijack()
+		}
+		if u, ok := rw.(interface{ Unwrap() http.ResponseWriter }); ok {
+			rw = u.Unwrap()
+		} else {
+			break
+		}
 	}
-	return h.Hijack()
+	return nil, nil, errors.New("gzip: underlying ResponseWriter does not support Hijacker")
 }
 
 func (w *gzipResponseWriter) Unwrap() http.ResponseWriter {

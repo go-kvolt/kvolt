@@ -38,6 +38,23 @@ func Validate(s interface{}) error {
 
 	for i := 0; i < v.NumField(); i++ {
 		field := t.Field(i)
+
+		// Recursively validate embedded anonymous struct fields
+		if field.Anonymous {
+			anonVal := v.Field(i)
+			for anonVal.Kind() == reflect.Ptr || anonVal.Kind() == reflect.Interface {
+				if anonVal.IsNil() {
+					break
+				}
+				anonVal = anonVal.Elem()
+			}
+			if anonVal.IsValid() && anonVal.Kind() == reflect.Struct && anonVal.CanInterface() {
+				if err := Validate(anonVal.Interface()); err != nil {
+					return err
+				}
+			}
+		}
+
 		tag := field.Tag.Get("validate")
 		if tag == "" {
 			continue
@@ -54,9 +71,21 @@ func Validate(s interface{}) error {
 				}
 			}
 
+			// Dereference pointer for value-based rules (email, min, max)
+			checkVal := val
+			for checkVal.Kind() == reflect.Ptr || checkVal.Kind() == reflect.Interface {
+				if checkVal.IsNil() {
+					break
+				}
+				checkVal = checkVal.Elem()
+			}
+			if !checkVal.IsValid() || (checkVal.Kind() == reflect.Ptr && checkVal.IsNil()) {
+				continue
+			}
+
 			// Check Email
-			if rule == "email" && val.Kind() == reflect.String {
-				if !emailRegex.MatchString(val.String()) {
+			if rule == "email" && checkVal.Kind() == reflect.String {
+				if !emailRegex.MatchString(checkVal.String()) {
 					return fmt.Errorf("field %s must be a valid email", field.Name)
 				}
 			}
@@ -66,20 +95,20 @@ func Validate(s interface{}) error {
 			if strings.HasPrefix(rule, "min=") {
 				limit, err := strconv.Atoi(strings.TrimPrefix(rule, "min="))
 				if err == nil {
-					if val.Kind() == reflect.String {
-						if len(val.String()) < limit {
+					if checkVal.Kind() == reflect.String {
+						if len(checkVal.String()) < limit {
 							return fmt.Errorf("field %s must be at least %d characters", field.Name, limit)
 						}
-					} else if val.Kind() == reflect.Slice || val.Kind() == reflect.Array {
-						if val.Len() < limit {
+					} else if checkVal.Kind() == reflect.Slice || checkVal.Kind() == reflect.Array {
+						if checkVal.Len() < limit {
 							return fmt.Errorf("field %s must contain at least %d items", field.Name, limit)
 						}
-					} else if val.Kind() >= reflect.Int && val.Kind() <= reflect.Int64 {
-						if val.Int() < int64(limit) {
+					} else if checkVal.Kind() >= reflect.Int && checkVal.Kind() <= reflect.Int64 {
+						if checkVal.Int() < int64(limit) {
 							return fmt.Errorf("field %s must be at least %d", field.Name, limit)
 						}
-					} else if val.Kind() >= reflect.Uint && val.Kind() <= reflect.Uint64 {
-						if val.Uint() < uint64(limit) {
+					} else if checkVal.Kind() >= reflect.Uint && checkVal.Kind() <= reflect.Uint64 {
+						if checkVal.Uint() < uint64(limit) {
 							return fmt.Errorf("field %s must be at least %d", field.Name, limit)
 						}
 					}
@@ -89,20 +118,20 @@ func Validate(s interface{}) error {
 			if strings.HasPrefix(rule, "max=") {
 				limit, err := strconv.Atoi(strings.TrimPrefix(rule, "max="))
 				if err == nil {
-					if val.Kind() == reflect.String {
-						if len(val.String()) > limit {
+					if checkVal.Kind() == reflect.String {
+						if len(checkVal.String()) > limit {
 							return fmt.Errorf("field %s must be at most %d characters", field.Name, limit)
 						}
-					} else if val.Kind() == reflect.Slice || val.Kind() == reflect.Array {
-						if val.Len() > limit {
+					} else if checkVal.Kind() == reflect.Slice || checkVal.Kind() == reflect.Array {
+						if checkVal.Len() > limit {
 							return fmt.Errorf("field %s must contain at most %d items", field.Name, limit)
 						}
-					} else if val.Kind() >= reflect.Int && val.Kind() <= reflect.Int64 {
-						if val.Int() > int64(limit) {
+					} else if checkVal.Kind() >= reflect.Int && checkVal.Kind() <= reflect.Int64 {
+						if checkVal.Int() > int64(limit) {
 							return fmt.Errorf("field %s must be at most %d", field.Name, limit)
 						}
-					} else if val.Kind() >= reflect.Uint && val.Kind() <= reflect.Uint64 {
-						if val.Uint() > uint64(limit) {
+					} else if checkVal.Kind() >= reflect.Uint && checkVal.Kind() <= reflect.Uint64 {
+						if checkVal.Uint() > uint64(limit) {
 							return fmt.Errorf("field %s must be at most %d", field.Name, limit)
 						}
 					}
@@ -117,13 +146,17 @@ func isEmpty(v reflect.Value) bool {
 	if !v.IsValid() {
 		return true
 	}
+	for v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
+		if v.IsNil() {
+			return true
+		}
+		v = v.Elem()
+	}
 	switch v.Kind() {
 	case reflect.String:
 		return v.Len() == 0
 	case reflect.Slice, reflect.Map:
 		return v.Len() == 0
-	case reflect.Ptr, reflect.Interface:
-		return v.IsNil()
 	default:
 		return false // zero value check for primitives?
 	}
