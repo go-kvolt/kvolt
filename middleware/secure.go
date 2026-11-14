@@ -64,7 +64,7 @@ func SecureWithConfig(config SecureConfig) func(c *context.Context) error {
 			peerTrusted(c) {
 			https = true
 		}
-		if https && config.HSTSMaxAge != 0 {
+		if https && config.HSTSMaxAge > 0 {
 			val := fmt.Sprintf("max-age=%d", config.HSTSMaxAge)
 			if !config.HSTSExcludeSubdomains {
 				val += "; includeSubDomains"

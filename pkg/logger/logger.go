@@ -92,9 +92,22 @@ func (l *Logger) Info(msg string, fields ...map[string]interface{}) {
 	l.log(INFO, msg, f)
 }
 
+// Warn logs a warning message.
+func (l *Logger) Warn(msg string, fields ...map[string]interface{}) {
+	var f map[string]interface{}
+	if len(fields) > 0 {
+		f = fields[0]
+	}
+	l.log(WARN, msg, f)
+}
+
 // Error logs an error message.
 func (l *Logger) Error(msg string, err error) {
-	l.log(ERROR, msg, map[string]interface{}{"error": err.Error()})
+	var errStr string
+	if err != nil {
+		errStr = err.Error()
+	}
+	l.log(ERROR, msg, map[string]interface{}{"error": errStr})
 }
 
 // Debug logs a debug message.

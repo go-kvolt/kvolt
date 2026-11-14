@@ -14,11 +14,7 @@ const DefaultMaxBodyBytes = 1 << 20
 // the reader returns an error so handlers can respond with 413 Payload Too Large.
 // Use this to prevent large payload attacks.
 func MaxBodySize(maxBytes int) func(c *context.Context) error {
-	return func(c *context.Context) error {
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, int64(maxBytes))
-		c.Next()
-		return nil
-	}
+	return MaxBodySizeBytes(int64(maxBytes))
 }
 
 // MaxBodySizeBytes is like MaxBodySize but accepts an int64 (e.g. for large multi-gigabyte uploads).

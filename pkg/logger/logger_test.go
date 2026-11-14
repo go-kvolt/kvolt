@@ -51,6 +51,23 @@ func TestLogger_LevelFilter(t *testing.T) {
 	l2.Debug("debug")
 }
 
+func TestLogger_NilErrorAndWarn(t *testing.T) {
+	buf := bytes.NewBuffer(nil)
+	l := New(buf, DEBUG)
+
+	// nil error must not panic
+	l.Error("failure without err", nil)
+	if !strings.Contains(buf.String(), "failure without err") {
+		t.Errorf("expected log output for nil error: %s", buf.String())
+	}
+
+	buf.Reset()
+	l.Warn("warning message")
+	if !strings.Contains(buf.String(), "WARN") || !strings.Contains(buf.String(), "warning message") {
+		t.Errorf("expected WARN log output: %s", buf.String())
+	}
+}
+
 type errDummy struct{}
 
 func (e errDummy) Error() string { return "dummy" }
