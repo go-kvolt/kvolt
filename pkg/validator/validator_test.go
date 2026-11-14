@@ -54,6 +54,25 @@ func TestValidate_Min(t *testing.T) {
 	}
 }
 
+func TestValidate_Max(t *testing.T) {
+	type S struct {
+		Code  string   `validate:"max=5"`
+		Items []string `validate:"max=2"`
+	}
+	err := Validate(&S{Code: "toolong"})
+	if err == nil {
+		t.Error("max=5 with 7 chars: want error")
+	}
+	err = Validate(&S{Code: "ok", Items: []string{"1", "2", "3"}})
+	if err == nil {
+		t.Error("max=2 with 3 items: want error")
+	}
+	err = Validate(&S{Code: "ok", Items: []string{"1", "2"}})
+	if err != nil {
+		t.Errorf("max ok: %v", err)
+	}
+}
+
 func TestValidate_NoTags(t *testing.T) {
 	type S struct {
 		A string

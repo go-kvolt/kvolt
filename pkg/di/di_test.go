@@ -83,3 +83,40 @@ func TestContainer_ProvideNilPanic(t *testing.T) {
 	}()
 	c.Provide(nil)
 }
+
+type Greeter interface {
+	Greet() string
+}
+
+type EnglishGreeter struct{}
+
+func (e *EnglishGreeter) Greet() string { return "hello" }
+
+type Consumer struct {
+	G Greeter
+}
+
+func TestContainer_InterfaceResolution(t *testing.T) {
+	c := NewContainer()
+	c.Provide(&EnglishGreeter{})
+
+	var g Greeter
+	if !c.Invoke(&g) {
+		t.Fatal("expected interface Invoke to resolve")
+	}
+	if g.Greet() != "hello" {
+		t.Fatalf("want hello, got %s", g.Greet())
+	}
+
+	err := c.ProvideFunc(func(g Greeter) *Consumer {
+		return &Consumer{G: g}
+	})
+	if err != nil {
+		t.Fatalf("ProvideFunc with interface dep: %v", err)
+	}
+
+	var cons *Consumer
+	if !c.Invoke(&cons) || cons.G == nil || cons.G.Greet() != "hello" {
+		t.Fatalf("Consumer not properly resolved: %+v", cons)
+	}
+}

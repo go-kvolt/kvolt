@@ -54,7 +54,10 @@ func stopApp() {
 	case <-done:
 	case <-time.After(stopTimeout):
 		_ = killProcessTree(cmd, true)
-		<-done
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+		}
 	}
 }
 

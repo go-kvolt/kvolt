@@ -33,10 +33,29 @@ var (
 // Middleware records request metrics in the default Prometheus registry.
 func Middleware() func(c *context.Context) error {
 	return func(c *context.Context) error {
+		if c == nil {
+			return nil
+		}
 		start := time.Now()
 		promInFlight.Inc()
+		defer func() {
+			promInFlight.Dec()
+			if r := recover(); r != nil {
+				path := c.RoutePath
+				if path == "" && c.Request != nil && c.Request.URL != nil {
+					path = c.Request.URL.Path
+				}
+				method := ""
+				if c.Request != nil {
+					method = c.Request.Method
+				}
+				promRequests.WithLabelValues(method, path, "500").Inc()
+				promLatency.WithLabelValues(method, path).Observe(time.Since(start).Seconds())
+				panic(r)
+			}
+		}()
+
 		c.Next()
-		promInFlight.Dec()
 
 		path := c.RoutePath
 		if path == "" && c.Request != nil && c.Request.URL != nil {

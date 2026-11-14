@@ -40,11 +40,13 @@ func Middleware(cfg Config) func(c *context.Context) error {
 	tr := cfg.TracerProvider.Tracer(cfg.TracerName)
 
 	return func(c *context.Context) error {
-		if cfg.Skipper != nil && cfg.Skipper(c) {
-			c.Next()
+		if c == nil || c.Request == nil {
+			if c != nil {
+				c.Next()
+			}
 			return nil
 		}
-		if c.Request == nil {
+		if cfg.Skipper != nil && cfg.Skipper(c) {
 			c.Next()
 			return nil
 		}
@@ -62,7 +64,15 @@ func Middleware(cfg Config) func(c *context.Context) error {
 				attribute.String("http.route", path),
 			),
 		)
-		defer span.End()
+		defer func() {
+			if r := recover(); r != nil {
+				span.SetStatus(codes.Error, fmt.Sprintf("panic: %v", r))
+				span.SetAttributes(semconv.HTTPResponseStatusCode(500))
+				span.End()
+				panic(r)
+			}
+			span.End()
+		}()
 
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()

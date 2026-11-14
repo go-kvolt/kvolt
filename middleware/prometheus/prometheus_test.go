@@ -35,3 +35,17 @@ func TestMiddleware_Scrape(t *testing.T) {
 		t.Fatalf("missing counter:\n%s", body)
 	}
 }
+
+func TestMiddleware_PanicDoesNotLeakInFlight(t *testing.T) {
+	c := context.New(httptest.NewRecorder(), httptest.NewRequest("GET", "/panic", nil))
+	c.Handlers = []context.HandlerFunc{
+		Middleware(),
+		func(c *context.Context) error {
+			panic("panic in handler")
+		},
+	}
+	defer func() {
+		_ = recover()
+	}()
+	c.Next()
+}

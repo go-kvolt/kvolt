@@ -56,12 +56,33 @@ func Validate(s interface{}) error {
 			}
 
 			// Check Min/Max (simplified)
-			// Format: min=5
+			// Format: min=5, max=10
 			if strings.HasPrefix(rule, "min=") {
-				limit, _ := strconv.Atoi(strings.TrimPrefix(rule, "min="))
-				if val.Kind() == reflect.String {
-					if len(val.String()) < limit {
-						return fmt.Errorf("field %s must be at least %d characters", field.Name, limit)
+				limit, err := strconv.Atoi(strings.TrimPrefix(rule, "min="))
+				if err == nil {
+					if val.Kind() == reflect.String {
+						if len(val.String()) < limit {
+							return fmt.Errorf("field %s must be at least %d characters", field.Name, limit)
+						}
+					} else if val.Kind() == reflect.Slice || val.Kind() == reflect.Array {
+						if val.Len() < limit {
+							return fmt.Errorf("field %s must contain at least %d items", field.Name, limit)
+						}
+					}
+				}
+			}
+
+			if strings.HasPrefix(rule, "max=") {
+				limit, err := strconv.Atoi(strings.TrimPrefix(rule, "max="))
+				if err == nil {
+					if val.Kind() == reflect.String {
+						if len(val.String()) > limit {
+							return fmt.Errorf("field %s must be at most %d characters", field.Name, limit)
+						}
+					} else if val.Kind() == reflect.Slice || val.Kind() == reflect.Array {
+						if val.Len() > limit {
+							return fmt.Errorf("field %s must contain at most %d items", field.Name, limit)
+						}
 					}
 				}
 			}

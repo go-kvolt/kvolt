@@ -34,7 +34,7 @@ func (c *Container) Provide(service interface{}) {
 	c.services[typ] = val
 }
 
-// Invoke looks up a service by type.
+// Invoke looks up a service by type or implemented interface.
 // Usage: var s *MyService; container.Invoke(&s)
 func (c *Container) Invoke(target interface{}) bool {
 	c.mu.RLock()
@@ -52,12 +52,21 @@ func (c *Container) Invoke(target interface{}) bool {
 		return true
 	}
 
+	if elemType.Kind() == reflect.Interface {
+		for sType, service := range c.services {
+			if sType.Implements(elemType) {
+				val.Elem().Set(service)
+				return true
+			}
+		}
+	}
+
 	return false
 }
 
 // ProvideFunc registers a service by invoking a constructor.
 // The constructor must be a function that returns T or (T, error).
-// Each parameter type is resolved from the container (exact type match).
+// Each parameter type is resolved from the container (exact type or implemented interface).
 //
 //	c.Provide(&Dep{})
 //	c.ProvideFunc(func(d *Dep) *Service { return &Service{Dep: d} })
@@ -80,6 +89,15 @@ func (c *Container) ProvideFunc(constructor interface{}) error {
 	for i := 0; i < ft.NumIn(); i++ {
 		inType := ft.In(i)
 		svc, ok := c.services[inType]
+		if !ok && inType.Kind() == reflect.Interface {
+			for sType, sVal := range c.services {
+				if sType.Implements(inType) {
+					svc = sVal
+					ok = true
+					break
+				}
+			}
+		}
 		if !ok {
 			c.mu.RUnlock()
 			return fmt.Errorf("di: missing dependency %s", inType.String())
@@ -96,6 +114,9 @@ func (c *Container) ProvideFunc(constructor interface{}) error {
 	}
 
 	instance := results[0]
+	if (instance.Kind() == reflect.Ptr || instance.Kind() == reflect.Interface) && instance.IsNil() {
+		return fmt.Errorf("di: constructor returned nil instance")
+	}
 	c.mu.Lock()
 	c.services[instance.Type()] = instance
 	c.mu.Unlock()

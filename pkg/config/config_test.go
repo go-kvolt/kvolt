@@ -22,3 +22,11 @@ func TestLoad_ValidStruct(t *testing.T) {
 		t.Errorf("want env port 8888, got %d", cfg.Port)
 	}
 }
+
+func TestLoad_NonStructPointer(t *testing.T) {
+	var s string
+	// Must not panic on non-struct pointer
+	_ = Load(&s)
+	var m map[string]string
+	_ = Load(&m)
+}

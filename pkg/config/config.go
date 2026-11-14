@@ -22,27 +22,29 @@ func Load(target interface{}) error {
 	val := reflect.ValueOf(target)
 	if val.Kind() == reflect.Ptr && !val.IsNil() {
 		elem := val.Elem()
-		typ := elem.Type()
-		for i := 0; i < elem.NumField(); i++ {
-			field := typ.Field(i)
+		if elem.Kind() == reflect.Struct {
+			typ := elem.Type()
+			for i := 0; i < elem.NumField(); i++ {
+				field := typ.Field(i)
 
-			key := field.Tag.Get("mapstructure")
-			if key == "" {
-				key = field.Name
-			}
-
-			// Handle "env" tag
-			tag := field.Tag.Get("env")
-			if tag != "" {
-				if err := v.BindEnv(key, tag); err != nil {
-					// In case of error binding, we just continue, but it's unlikely.
+				key := field.Tag.Get("mapstructure")
+				if key == "" {
+					key = field.Name
 				}
-			}
 
-			// Handle "default" tag
-			def := field.Tag.Get("default")
-			if def != "" {
-				v.SetDefault(key, def)
+				// Handle "env" tag
+				tag := field.Tag.Get("env")
+				if tag != "" {
+					if err := v.BindEnv(key, tag); err != nil {
+						// In case of error binding, we just continue, but it's unlikely.
+					}
+				}
+
+				// Handle "default" tag
+				def := field.Tag.Get("default")
+				if def != "" {
+					v.SetDefault(key, def)
+				}
 			}
 		}
 	}
