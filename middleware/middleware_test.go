@@ -251,3 +251,25 @@ func TestMiddlewares_NilContextGuards(t *testing.T) {
 	_ = CORS()(nil)
 	_ = Idempotency(IdempotencyConfig{Store: NewMemoryIdempotencyStore()})(nil)
 }
+
+func TestGzip_AcceptsGzipQValues(t *testing.T) {
+	// gzip;q=0 should be rejected
+	if acceptsGzip("gzip;q=0") {
+		t.Fatal("expected acceptsGzip to return false for gzip;q=0")
+	}
+	if acceptsGzip("gzip; q=0.0") {
+		t.Fatal("expected acceptsGzip to return false for gzip; q=0.0")
+	}
+	if !acceptsGzip("gzip") {
+		t.Fatal("expected acceptsGzip to return true for gzip")
+	}
+	if !acceptsGzip("deflate, gzip;q=0.8, br") {
+		t.Fatal("expected acceptsGzip to return true for q=0.8")
+	}
+	if !acceptsGzip("*") {
+		t.Fatal("expected acceptsGzip to return true for *")
+	}
+	if acceptsGzip("") {
+		t.Fatal("expected acceptsGzip to return false for empty header")
+	}
+}

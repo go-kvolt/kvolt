@@ -201,6 +201,28 @@ func (w *gzipResponseWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
 
+func acceptsGzip(header string) bool {
+	if header == "" {
+		return false
+	}
+	for _, part := range strings.Split(header, ",") {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(part, "gzip") {
+			if idx := strings.Index(part, "q="); idx != -1 {
+				qVal := strings.TrimSpace(part[idx+2:])
+				if qVal == "0" || strings.HasPrefix(qVal, "0.0") || qVal == "0." {
+					return false
+				}
+			}
+			return true
+		}
+		if part == "*" {
+			return true
+		}
+	}
+	return false
+}
+
 // Gzip compresses large non-JSON responses when the client sends Accept-Encoding: gzip.
 func Gzip() func(c *context.Context) error {
 	return GzipWithConfig(DefaultGzipConfig)
@@ -222,7 +244,7 @@ func GzipWithConfig(cfg GzipConfig) func(c *context.Context) error {
 			c.Next()
 			return nil
 		}
-		if !strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
+		if !acceptsGzip(c.Request.Header.Get("Accept-Encoding")) {
 			c.Next()
 			return nil
 		}

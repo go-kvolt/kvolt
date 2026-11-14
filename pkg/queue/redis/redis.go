@@ -388,7 +388,6 @@ func (q *Queue) processAndAck(ctx context.Context, data string) {
 		}()
 		err = handler(job)
 	}()
-	q.ack(ctx, data) // always ack processing slot; retry uses delayed/ready
 
 	if err != nil {
 		log.Printf("Job %s attempt %d failed: %v\n", job.ID, job.Attempt, err)
@@ -407,8 +406,10 @@ func (q *Queue) processAndAck(ctx context.Context, data string) {
 					}()
 				}
 			}
+			q.ack(ctx, data)
 			return
 		}
+		q.ack(ctx, data)
 		if q.onDead != nil {
 			func() {
 				defer func() {
@@ -419,7 +420,9 @@ func (q *Queue) processAndAck(ctx context.Context, data string) {
 				q.onDead(job, err)
 			}()
 		}
+		return
 	}
+	q.ack(ctx, data)
 }
 
 var (
