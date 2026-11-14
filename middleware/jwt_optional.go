@@ -18,6 +18,9 @@ func JWTOptional(config JWTConfig) context.HandlerFunc {
 	extractor := buildJWTExtractor(config.TokenLookup, config.AuthScheme)
 
 	return func(c *context.Context) error {
+		if c == nil {
+			return nil
+		}
 		tokenString, err := extractor(c)
 		if err != nil {
 			// No token → anonymous continue
@@ -49,6 +52,9 @@ func JWTOptional(config JWTConfig) context.HandlerFunc {
 
 // Claims returns JWT MapClaims previously stored by JWT / JWTOptional middleware.
 func Claims(c *context.Context, contextKey ...string) (jwt.MapClaims, bool) {
+	if c == nil {
+		return nil, false
+	}
 	key := "user"
 	if len(contextKey) > 0 && contextKey[0] != "" {
 		key = contextKey[0]
@@ -63,6 +69,9 @@ func Claims(c *context.Context, contextKey ...string) (jwt.MapClaims, bool) {
 
 // ClaimString reads a string claim from JWT middleware storage.
 func ClaimString(c *context.Context, claim string, contextKey ...string) string {
+	if c == nil {
+		return ""
+	}
 	claims, ok := Claims(c, contextKey...)
 	if !ok {
 		return ""

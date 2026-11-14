@@ -20,12 +20,20 @@ const (
 // Incoming values are sanitized (alphanumeric, '.', '_', '-'; max 128); invalid values are replaced.
 func RequestID() func(c *context.Context) error {
 	return func(c *context.Context) error {
+		if c == nil || c.Request == nil {
+			if c != nil {
+				c.Next()
+			}
+			return nil
+		}
 		id := sanitizeRequestID(c.Request.Header.Get(RequestIDHeader))
 		if id == "" {
 			id = uuid.NewString()
 		}
 		c.Set(RequestIDKey, id)
-		c.Writer.Header().Set(RequestIDHeader, id)
+		if c.Writer != nil {
+			c.Writer.Header().Set(RequestIDHeader, id)
+		}
 		c.Next()
 		return nil
 	}

@@ -62,6 +62,9 @@ func Default() *Logger {
 }
 
 func (l *Logger) log(level Level, msg string, fields map[string]interface{}) {
+	if l == nil || l.out == nil {
+		return
+	}
 	if level < l.level {
 		return
 	}

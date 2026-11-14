@@ -59,6 +59,9 @@ func (r *Request) WithJSON(obj interface{}) *Request {
 
 // Do executes the request and returns a Response tester.
 func (r *Request) Do() *Response {
+	if r == nil || r.engine == nil {
+		return nil
+	}
 	req := httptest.NewRequest(r.method, r.path, r.body)
 	for k, vv := range r.header {
 		req.Header[k] = append([]string(nil), vv...)

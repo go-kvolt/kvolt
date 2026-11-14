@@ -16,6 +16,9 @@ type SSEvent struct {
 
 // SSE prepares the response for Server-Sent Events and writes headers.
 func (c *Context) SSE() error {
+	if c == nil || c.Writer == nil {
+		return fmt.Errorf("nil writer")
+	}
 	h := c.Writer.Header()
 	h.Set("Content-Type", "text/event-stream")
 	h.Set("Cache-Control", "no-cache")
@@ -33,12 +36,18 @@ func (c *Context) SSE() error {
 
 // Event writes a simple SSE frame (event + data).
 func (c *Context) Event(event, data string) error {
+	if c == nil {
+		return fmt.Errorf("nil context")
+	}
 	return c.SSEvent(SSEvent{Event: event, Data: data})
 }
 
 // SSEvent writes a full SSE frame.
 // Event and ID are sanitized (CR/LF stripped) so untrusted values cannot inject frames.
 func (c *Context) SSEvent(ev SSEvent) error {
+	if c == nil || c.Writer == nil {
+		return fmt.Errorf("nil writer")
+	}
 	if !c.headerWritten {
 		if err := c.SSE(); err != nil {
 			return err
@@ -81,6 +90,9 @@ func sanitizeSSEField(s string) string {
 
 // Flush flushes buffered data to the client when the writer supports http.Flusher.
 func (c *Context) Flush() error {
+	if c == nil || c.Writer == nil {
+		return fmt.Errorf("nil writer")
+	}
 	f, ok := c.Writer.(http.Flusher)
 	if !ok {
 		return fmt.Errorf("sse: ResponseWriter does not support Flush")

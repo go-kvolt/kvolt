@@ -281,6 +281,9 @@ func (c *Context) writeHeader(code int) {
 
 // String sends a plain text response. Extra args are fmt.Sprintf'd into format.
 func (c *Context) String(code int, format string, values ...interface{}) error {
+	if c == nil || c.Writer == nil {
+		return fmt.Errorf("nil writer")
+	}
 	c.Writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	c.writeHeader(code)
 	if len(values) > 0 {
@@ -292,6 +295,9 @@ func (c *Context) String(code int, format string, values ...interface{}) error {
 
 // RenderHTML renders the template with data and sets values content-type to "text/html".
 func (c *Context) RenderHTML(code int, name string, data interface{}) error {
+	if c == nil || c.Writer == nil {
+		return fmt.Errorf("nil writer")
+	}
 	c.Writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if c.Templates == nil {
 		return c.String(http.StatusInternalServerError, "Templates not loaded")
@@ -302,6 +308,9 @@ func (c *Context) RenderHTML(code int, name string, data interface{}) error {
 
 // HTML sends an HTML response (Raw String).
 func (c *Context) HTML(code int, html string) error {
+	if c == nil || c.Writer == nil {
+		return fmt.Errorf("nil writer")
+	}
 	c.Writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	c.writeHeader(code)
 	_, err := c.Writer.Write([]byte(html))
@@ -310,6 +319,9 @@ func (c *Context) HTML(code int, html string) error {
 
 // Data writes raw bytes with the specified status code and optional content type.
 func (c *Context) Data(code int, contentType string, data []byte) error {
+	if c == nil || c.Writer == nil {
+		return fmt.Errorf("nil writer")
+	}
 	if contentType != "" {
 		c.Writer.Header().Set("Content-Type", contentType)
 	}
@@ -321,6 +333,9 @@ func (c *Context) Data(code int, contentType string, data []byte) error {
 // RawBody reads the full request body once and restores Request.Body so Bind/BindJSON still work.
 // Useful for webhook signature verification (Razorpay, Stripe, couriers).
 func (c *Context) RawBody() ([]byte, error) {
+	if c == nil {
+		return nil, fmt.Errorf("nil context")
+	}
 	if v, ok := c.Get(rawBodyKey); ok {
 		if b, ok := v.([]byte); ok {
 			return b, nil
@@ -346,6 +361,9 @@ func (c *Context) FormFile(name string) (*multipart.FileHeader, error) {
 
 // FormFileMax is like FormFile but lets you set ParseMultipartForm maxMemory.
 func (c *Context) FormFileMax(name string, maxMemory int64) (*multipart.FileHeader, error) {
+	if c == nil || c.Request == nil {
+		return nil, fmt.Errorf("nil request")
+	}
 	if maxMemory <= 0 {
 		maxMemory = 32 << 20
 	}
@@ -385,6 +403,9 @@ func (c *Context) FormFileAllowed(name string, maxMemory int64, allowedExts ...s
 // dst must be a local path (filepath.IsLocal); ".." escapes are rejected.
 // Prefer SafeUploadPath(dir, file.Filename) when using the client-provided name.
 func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) error {
+	if file == nil {
+		return httperr.BadRequest("invalid_file", "nil file header")
+	}
 	dst = filepath.Clean(dst)
 	if !filepath.IsAbs(dst) && (dst == "." || !filepath.IsLocal(dst)) {
 		return httperr.BadRequest("invalid_path", "upload destination must be a local non-escaping path")
@@ -417,6 +438,9 @@ func SafeUploadPath(dir, filename string) string {
 // File writes the specified file into the body stream in an efficient way.
 // Do not pass user-controlled paths; use FileFrom when the name comes from the request.
 func (c *Context) File(path string) {
+	if c == nil || c.Writer == nil || c.Request == nil {
+		return
+	}
 	http.ServeFile(c.Writer, c.Request, path)
 	c.headerWritten = true
 	if c.status == 0 {
@@ -436,6 +460,9 @@ func (c *Context) FileFrom(root, name string) error {
 
 // Attachment serves a file as a download with Content-Disposition attachment.
 func (c *Context) Attachment(path, filename string) {
+	if c == nil || c.Writer == nil {
+		return
+	}
 	if filename == "" {
 		filename = filepath.Base(path)
 	}
@@ -517,6 +544,9 @@ func sanitizeDownloadFilename(name string) string {
 // Absolute URLs (http/https/javascript/…) and protocol-relative "//…" are rejected
 // to prevent open redirects. Use RedirectURL for trusted absolute URLs.
 func (c *Context) Redirect(code int, location string) error {
+	if c == nil || c.Writer == nil || c.Request == nil {
+		return fmt.Errorf("nil context, writer, or request")
+	}
 	if !isSafeRelativeRedirect(location) {
 		return httperr.BadRequest("unsafe_redirect", "only relative redirects are allowed")
 	}
@@ -531,6 +561,9 @@ func (c *Context) Redirect(code int, location string) error {
 
 // RedirectURL redirects to any URL. Use only with trusted/absolute locations you control.
 func (c *Context) RedirectURL(code int, location string) error {
+	if c == nil || c.Writer == nil || c.Request == nil {
+		return fmt.Errorf("nil context, writer, or request")
+	}
 	if strings.TrimSpace(location) == "" {
 		return httperr.BadRequest("unsafe_redirect", "empty redirect location")
 	}
@@ -571,11 +604,17 @@ func isSafeRelativeRedirect(location string) bool {
 
 // NoContent sends 204 No Content.
 func (c *Context) NoContent() error {
+	if c == nil || c.Writer == nil {
+		return fmt.Errorf("nil writer")
+	}
 	c.writeHeader(http.StatusNoContent)
 	return nil
 }
 
 func sameOrigin(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
 	origin := r.Header.Get("Origin")
 	if origin == "" {
 		return true
@@ -606,6 +645,9 @@ func SetWebsocketCheckOrigin(fn func(*http.Request) bool) {
 // Upgrade upgrades the HTTP connection to a WebSocket connection.
 // Returns the *websocket.Conn and any error.
 func (c *Context) Upgrade() (*websocket.Conn, error) {
+	if c == nil || c.Writer == nil || c.Request == nil {
+		return nil, fmt.Errorf("nil context, writer, or request")
+	}
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err == nil {
 		c.headerWritten = true
