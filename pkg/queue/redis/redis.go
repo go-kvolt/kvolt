@@ -178,6 +178,9 @@ func (q *Queue) Register(name string, handler queue.HandlerFunc) {
 	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	if q.handlers == nil {
+		q.handlers = make(map[string]queue.HandlerFunc)
+	}
 	q.handlers[name] = handler
 }
 
@@ -201,7 +204,9 @@ func (q *Queue) Stop() {
 		return
 	}
 	q.stopOnce.Do(func() {
-		close(q.quit)
+		if q.quit != nil {
+			close(q.quit)
+		}
 		q.wg.Wait()
 		fmt.Println("Queue (redis) stopped")
 	})

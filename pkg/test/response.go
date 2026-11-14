@@ -27,7 +27,7 @@ func (r *Response) ExpectStatus(code int) *Response {
 	if r == nil || r.Recorder == nil {
 		return r
 	}
-	if r.Recorder.Code != code {
+	if r.t != nil && r.Recorder.Code != code {
 		r.t.Errorf("Expected status code %d, got %d", code, r.Recorder.Code)
 	}
 	return r
@@ -38,7 +38,7 @@ func (r *Response) ExpectBody(expected string) *Response {
 	if r == nil || r.Recorder == nil {
 		return r
 	}
-	if r.Recorder.Body.String() != expected {
+	if r.t != nil && r.Recorder.Body.String() != expected {
 		r.t.Errorf("Expected body %q, got %q", expected, r.Recorder.Body.String())
 	}
 	return r
@@ -49,7 +49,7 @@ func (r *Response) ExpectBodyContains(substring string) *Response {
 	if r == nil || r.Recorder == nil {
 		return r
 	}
-	if !strings.Contains(r.Recorder.Body.String(), substring) {
+	if r.t != nil && !strings.Contains(r.Recorder.Body.String(), substring) {
 		r.t.Errorf("Expected body to contain %q, got %q", substring, r.Recorder.Body.String())
 	}
 	return r
@@ -61,7 +61,7 @@ func (r *Response) ExpectHeader(key, value string) *Response {
 		return r
 	}
 	got := r.Recorder.Header().Get(key)
-	if got != value {
+	if r.t != nil && got != value {
 		r.t.Errorf("Expected header %s=%q, got %q", key, value, got)
 	}
 	return r

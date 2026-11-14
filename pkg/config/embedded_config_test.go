@@ -34,3 +34,24 @@ func TestConfig_EmbeddedStructEnvAndDefaults(t *testing.T) {
 		t.Fatalf("expected AppName default=KVoltApp, got %s", cfg.AppName)
 	}
 }
+
+type OptionsConfig struct {
+	Timeout int    `mapstructure:"timeout,omitempty" env:"APP_TIMEOUT" default:"30"`
+	Ignored string `mapstructure:"-" env:"IGNORED" default:"secret"`
+}
+
+func TestConfig_MapstructureOptionsAndDash(t *testing.T) {
+	_ = os.Setenv("APP_TIMEOUT", "45")
+	defer func() { _ = os.Unsetenv("APP_TIMEOUT") }()
+
+	var cfg OptionsConfig
+	if err := Load(&cfg); err != nil {
+		t.Fatalf("unexpected Load error: %v", err)
+	}
+	if cfg.Timeout != 45 {
+		t.Fatalf("expected Timeout=45 from APP_TIMEOUT, got %d", cfg.Timeout)
+	}
+	if cfg.Ignored != "" {
+		t.Fatalf("expected Ignored to remain empty, got %s", cfg.Ignored)
+	}
+}

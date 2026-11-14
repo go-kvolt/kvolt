@@ -111,46 +111,56 @@ func Validate(s interface{}) error {
 			// Check Min/Max (simplified)
 			// Format: min=5, max=10
 			if strings.HasPrefix(rule, "min=") {
-				limit, err := strconv.Atoi(strings.TrimPrefix(rule, "min="))
+				limitStr := strings.TrimPrefix(rule, "min=")
+				limit, err := strconv.ParseFloat(limitStr, 64)
 				if err == nil {
 					if checkVal.Kind() == reflect.String {
-						if len(checkVal.String()) < limit {
-							return fmt.Errorf("field %s must be at least %d characters", field.Name, limit)
+						if float64(len(checkVal.String())) < limit {
+							return fmt.Errorf("field %s must be at least %s characters", field.Name, limitStr)
 						}
 					} else if checkVal.Kind() == reflect.Slice || checkVal.Kind() == reflect.Array {
-						if checkVal.Len() < limit {
-							return fmt.Errorf("field %s must contain at least %d items", field.Name, limit)
+						if float64(checkVal.Len()) < limit {
+							return fmt.Errorf("field %s must contain at least %s items", field.Name, limitStr)
 						}
 					} else if checkVal.Kind() >= reflect.Int && checkVal.Kind() <= reflect.Int64 {
-						if checkVal.Int() < int64(limit) {
-							return fmt.Errorf("field %s must be at least %d", field.Name, limit)
+						if float64(checkVal.Int()) < limit {
+							return fmt.Errorf("field %s must be at least %s", field.Name, limitStr)
 						}
 					} else if checkVal.Kind() >= reflect.Uint && checkVal.Kind() <= reflect.Uint64 {
-						if checkVal.Uint() < uint64(limit) {
-							return fmt.Errorf("field %s must be at least %d", field.Name, limit)
+						if float64(checkVal.Uint()) < limit {
+							return fmt.Errorf("field %s must be at least %s", field.Name, limitStr)
+						}
+					} else if checkVal.Kind() == reflect.Float32 || checkVal.Kind() == reflect.Float64 {
+						if checkVal.Float() < limit {
+							return fmt.Errorf("field %s must be at least %s", field.Name, limitStr)
 						}
 					}
 				}
 			}
 
 			if strings.HasPrefix(rule, "max=") {
-				limit, err := strconv.Atoi(strings.TrimPrefix(rule, "max="))
+				limitStr := strings.TrimPrefix(rule, "max=")
+				limit, err := strconv.ParseFloat(limitStr, 64)
 				if err == nil {
 					if checkVal.Kind() == reflect.String {
-						if len(checkVal.String()) > limit {
-							return fmt.Errorf("field %s must be at most %d characters", field.Name, limit)
+						if float64(len(checkVal.String())) > limit {
+							return fmt.Errorf("field %s must be at most %s characters", field.Name, limitStr)
 						}
 					} else if checkVal.Kind() == reflect.Slice || checkVal.Kind() == reflect.Array {
-						if checkVal.Len() > limit {
-							return fmt.Errorf("field %s must contain at most %d items", field.Name, limit)
+						if float64(checkVal.Len()) > limit {
+							return fmt.Errorf("field %s must contain at most %s items", field.Name, limitStr)
 						}
 					} else if checkVal.Kind() >= reflect.Int && checkVal.Kind() <= reflect.Int64 {
-						if checkVal.Int() > int64(limit) {
-							return fmt.Errorf("field %s must be at most %d", field.Name, limit)
+						if float64(checkVal.Int()) > limit {
+							return fmt.Errorf("field %s must be at most %s", field.Name, limitStr)
 						}
 					} else if checkVal.Kind() >= reflect.Uint && checkVal.Kind() <= reflect.Uint64 {
-						if checkVal.Uint() > uint64(limit) {
-							return fmt.Errorf("field %s must be at most %d", field.Name, limit)
+						if float64(checkVal.Uint()) > limit {
+							return fmt.Errorf("field %s must be at most %s", field.Name, limitStr)
+						}
+					} else if checkVal.Kind() == reflect.Float32 || checkVal.Kind() == reflect.Float64 {
+						if checkVal.Float() > limit {
+							return fmt.Errorf("field %s must be at most %s", field.Name, limitStr)
 						}
 					}
 				}

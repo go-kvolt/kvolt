@@ -81,14 +81,27 @@ func (q *MemoryQueue) enqueue(job Job) error {
 	if q == nil {
 		return fmt.Errorf("queue is nil")
 	}
-	select {
-	case <-q.quit:
-		return fmt.Errorf("queue is stopped")
-	default:
+	if q.jobChan == nil {
+		return fmt.Errorf("queue is uninitialized")
+	}
+	if q.quit != nil {
+		select {
+		case <-q.quit:
+			return fmt.Errorf("queue is stopped")
+		default:
+		}
+	}
+	if q.quit != nil {
+		select {
+		case <-q.quit:
+			return fmt.Errorf("queue is stopped")
+		case q.jobChan <- job:
+			return nil
+		default:
+			return fmt.Errorf("queue is full")
+		}
 	}
 	select {
-	case <-q.quit:
-		return fmt.Errorf("queue is stopped")
 	case q.jobChan <- job:
 		return nil
 	default:
@@ -103,6 +116,9 @@ func (q *MemoryQueue) Register(name string, handler HandlerFunc) {
 	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	if q.handlers == nil {
+		q.handlers = make(map[string]HandlerFunc)
+	}
 	q.handlers[name] = handler
 }
 
@@ -124,7 +140,9 @@ func (q *MemoryQueue) Stop() {
 		return
 	}
 	q.stopOnce.Do(func() {
-		close(q.quit)
+		if q.quit != nil {
+			close(q.quit)
+		}
 		q.wg.Wait()
 		fmt.Println("🛑 Queue stopped")
 	})

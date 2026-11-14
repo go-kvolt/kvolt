@@ -163,3 +163,26 @@ func TestValidate_NestedStructAndSlice(t *testing.T) {
 		t.Fatalf("unexpected error on valid order: %v", err)
 	}
 }
+
+func TestValidate_FloatMinMax(t *testing.T) {
+	type Product struct {
+		Price    float64 `validate:"min=0.01,max=9999.99"`
+		Discount float32 `validate:"min=0,max=100"`
+	}
+
+	if err := Validate(&Product{Price: 0.005, Discount: 10}); err == nil {
+		t.Fatal("expected error on price < 0.01")
+	}
+	if err := Validate(&Product{Price: 10000.0, Discount: 10}); err == nil {
+		t.Fatal("expected error on price > 9999.99")
+	}
+	if err := Validate(&Product{Price: 50.0, Discount: -1}); err == nil {
+		t.Fatal("expected error on discount < 0")
+	}
+	if err := Validate(&Product{Price: 50.0, Discount: 105}); err == nil {
+		t.Fatal("expected error on discount > 100")
+	}
+	if err := Validate(&Product{Price: 19.99, Discount: 15}); err != nil {
+		t.Fatalf("unexpected error on valid product: %v", err)
+	}
+}

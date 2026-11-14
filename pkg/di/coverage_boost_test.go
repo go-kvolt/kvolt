@@ -31,3 +31,21 @@ func TestMustProvideFunc(t *testing.T) {
 	}()
 	c.MustProvideFunc(42) // invalid constructor
 }
+
+func TestContainer_Uninitialized(t *testing.T) {
+	c := &Container{}
+	c.Provide("hello")
+	var s string
+	if !c.Invoke(&s) || s != "hello" {
+		t.Fatalf("expected hello, got %s", s)
+	}
+
+	c2 := &Container{}
+	if err := c2.ProvideFunc(func() int { return 99 }); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var n int
+	if !c2.Invoke(&n) || n != 99 {
+		t.Fatalf("expected 99, got %d", n)
+	}
+}

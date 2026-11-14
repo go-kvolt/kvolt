@@ -2,6 +2,7 @@ package config
 
 import (
 	"reflect"
+	"strings"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/joho/godotenv"
@@ -67,6 +68,12 @@ func bindViperTags(v *viper.Viper, elem reflect.Value) {
 		}
 
 		key := field.Tag.Get("mapstructure")
+		if key == "-" {
+			continue
+		}
+		if key != "" {
+			key = strings.Split(key, ",")[0]
+		}
 		if key == "" {
 			key = field.Name
 		}

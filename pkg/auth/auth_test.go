@@ -24,6 +24,15 @@ func TestGenerateTokenAndParseToken(t *testing.T) {
 	if claims["user"] != "alice" || claims["role"] != "admin" {
 		t.Errorf("ParseToken: claims %v", claims)
 	}
+
+	// Should also parse when token has leading/trailing whitespace
+	claimsWs, err := ParseToken("  \n\t" + token + " \r\n")
+	if err != nil {
+		t.Fatalf("ParseToken with whitespace: %v", err)
+	}
+	if claimsWs["user"] != "alice" {
+		t.Errorf("ParseToken with whitespace claims: %v", claimsWs)
+	}
 }
 
 func TestParseToken_InvalidFormat(t *testing.T) {

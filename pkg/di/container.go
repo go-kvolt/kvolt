@@ -30,6 +30,9 @@ func (c *Container) Provide(service interface{}) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.services == nil {
+		c.services = make(map[reflect.Type]reflect.Value)
+	}
 
 	val := reflect.ValueOf(service)
 	typ := reflect.TypeOf(service)
@@ -127,6 +130,9 @@ func (c *Container) ProvideFunc(constructor interface{}) error {
 		return fmt.Errorf("di: constructor returned nil instance")
 	}
 	c.mu.Lock()
+	if c.services == nil {
+		c.services = make(map[reflect.Type]reflect.Value)
+	}
 	c.services[ft.Out(0)] = instance
 	if ft.Out(0) != instance.Type() {
 		c.services[instance.Type()] = instance

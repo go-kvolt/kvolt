@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -73,6 +74,7 @@ func GenerateToken(claims Claims, expiry time.Duration) (string, error) {
 
 // ParseToken validates an HS256 JWT and returns claims.
 func ParseToken(tokenString string) (Claims, error) {
+	tokenString = strings.TrimSpace(tokenString)
 	secret, err := currentSecret()
 	if err != nil {
 		return nil, err

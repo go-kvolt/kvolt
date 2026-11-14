@@ -128,6 +128,12 @@ func (e *Engine) handlers404() []context.HandlerFunc {
 
 // ServeHTTP implements the http.Handler interface.
 func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if e == nil || w == nil || r == nil || r.URL == nil {
+		if w != nil {
+			w.WriteHeader(http.StatusBadRequest)
+		}
+		return
+	}
 	c := e.pool.Get().(*context.Context)
 	c.Reset(w, r)
 	c.TrustedProxies = e.TrustedProxies

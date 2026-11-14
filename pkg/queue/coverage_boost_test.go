@@ -31,3 +31,21 @@ func TestMemoryQueue_RequeueFullTriggersDeadLetter(t *testing.T) {
 		t.Fatal("want dead letter")
 	}
 }
+
+func TestMemoryQueue_Uninitialized(t *testing.T) {
+	var q *MemoryQueue
+	q.Register("test", func(job Job) error { return nil })
+	q.Start()
+	q.Stop()
+	if err := q.Push("test", nil); err == nil {
+		t.Fatal("expected error on nil queue push")
+	}
+
+	q2 := &MemoryQueue{}
+	q2.Register("test", func(job Job) error { return nil })
+	q2.Start()
+	q2.Stop()
+	if err := q2.Push("test", nil); err == nil {
+		t.Fatal("expected error on uninitialized queue push")
+	}
+}

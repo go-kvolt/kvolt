@@ -90,3 +90,28 @@ func TestProxyAndHTTPServerDefaults(t *testing.T) {
 		t.Fatalf("%+v", srv2)
 	}
 }
+
+func TestServeHTTP_NilGuards(t *testing.T) {
+	app := New()
+	rec := httptest.NewRecorder()
+
+	// nil request
+	app.ServeHTTP(rec, nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on nil request, got %d", rec.Code)
+	}
+
+	// nil URL
+	rec2 := httptest.NewRecorder()
+	app.ServeHTTP(rec2, &http.Request{})
+	if rec2.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on nil URL, got %d", rec2.Code)
+	}
+
+	// nil engine
+	var nilEngine *Engine
+	nilEngine.ServeHTTP(rec, nil)
+
+	// nil writer
+	app.ServeHTTP(nil, httptest.NewRequest("GET", "/", nil))
+}

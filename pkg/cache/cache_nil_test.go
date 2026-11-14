@@ -30,6 +30,9 @@ func TestMemoryStore_Uninitialized(t *testing.T) {
 	if err := m.Touch("key", time.Hour); err != ErrKeyNotFound {
 		t.Fatalf("expected ErrKeyNotFound, got %v", err)
 	}
+	if err := m.Close(); err != nil {
+		t.Fatalf("expected nil on Close, got %v", err)
+	}
 
 	m2 := &MemoryStore{}
 	if _, err := m2.Get("key"); err != ErrKeyNotFound {
@@ -43,5 +46,8 @@ func TestMemoryStore_Uninitialized(t *testing.T) {
 	}
 	if err := m2.Touch("key", time.Hour); err != ErrKeyNotFound {
 		t.Fatalf("expected ErrKeyNotFound, got %v", err)
+	}
+	if err := m2.Close(); err != nil {
+		t.Fatalf("expected nil on Close, got %v", err)
 	}
 }

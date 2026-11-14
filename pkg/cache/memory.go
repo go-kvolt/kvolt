@@ -251,7 +251,9 @@ func (m *MemoryStore) Close() error {
 		return nil
 	}
 	m.stopOnce.Do(func() {
-		close(m.stopChan)
+		if m.stopChan != nil {
+			close(m.stopChan)
+		}
 	})
 	return nil
 }

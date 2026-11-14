@@ -35,3 +35,12 @@ func TestResponse_AssertStatus(t *testing.T) {
 	// Should not call t.Errorf when code matches
 	resp.AssertStatus(t, 404)
 }
+
+func TestResponse_NilT(t *testing.T) {
+	w := httptest.NewRecorder()
+	w.WriteHeader(500)
+	resp := &Response{Recorder: w}
+	// Calling with nil t should not panic even on mismatch
+	resp.AssertStatus(nil, 200)
+	resp.AssertBody(nil, "something_else")
+}

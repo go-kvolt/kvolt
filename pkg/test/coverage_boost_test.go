@@ -80,3 +80,18 @@ func TestExpectJSON_ValueMismatch(t *testing.T) {
 		t.Fatal("want ExpectJSON deep-equal failure")
 	}
 }
+
+func TestResponse_NilT(t *testing.T) {
+	app := kvolt.New()
+	app.GET("/nil-t", func(c *context.Context) error {
+		return c.String(200, "ok")
+	})
+	ts := New(nil, app)
+	resp := ts.GET("/nil-t").Do()
+	// Should not panic even when assertions fail with nil t
+	resp.ExpectStatus(500)
+	resp.ExpectBody("wrong")
+	resp.ExpectBodyContains("wrong")
+	resp.ExpectHeader("X-Missing", "wrong")
+	resp.ExpectJSON(map[string]string{"foo": "bar"})
+}
