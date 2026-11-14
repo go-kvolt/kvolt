@@ -5,6 +5,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"log"
 	"os"
 	"sync"
@@ -21,9 +23,10 @@ func main() {
 	app.Use(middleware.Logger())
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		// #nosec G101 -- demo fallback key for local demo when JWT_SECRET is unset
-		secret = "dev-insecure-secret-key-change-in-production-32b"
-		log.Println("JWT_SECRET not set: using demo secret with secure JWT claim tenant extraction")
+		b := make([]byte, 32)
+		_, _ = rand.Read(b)
+		secret = hex.EncodeToString(b)
+		log.Println("JWT_SECRET not set: generated ephemeral 256-bit random secret for local run")
 	}
 	// JWT first so Tenant can read the claim; header alone is not trusted when Claim is set.
 	app.Use(middleware.JWTOptional(middleware.JWTConfig{SigningKey: secret}))

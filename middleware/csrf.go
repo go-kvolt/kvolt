@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -61,6 +62,7 @@ func csrfSecretBytes(cfg CSRFConfig) []byte {
 		b := make([]byte, 32)
 		mustCSRFRand(b)
 		csrfProcessSecret = b
+		log.Println("[KVolt CSRF] Process-local secret generated; set CSRFConfig.Secret explicitly for multi-instance deployments")
 	})
 	return csrfProcessSecret
 }
