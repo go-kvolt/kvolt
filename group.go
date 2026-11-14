@@ -39,13 +39,18 @@ func (o onlyFilesFS) Open(name string) (http.File, error) {
 		return nil, err
 	}
 	if st.IsDir() {
-		// Allow only if index.html exists; otherwise no directory listing.
+		// Allow only if index.html exists and is not a directory; otherwise no directory listing.
 		idx, err := o.fs.Open(strings.TrimSuffix(name, "/") + "/index.html")
 		if err != nil {
 			_ = f.Close()
 			return nil, fs.ErrNotExist
 		}
+		idxSt, err := idx.Stat()
 		_ = idx.Close()
+		if err != nil || idxSt.IsDir() {
+			_ = f.Close()
+			return nil, fs.ErrNotExist
+		}
 	}
 	return f, nil
 }
@@ -209,8 +214,12 @@ func (group *RouterGroup) Static(relativePath, root string) *Route {
 	if group == nil || group.engine == nil {
 		return nil
 	}
+	rel := strings.TrimSuffix(strings.TrimSpace(relativePath), "/")
+	if rel != "" && !strings.HasPrefix(rel, "/") {
+		rel = "/" + rel
+	}
 	// Construct the full prefix path to strip (e.g. /v1/assets)
-	absolutePrefix := group.prefix + relativePath
+	absolutePrefix := group.prefix + rel
 
 	fs := http.StripPrefix(absolutePrefix, http.FileServer(onlyFilesFS{http.Dir(root)}))
 
@@ -223,18 +232,14 @@ func (group *RouterGroup) Static(relativePath, root string) *Route {
 		return nil
 	}
 
-	// Register the route with wildcard suffix
-	// e.g. /assets/*filepath
-	urlPattern := relativePath + "/*filepath"
-	// Also register the exact path (e.g. /assets) to handle root requests
-	group.GET(relativePath, handler)
-	// Register the trailing slash path if it's different from relativePath
-	// e.g. /assets/
-	if relativePath != "/" && len(relativePath) > 0 {
-		group.GET(relativePath+"/", handler)
+	if rel == "" {
+		group.GET("/", handler)
+		return group.GET("/*filepath", handler)
 	}
 
-	return group.GET(urlPattern, handler)
+	group.GET(rel, handler)
+	group.GET(rel+"/", handler)
+	return group.GET(rel+"/*filepath", handler)
 }
 
 func (group *RouterGroup) addRoute(method, path string, handler context.HandlerFunc) *Route {

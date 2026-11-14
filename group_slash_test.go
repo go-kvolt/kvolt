@@ -3,6 +3,7 @@ package kvolt
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-kvolt/kvolt/v2/context"
@@ -47,5 +48,23 @@ func TestGroup_SlashNormalization(t *testing.T) {
 	app.ServeHTTP(rec3, httptest.NewRequest("GET", "/v2/users", nil))
 	if rec3.Code != 200 || rec3.Body.String() != "v2 users" {
 		t.Fatalf("expected /v2/users to match, got %d %s", rec3.Code, rec3.Body.String())
+	}
+}
+
+func TestStatic_TrailingSlashNormalization(t *testing.T) {
+	app := New()
+	td := t.TempDir()
+
+	// Register Static with trailing slash "/static/"
+	app.Static("/static/", td)
+	// Register Static with root "/"
+	v1 := app.Group("/pub")
+	v1.Static("/", td)
+
+	// Routes registered should have clean paths without double slashes
+	for _, r := range app.Routes() {
+		if strings.Contains(r.Path, "//") {
+			t.Fatalf("found route with double slash: %s", r.Path)
+		}
 	}
 }
