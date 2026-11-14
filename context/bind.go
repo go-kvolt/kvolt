@@ -128,15 +128,18 @@ func setFieldSlice(fv reflect.Value, rawSlice []string) error {
 		parts := rawSlice
 		trimmed := strings.TrimSpace(raw)
 		if len(rawSlice) == 1 {
-			if strings.HasPrefix(trimmed, "[") || strings.HasPrefix(trimmed, "{") {
+			if trimmed == "" {
+				parts = nil
+			} else if strings.HasPrefix(trimmed, "[") || strings.HasPrefix(trimmed, "{") {
 				ptr := reflect.New(fv.Type())
 				if err := json.Unmarshal([]byte(raw), ptr.Interface()); err != nil {
 					return fmt.Errorf("bind %s: %w", fv.Type().String(), err)
 				}
 				fv.Set(ptr.Elem())
 				return nil
+			} else {
+				parts = strings.Split(raw, ",")
 			}
-			parts = strings.Split(raw, ",")
 		}
 		elemType := fv.Type().Elem()
 		elemKind := elemType.Kind()

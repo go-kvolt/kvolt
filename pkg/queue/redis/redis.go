@@ -48,6 +48,7 @@ type Queue struct {
 	onDead      queue.DeadLetterFunc
 	handlers    map[string]queue.HandlerFunc
 	quit        chan struct{}
+	stopOnce    sync.Once
 	wg          sync.WaitGroup
 	mu          sync.RWMutex
 }
@@ -124,11 +125,17 @@ func (q *Queue) delayedKey() string    { return q.prefix + "delayed" }
 
 // Push implements queue.Queue.
 func (q *Queue) Push(name string, payload interface{}) error {
+	if q == nil || q.client == nil {
+		return fmt.Errorf("queue is nil or client is nil")
+	}
 	return q.PushWithOptions(name, payload, queue.PushOptions{})
 }
 
 // PushWithOptions implements queue.Queue.
 func (q *Queue) PushWithOptions(name string, payload interface{}, opts queue.PushOptions) error {
+	if q == nil || q.client == nil {
+		return fmt.Errorf("queue is nil or client is nil")
+	}
 	payloadBytes, err := sonic.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("queue redis marshal payload: %w", err)
@@ -166,6 +173,9 @@ func (q *Queue) enqueueDelayed(job jobWire, delay time.Duration) error {
 
 // Register implements queue.Worker.
 func (q *Queue) Register(name string, handler queue.HandlerFunc) {
+	if q == nil {
+		return
+	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.handlers[name] = handler
@@ -173,6 +183,9 @@ func (q *Queue) Register(name string, handler queue.HandlerFunc) {
 
 // Start implements queue.Worker.
 func (q *Queue) Start() {
+	if q == nil || q.client == nil {
+		return
+	}
 	q.wg.Add(1)
 	go q.reaperLoop()
 	for i := 0; i < q.workerCount; i++ {
@@ -184,9 +197,14 @@ func (q *Queue) Start() {
 
 // Stop implements queue.Worker.
 func (q *Queue) Stop() {
-	close(q.quit)
-	q.wg.Wait()
-	fmt.Println("Queue (redis) stopped")
+	if q == nil {
+		return
+	}
+	q.stopOnce.Do(func() {
+		close(q.quit)
+		q.wg.Wait()
+		fmt.Println("Queue (redis) stopped")
+	})
 }
 
 func (q *Queue) workerLoop(id int) {
@@ -228,10 +246,11 @@ func (q *Queue) workerLoop(id int) {
 
 func (q *Queue) reaperLoop() {
 	defer q.wg.Done()
-	ticker := time.NewTicker(q.visibility / 2)
-	if q.visibility/2 < time.Second {
-		ticker.Reset(time.Second)
+	vis := q.visibility
+	if vis < 2*time.Second {
+		vis = 2 * time.Second
 	}
+	ticker := time.NewTicker(vis / 2)
 	defer ticker.Stop()
 	for {
 		select {

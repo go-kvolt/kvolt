@@ -57,6 +57,9 @@ func NewMemoryIdempotencyStore() *MemoryIdempotencyStore {
 
 // WithMaxKeys caps distinct keys (evicts expired then oldest). Returns the same store.
 func (s *MemoryIdempotencyStore) WithMaxKeys(n int) *MemoryIdempotencyStore {
+	if s == nil {
+		return nil
+	}
 	if n > 0 {
 		s.maxKeys = n
 	}
@@ -65,6 +68,9 @@ func (s *MemoryIdempotencyStore) WithMaxKeys(n int) *MemoryIdempotencyStore {
 
 // Get implements IdempotencyStore.
 func (s *MemoryIdempotencyStore) Get(key string) (IdempotencyRecord, bool, error) {
+	if s == nil {
+		return IdempotencyRecord{}, false, nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	it, ok := s.items[key]
@@ -80,6 +86,9 @@ func (s *MemoryIdempotencyStore) Get(key string) (IdempotencyRecord, bool, error
 
 // Set implements IdempotencyStore.
 func (s *MemoryIdempotencyStore) Set(key string, rec IdempotencyRecord, ttl time.Duration) error {
+	if s == nil {
+		return nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now()

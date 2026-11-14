@@ -76,3 +76,19 @@ func TestParamRoute_AuthProviderCallback(t *testing.T) {
 		t.Fatalf("callback: ok=%v h=%v p=%q", ok2, h2, ps2.Get("provider"))
 	}
 }
+
+func TestEdgeSplit_PreservesPattern(t *testing.T) {
+	r := New()
+	r.AddRoute("GET", "/testing-long-prefix", "long")
+	r.AddRoute("GET", "/test", "short")
+
+	res1 := r.FindEx("GET", "/testing-long-prefix", nil)
+	if !res1.Found || res1.Pattern != "/testing-long-prefix" {
+		t.Fatalf("res1 want Pattern /testing-long-prefix got %q", res1.Pattern)
+	}
+
+	res2 := r.FindEx("GET", "/test", nil)
+	if !res2.Found || res2.Pattern != "/test" {
+		t.Fatalf("res2 want Pattern /test got %q", res2.Pattern)
+	}
+}

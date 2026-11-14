@@ -73,7 +73,7 @@ func CORSWithConfig(cfg CORSConfig) func(c *context.Context) error {
 	}
 
 	return func(c *context.Context) error {
-		if c == nil || c.Request == nil {
+		if c == nil || c.Request == nil || c.Writer == nil {
 			if c != nil {
 				c.Next()
 			}

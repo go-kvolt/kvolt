@@ -104,6 +104,7 @@ walk:
 				indices:   n.indices,
 				children:  n.children,
 				handle:    n.handle,
+				fullPath:  n.fullPath,
 				priority:  n.priority - 1,
 			}
 
@@ -112,6 +113,7 @@ walk:
 			n.indices = string([]byte{n.path[i]})
 			n.path = path[:i]
 			n.handle = nil
+			n.fullPath = ""
 			n.wildChild = false
 		}
 

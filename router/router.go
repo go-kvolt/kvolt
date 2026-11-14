@@ -143,7 +143,11 @@ const pathStub = ""
 func (n *Node) walk(path string, walkFunc func(path string)) {
 	fullPath := path + n.path
 	if n.handle != nil {
-		walkFunc(fullPath)
+		if n.fullPath != "" {
+			walkFunc(n.fullPath)
+		} else {
+			walkFunc(fullPath)
+		}
 	}
 	for _, child := range n.children {
 		child.walk(fullPath, walkFunc)

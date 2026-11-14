@@ -101,6 +101,9 @@ func Handler(cfg Config) func(c *context.Context) error {
 	}
 
 	return func(c *context.Context) error {
+		if c == nil || c.Writer == nil {
+			return nil
+		}
 		if cfg.Disabled {
 			return c.Status(404).String(404, "Not Found")
 		}

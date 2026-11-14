@@ -133,17 +133,26 @@ func (c *Context) Reset(w http.ResponseWriter, r *http.Request) {
 // SetDetached marks the context as detached, signaling that an async goroutine
 // may outlive the main handler and this context instance must not be returned to sync.Pool.
 func (c *Context) SetDetached() {
+	if c == nil {
+		return
+	}
 	c.detached = true
 }
 
 // IsDetached reports whether the context is detached.
 func (c *Context) IsDetached() bool {
+	if c == nil {
+		return false
+	}
 	return c.detached
 }
 
 // Set is used to store a new key/value pair exclusively for this context.
 // It also lazily initializes  c.Keys if it was not used previously.
 func (c *Context) Set(key string, value interface{}) {
+	if c == nil {
+		return
+	}
 	if c.Keys == nil {
 		c.Keys = make(map[string]interface{})
 	}
@@ -153,6 +162,9 @@ func (c *Context) Set(key string, value interface{}) {
 // Get returns the value for the given key, ie: (value, true).
 // If the value does not exist it returns (nil, false)
 func (c *Context) Get(key string) (value interface{}, exists bool) {
+	if c == nil {
+		return nil, false
+	}
 	if c.Keys != nil {
 		value, exists = c.Keys[key]
 	}
@@ -161,6 +173,9 @@ func (c *Context) Get(key string) (value interface{}, exists bool) {
 
 // MustGet returns the value for the given key if it exists, otherwise it panics.
 func (c *Context) MustGet(key string) interface{} {
+	if c == nil {
+		panic("nil context")
+	}
 	if value, exists := c.Get(key); exists {
 		return value
 	}
@@ -169,12 +184,15 @@ func (c *Context) MustGet(key string) interface{} {
 
 // Param returns the value of the URL param.
 func (c *Context) Param(key string) string {
+	if c == nil {
+		return ""
+	}
 	return c.Params.Get(key)
 }
 
 // Query returns the first query string value for key (e.g. /search?q=foo).
 func (c *Context) Query(key string) string {
-	if c.Request == nil || c.Request.URL == nil {
+	if c == nil || c.Request == nil || c.Request.URL == nil {
 		return ""
 	}
 	return c.Request.URL.Query().Get(key)
@@ -182,6 +200,9 @@ func (c *Context) Query(key string) string {
 
 // Bind decodes the JSON body into obj and then validates it (go-playground tags).
 func (c *Context) Bind(obj interface{}) error {
+	if c == nil {
+		return fmt.Errorf("nil context")
+	}
 	if err := c.BindJSON(obj); err != nil {
 		return err
 	}
@@ -192,7 +213,7 @@ func (c *Context) Bind(obj interface{}) error {
 // If a handler returns an error and no response has been written yet,
 // httperr.Error is mapped to JSON; other errors become a generic 500.
 func (c *Context) Next() {
-	if c.aborted {
+	if c == nil || c.aborted {
 		return
 	}
 	c.index++
@@ -207,17 +228,26 @@ func (c *Context) Next() {
 
 // Abort stops the remaining middleware/handler chain.
 func (c *Context) Abort() {
+	if c == nil {
+		return
+	}
 	c.aborted = true
 	c.index = len(c.Handlers)
 }
 
 // IsAborted reports whether Abort was called.
 func (c *Context) IsAborted() bool {
+	if c == nil {
+		return false
+	}
 	return c.aborted
 }
 
 // WriteHandlerError maps handler errors to JSON responses when headers are not written yet.
 func (c *Context) WriteHandlerError(err error) {
+	if c == nil {
+		return
+	}
 	if c.headerWritten {
 		log.Printf("[KVolt] handler error after write: %v", err)
 		return
@@ -237,6 +267,9 @@ func (c *Context) WriteHandlerError(err error) {
 
 // AbortWithError stops the chain and writes an httperr JSON response (no double-write log).
 func (c *Context) AbortWithError(err *httperr.Error) error {
+	if c == nil {
+		return nil
+	}
 	c.Abort()
 	if err == nil {
 		return nil
@@ -588,8 +621,16 @@ func isSafeRelativeRedirect(location string) bool {
 	if !strings.HasPrefix(location, "/") || strings.HasPrefix(location, "//") {
 		return false
 	}
-	// Backslash / CRLF / NUL / @ (userinfo) tricks historically confuse some user-agents.
-	if strings.ContainsAny(location, "\\\r\n\x00@") {
+	// Backslash / CRLF / NUL are strictly forbidden.
+	if strings.ContainsAny(location, "\\\r\n\x00") {
+		return false
+	}
+	// Prevent userinfo host confusion at the start of path (e.g. /@evil.com).
+	pathPart := location
+	if idx := strings.IndexByte(location, '?'); idx != -1 {
+		pathPart = location[:idx]
+	}
+	if strings.HasPrefix(pathPart, "/@") {
 		return false
 	}
 	if strings.Contains(location, "://") {

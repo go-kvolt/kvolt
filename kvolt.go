@@ -149,9 +149,13 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			code = http.StatusPermanentRedirect
 		}
-		c.Handlers = []context.HandlerFunc{func(c *context.Context) error {
-			return c.Redirect(code, alternatePath(r.URL.Path))
-		}}
+		target := alternatePath(r.URL.Path)
+		if r.URL.RawQuery != "" {
+			target += "?" + r.URL.RawQuery
+		}
+		c.Handlers = append(append([]context.HandlerFunc{}, e.RouterGroup.middleware...), func(c *context.Context) error {
+			return c.Redirect(code, target)
+		})
 	case e.HandleMethodNotAllowed:
 		if allowed := e.router.AllowedMethods(r.URL.Path); len(allowed) > 0 {
 			if !slices.Contains(allowed, http.MethodOptions) {

@@ -156,3 +156,21 @@ type errString string
 func (e errString) Error() string { return string(e) }
 
 var errFail = errString("fail")
+
+func TestQueue_NilAndDoubleStop(t *testing.T) {
+	var qNil *Queue
+	qNil.Stop()
+	qNil.Start()
+	qNil.Register("test", nil)
+	if err := qNil.Push("test", nil); err == nil {
+		t.Fatal("expected error on nil queue push")
+	}
+
+	mr := miniredis.RunT(t)
+	client := goredis.NewClient(&goredis.Options{Addr: mr.Addr()})
+	q := New(client, 1)
+	q.Start()
+	// Multiple Stop calls must not panic (close of closed channel)
+	q.Stop()
+	q.Stop()
+}

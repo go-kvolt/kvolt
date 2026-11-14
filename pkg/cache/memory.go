@@ -110,6 +110,9 @@ func (s *shard) evictLocked() {
 
 // Get retrieves a value.
 func (m *MemoryStore) Get(key string) (interface{}, error) {
+	if m == nil {
+		return nil, ErrKeyNotFound
+	}
 	s := m.getShard(key)
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -128,6 +131,9 @@ func (m *MemoryStore) Get(key string) (interface{}, error) {
 
 // Set stores a value.
 func (m *MemoryStore) Set(key string, value interface{}, ttl time.Duration) error {
+	if m == nil {
+		return ErrKeyNotFound
+	}
 	s := m.getShard(key)
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -153,6 +159,9 @@ func (m *MemoryStore) Set(key string, value interface{}, ttl time.Duration) erro
 
 // Delete removes a key.
 func (m *MemoryStore) Delete(key string) error {
+	if m == nil {
+		return nil
+	}
 	s := m.getShard(key)
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -162,6 +171,9 @@ func (m *MemoryStore) Delete(key string) error {
 
 // Touch extends TTL only if the key still exists (does not create/resurrect).
 func (m *MemoryStore) Touch(key string, ttl time.Duration) error {
+	if m == nil {
+		return ErrKeyNotFound
+	}
 	s := m.getShard(key)
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -184,6 +196,9 @@ func (m *MemoryStore) Touch(key string, ttl time.Duration) error {
 
 // Flush clears everything.
 func (m *MemoryStore) Flush() error {
+	if m == nil {
+		return nil
+	}
 	for _, s := range m.shards {
 		s.mu.Lock()
 		s.items = make(map[string]*item)
@@ -217,6 +232,9 @@ func (m *MemoryStore) janitor(interval time.Duration) {
 
 // Close stops the background janitor goroutine.
 func (m *MemoryStore) Close() error {
+	if m == nil {
+		return nil
+	}
 	m.stopOnce.Do(func() {
 		close(m.stopChan)
 	})
@@ -225,6 +243,9 @@ func (m *MemoryStore) Close() error {
 
 // Len returns the number of live keys (not including expired until janitor/Get).
 func (m *MemoryStore) Len() int {
+	if m == nil {
+		return 0
+	}
 	n := 0
 	for _, s := range m.shards {
 		s.mu.Lock()

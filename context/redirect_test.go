@@ -39,6 +39,24 @@ func TestRedirect_AllowsRelative(t *testing.T) {
 	if rec.Code != 302 || rec.Header().Get("Location") != "/login" {
 		t.Fatalf("code=%d loc=%q", rec.Code, rec.Header().Get("Location"))
 	}
+
+	// Email parameter in relative redirect
+	rec2 := httptest.NewRecorder()
+	c2 := New(rec2, httptest.NewRequest(http.MethodGet, "/", nil))
+	if err := c2.Redirect(302, "/login?email=user@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if rec2.Header().Get("Location") != "/login?email=user@example.com" {
+		t.Fatalf("loc=%q", rec2.Header().Get("Location"))
+	}
+}
+
+func TestRedirect_BlocksAtPrefix(t *testing.T) {
+	rec := httptest.NewRecorder()
+	c := New(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if err := c.Redirect(302, "/@evil.example"); err == nil {
+		t.Fatal("expected error on /@ in Redirect")
+	}
 }
 
 func TestRedirectURL_AllowsAbsolute(t *testing.T) {

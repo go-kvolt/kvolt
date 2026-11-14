@@ -8,6 +8,9 @@ import (
 )
 
 func killProcessTreePlatform(cmd *exec.Cmd, hard bool) error {
+	if cmd == nil || cmd.Process == nil {
+		return nil
+	}
 	pid := cmd.Process.Pid
 	sig := syscall.SIGINT
 	if hard {

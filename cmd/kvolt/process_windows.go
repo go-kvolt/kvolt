@@ -11,6 +11,9 @@ import (
 const createNewProcessGroup = 0x00000200
 
 func killProcessTreePlatform(cmd *exec.Cmd, hard bool) error {
+	if cmd == nil || cmd.Process == nil {
+		return nil
+	}
 	args := []string{"/T"}
 	if hard {
 		args = append(args, "/F")

@@ -41,12 +41,18 @@ func New(store cache.Store, ttl time.Duration) *Manager {
 
 // WithMaxAge sets an absolute session lifetime independent of sliding TTL.
 func (m *Manager) WithMaxAge(d time.Duration) *Manager {
+	if m == nil {
+		return nil
+	}
 	m.MaxAge = d
 	return m
 }
 
 // Create creates a new session and returns the token.
 func (m *Manager) Create(data interface{}) (string, error) {
+	if m == nil || m.store == nil {
+		return "", errors.New("nil session manager or store")
+	}
 	token := uuid.New().String()
 	if err := m.store.Set(token, data, m.ttl); err != nil {
 		return "", err
@@ -63,6 +69,9 @@ func (m *Manager) Create(data interface{}) (string, error) {
 
 // Get retrieves session data and refreshes sliding TTL without resurrecting deleted keys.
 func (m *Manager) Get(token string) (interface{}, error) {
+	if m == nil || m.store == nil {
+		return nil, errors.New("nil session manager or store")
+	}
 	if m.MaxAge > 0 {
 		m.mu.Lock()
 		created, ok := m.created[token]
@@ -98,6 +107,9 @@ func (m *Manager) Get(token string) (interface{}, error) {
 
 // Destroy removes a session.
 func (m *Manager) Destroy(token string) error {
+	if m == nil || m.store == nil {
+		return errors.New("nil session manager or store")
+	}
 	m.mu.Lock()
 	delete(m.created, token)
 	m.mu.Unlock()

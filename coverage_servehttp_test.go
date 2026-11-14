@@ -23,6 +23,16 @@ func TestServeHTTP_TSRAndMethodNotAllowedAndFlush(t *testing.T) {
 		t.Fatalf("GET TSR want 301 got %d", w.Code)
 	}
 
+	// TSR with query parameters
+	wQuery := httptest.NewRecorder()
+	app.ServeHTTP(wQuery, httptest.NewRequest("GET", "/dir?sort=desc&page=2", nil))
+	if wQuery.Code != http.StatusMovedPermanently {
+		t.Fatalf("GET TSR query want 301 got %d", wQuery.Code)
+	}
+	if loc := wQuery.Header().Get("Location"); loc != "/dir/?sort=desc&page=2" {
+		t.Fatalf("TSR query want /dir/?sort=desc&page=2 got %q", loc)
+	}
+
 	w2 := httptest.NewRecorder()
 	app.ServeHTTP(w2, httptest.NewRequest("POST", "/form", nil))
 	if w2.Code != http.StatusPermanentRedirect {

@@ -52,6 +52,12 @@ func NewWithConfig(cfg Config) func(c *kvctx.Context) error {
 	}
 
 	return func(c *kvctx.Context) error {
+		if c == nil || c.Writer == nil {
+			if c != nil {
+				c.Next()
+			}
+			return nil
+		}
 		key := cfg.KeyPrefix + cfg.KeyFunc(c)
 		ctx := context.Background()
 		n, err := cfg.Client.Incr(ctx, key).Result()

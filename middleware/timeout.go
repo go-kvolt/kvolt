@@ -17,6 +17,12 @@ import (
 // Handlers should still check c.Request.Context().Done() to stop work early.
 func Timeout(d time.Duration) func(c *context.Context) error {
 	return func(c *context.Context) error {
+		if c == nil || c.Request == nil || c.Writer == nil {
+			if c != nil {
+				c.Next()
+			}
+			return nil
+		}
 		if d <= 0 {
 			c.Next()
 			return nil

@@ -64,6 +64,9 @@ func (s *Store) key(k string) string { return s.prefix + k }
 
 // Get implements middleware.IdempotencyStore.
 func (s *Store) Get(key string) (middleware.IdempotencyRecord, bool, error) {
+	if s == nil || s.client == nil {
+		return middleware.IdempotencyRecord{}, false, fmt.Errorf("redisidem: client is nil")
+	}
 	data, err := s.client.Get(context.Background(), s.key(key)).Bytes()
 	if err == goredis.Nil {
 		return middleware.IdempotencyRecord{}, false, nil
@@ -84,6 +87,9 @@ func (s *Store) Get(key string) (middleware.IdempotencyRecord, bool, error) {
 
 // Set implements middleware.IdempotencyStore.
 func (s *Store) Set(key string, rec middleware.IdempotencyRecord, ttl time.Duration) error {
+	if s == nil || s.client == nil {
+		return fmt.Errorf("redisidem: client is nil")
+	}
 	if s.maxBodyBytes > 0 && len(rec.Body) > s.maxBodyBytes {
 		return fmt.Errorf("redisidem: body %d exceeds max %d", len(rec.Body), s.maxBodyBytes)
 	}

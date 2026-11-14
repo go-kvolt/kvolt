@@ -134,3 +134,21 @@ func TestBindQuery_CommaSeparatedSlices(t *testing.T) {
 		t.Errorf("UserIDs mismatch: %+v", f.UserIDs)
 	}
 }
+
+func TestBindQuery_EmptySlice(t *testing.T) {
+	type Filter struct {
+		Statuses []string  `query:"status"`
+		UserIDs  []int     `query:"ids"`
+		Rates    []float64 `query:"rates"`
+		Flags    []bool    `query:"flags"`
+	}
+	r := httptest.NewRequest("GET", "/test?status=&ids=&rates=&flags=", nil)
+	c := New(httptest.NewRecorder(), r)
+	var f Filter
+	if err := c.BindQuery(&f); err != nil {
+		t.Fatalf("BindQuery empty slice: %v", err)
+	}
+	if len(f.Statuses) != 0 || len(f.UserIDs) != 0 || len(f.Rates) != 0 || len(f.Flags) != 0 {
+		t.Fatalf("expected empty slices, got %+v", f)
+	}
+}
