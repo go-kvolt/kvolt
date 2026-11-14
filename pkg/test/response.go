@@ -61,12 +61,24 @@ func (r *Response) ExpectHeader(key, value string) *Response {
 func (r *Response) ExpectJSON(expected interface{}) *Response {
 	actualJSON := r.Recorder.Body.Bytes()
 
+	if expected == nil {
+		trimmed := strings.TrimSpace(string(actualJSON))
+		if trimmed != "" && trimmed != "null" {
+			if r.t != nil {
+				r.t.Errorf("Expected null JSON, got %s", trimmed)
+			}
+		}
+		return r
+	}
+
 	// Create a new instance of the expected type to unmarshal into
 	actual := reflect.New(reflect.TypeOf(expected)).Interface()
 
 	err := json.Unmarshal(actualJSON, actual)
 	if err != nil {
-		r.t.Errorf("Failed to unmarshal response JSON: %v. Body: %s", err, string(actualJSON))
+		if r.t != nil {
+			r.t.Errorf("Failed to unmarshal response JSON: %v. Body: %s", err, string(actualJSON))
+		}
 		return r
 	}
 
@@ -74,7 +86,9 @@ func (r *Response) ExpectJSON(expected interface{}) *Response {
 	actualValue := reflect.ValueOf(actual).Elem().Interface()
 
 	if !reflect.DeepEqual(actualValue, expected) {
-		r.t.Errorf("Expected JSON value %v, got %v", expected, actualValue)
+		if r.t != nil {
+			r.t.Errorf("Expected JSON value %v, got %v", expected, actualValue)
+		}
 	}
 	return r
 }

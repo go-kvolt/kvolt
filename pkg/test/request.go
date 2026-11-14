@@ -48,7 +48,9 @@ func (r *Request) WithBody(body []byte) *Request {
 func (r *Request) WithJSON(obj interface{}) *Request {
 	b, err := json.Marshal(obj)
 	if err != nil {
-		r.t.Errorf("Failed to marshal JSON body: %v", err)
+		if r.t != nil {
+			r.t.Errorf("Failed to marshal JSON body: %v", err)
+		}
 		return r
 	}
 	r.header.Set("Content-Type", "application/json")
@@ -58,7 +60,9 @@ func (r *Request) WithJSON(obj interface{}) *Request {
 // Do executes the request and returns a Response tester.
 func (r *Request) Do() *Response {
 	req := httptest.NewRequest(r.method, r.path, r.body)
-	req.Header = r.header
+	for k, vv := range r.header {
+		req.Header[k] = append([]string(nil), vv...)
+	}
 
 	w := httptest.NewRecorder()
 	r.engine.ServeHTTP(w, req)
