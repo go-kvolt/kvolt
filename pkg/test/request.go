@@ -34,24 +34,39 @@ func NewRequest(t *testing.T, e *kvolt.Engine, method, path string) *Request {
 
 // WithHeader adds a header to the request.
 func (r *Request) WithHeader(key, value string) *Request {
+	if r == nil {
+		return nil
+	}
+	if r.header == nil {
+		r.header = make(http.Header)
+	}
 	r.header.Add(key, value)
 	return r
 }
 
 // WithBody sets the raw request body.
 func (r *Request) WithBody(body []byte) *Request {
+	if r == nil {
+		return nil
+	}
 	r.body = bytes.NewReader(body)
 	return r
 }
 
 // WithJSON sets the request body as JSON and adds Content-Type header.
 func (r *Request) WithJSON(obj interface{}) *Request {
+	if r == nil {
+		return nil
+	}
 	b, err := json.Marshal(obj)
 	if err != nil {
 		if r.t != nil {
 			r.t.Errorf("Failed to marshal JSON body: %v", err)
 		}
 		return r
+	}
+	if r.header == nil {
+		r.header = make(http.Header)
 	}
 	r.header.Set("Content-Type", "application/json")
 	return r.WithBody(b)

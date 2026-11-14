@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"fmt"
+
 	"github.com/go-kvolt/kvolt/v2/context"
 	"github.com/go-kvolt/kvolt/v2/pkg/httperr"
 )
@@ -38,7 +40,18 @@ func requirePermissions(check PermissionChecker, all bool, permissions ...string
 		}
 		if all {
 			for _, p := range permissions {
-				ok, err := check(c, p)
+				var (
+					ok  bool
+					err error
+				)
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							err = fmt.Errorf("permission check panic: %v", r)
+						}
+					}()
+					ok, err = check(c, p)
+				}()
 				if err != nil {
 					return httperr.Internal("permission check failed")
 				}
@@ -49,7 +62,18 @@ func requirePermissions(check PermissionChecker, all bool, permissions ...string
 		} else {
 			any := false
 			for _, p := range permissions {
-				ok, err := check(c, p)
+				var (
+					ok  bool
+					err error
+				)
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							err = fmt.Errorf("permission check panic: %v", r)
+						}
+					}()
+					ok, err = check(c, p)
+				}()
 				if err != nil {
 					return httperr.Internal("permission check failed")
 				}

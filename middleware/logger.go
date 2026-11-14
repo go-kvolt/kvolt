@@ -84,6 +84,9 @@ func Logger() func(c *context.Context) error {
 func LoggerWithConfig(cfg LoggerConfig) func(c *context.Context) error {
 	ensureLogWorker()
 	return func(c *context.Context) error {
+		if c == nil {
+			return nil
+		}
 		start := time.Now()
 		c.Next()
 		if cfg.Skipper != nil && cfg.Skipper(c) {

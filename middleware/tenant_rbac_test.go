@@ -156,3 +156,17 @@ func TestRequireAnyPermission(t *testing.T) {
 		t.Fatalf("code=%d", w.Code)
 	}
 }
+
+func TestRequirePermission_PanicRecovery(t *testing.T) {
+	panicCheck := func(c *context.Context, perm string) (bool, error) {
+		panic("database connection lost during permission check")
+	}
+	mw := RequirePermission("admin", panicCheck)
+	w := httptest.NewRecorder()
+	c := context.New(w, httptest.NewRequest("GET", "/", nil))
+	c.Handlers = []context.HandlerFunc{func(c *context.Context) error { return c.String(200, "ok") }}
+	err := mw(c)
+	if err == nil {
+		t.Fatal("expected error on checker panic")
+	}
+}

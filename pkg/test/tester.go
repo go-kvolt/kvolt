@@ -23,6 +23,9 @@ func New(t *testing.T, e *kvolt.Engine) *Tester {
 
 // Request creates a new request builder.
 func (t *Tester) Request(method, path string) *Request {
+	if t == nil {
+		return NewRequest(nil, nil, method, path)
+	}
 	return NewRequest(t.t, t.engine, method, path)
 }
 

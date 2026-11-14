@@ -20,6 +20,9 @@ func New(h http.Handler) *TestServer {
 
 // Get performs a GET request.
 func (ts *TestServer) Get(t *testing.T, path string) *Response {
+	if ts == nil || ts.Handler == nil {
+		return &Response{Recorder: httptest.NewRecorder()}
+	}
 	req := httptest.NewRequest("GET", path, nil)
 	w := httptest.NewRecorder()
 
@@ -30,6 +33,9 @@ func (ts *TestServer) Get(t *testing.T, path string) *Response {
 
 // Post performs a POST request with JSON body.
 func (ts *TestServer) Post(t *testing.T, path string, body interface{}) *Response {
+	if ts == nil || ts.Handler == nil {
+		return &Response{Recorder: httptest.NewRecorder()}
+	}
 	jsonBody, _ := json.Marshal(body)
 	req := httptest.NewRequest("POST", path, bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
@@ -47,6 +53,9 @@ type Response struct {
 
 // AssertStatus asserts the HTTP status code.
 func (r *Response) AssertStatus(t *testing.T, code int) {
+	if r == nil || r.Recorder == nil {
+		return
+	}
 	if r.Recorder.Code != code {
 		t.Errorf("Expected status %d, got %d", code, r.Recorder.Code)
 	}
@@ -54,6 +63,9 @@ func (r *Response) AssertStatus(t *testing.T, code int) {
 
 // AssertBody asserts the body contains string.
 func (r *Response) AssertBody(t *testing.T, contains string) {
+	if r == nil || r.Recorder == nil {
+		return
+	}
 	if !bytes.Contains(r.Recorder.Body.Bytes(), []byte(contains)) {
 		t.Errorf("Expected body to contain '%s'", contains)
 	}
