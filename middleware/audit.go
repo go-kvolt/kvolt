@@ -43,6 +43,9 @@ func Audit(cfg AuditConfig) func(c *context.Context) error {
 	}
 
 	return func(c *context.Context) error {
+		if c == nil {
+			return nil
+		}
 		if cfg.Skipper != nil && cfg.Skipper(c) {
 			c.Next()
 			return nil
@@ -74,6 +77,9 @@ func auditPanicErr(r interface{}) error {
 }
 
 func emitAudit(cfg AuditConfig, c *context.Context, start time.Time, handlerErr error) {
+	if c == nil {
+		return
+	}
 	status := 200
 	if c.StatusCode() > 0 {
 		status = c.StatusCode()

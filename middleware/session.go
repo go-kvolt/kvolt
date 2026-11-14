@@ -28,6 +28,9 @@ func Session(config SessionConfig) func(c *context.Context) error {
 	}
 
 	return func(c *context.Context) error {
+		if c == nil {
+			return nil
+		}
 		token := extractToken(c, config.Lookup)
 		if token == "" {
 			return httperr.Unauthorized("unauthorized", "no session token")

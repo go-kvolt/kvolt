@@ -83,12 +83,18 @@ type Route struct {
 
 // Desc adds a description/summary to the route for documentation.
 func (r *Route) Desc(summary string) *Route {
+	if r == nil || r.engine == nil || r.engine.router == nil {
+		return r
+	}
 	r.engine.router.SetDocumentation(r.Method, r.Path, summary)
 	return r
 }
 
 // Tags sets OpenAPI tags for the route.
 func (r *Route) Tags(tags ...string) *Route {
+	if r == nil || r.engine == nil || r.engine.router == nil {
+		return r
+	}
 	r.engine.router.UpdateDoc(r.Method, r.Path, func(doc *router.RouteDoc) {
 		doc.Tags = append([]string(nil), tags...)
 	})
@@ -97,6 +103,9 @@ func (r *Route) Tags(tags ...string) *Route {
 
 // Request sets a sample request body used to generate an OpenAPI schema.
 func (r *Route) Request(sample interface{}) *Route {
+	if r == nil || r.engine == nil || r.engine.router == nil {
+		return r
+	}
 	r.engine.router.UpdateDoc(r.Method, r.Path, func(doc *router.RouteDoc) {
 		doc.Request = sample
 	})
@@ -105,6 +114,9 @@ func (r *Route) Request(sample interface{}) *Route {
 
 // Response sets a sample response body for the given status code.
 func (r *Route) Response(code int, sample interface{}) *Route {
+	if r == nil || r.engine == nil || r.engine.router == nil {
+		return r
+	}
 	r.engine.router.UpdateDoc(r.Method, r.Path, func(doc *router.RouteDoc) {
 		if doc.Responses == nil {
 			doc.Responses = make(map[int]interface{})
@@ -116,6 +128,9 @@ func (r *Route) Response(code int, sample interface{}) *Route {
 
 // Security sets OpenAPI security requirement names (e.g. "bearer").
 func (r *Route) Security(schemes ...string) *Route {
+	if r == nil || r.engine == nil || r.engine.router == nil {
+		return r
+	}
 	r.engine.router.UpdateDoc(r.Method, r.Path, func(doc *router.RouteDoc) {
 		doc.Security = append([]string(nil), schemes...)
 	})
@@ -183,6 +198,10 @@ func (group *RouterGroup) Static(relativePath, root string) *Route {
 	fs := http.StripPrefix(absolutePrefix, http.FileServer(onlyFilesFS{http.Dir(root)}))
 
 	handler := func(c *context.Context) error {
+		if c == nil || c.Writer == nil || c.Request == nil {
+			return nil
+		}
+		c.SetHeaderWritten()
 		fs.ServeHTTP(c.Writer, c.Request)
 		return nil
 	}

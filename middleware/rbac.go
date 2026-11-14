@@ -33,6 +33,9 @@ func requirePermissions(check PermissionChecker, all bool, permissions ...string
 	}
 
 	return func(c *context.Context) error {
+		if c == nil {
+			return nil
+		}
 		if all {
 			for _, p := range permissions {
 				ok, err := check(c, p)

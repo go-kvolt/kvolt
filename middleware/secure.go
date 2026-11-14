@@ -42,6 +42,12 @@ func Secure() func(c *context.Context) error {
 // SecureWithConfig returns a middleware that sets security headers with config.
 func SecureWithConfig(config SecureConfig) func(c *context.Context) error {
 	return func(c *context.Context) error {
+		if c == nil || c.Writer == nil {
+			if c != nil {
+				c.Next()
+			}
+			return nil
+		}
 		if config.XSSProtection != "" {
 			c.Writer.Header().Set("X-XSS-Protection", config.XSSProtection)
 		}
@@ -58,8 +64,8 @@ func SecureWithConfig(config SecureConfig) func(c *context.Context) error {
 			c.Writer.Header().Set("Permissions-Policy", config.PermissionsPolicy)
 		}
 
-		https := c.Request.TLS != nil
-		if !https && config.HSTSIfXForwardedProto &&
+		https := c.Request != nil && c.Request.TLS != nil
+		if !https && config.HSTSIfXForwardedProto && c.Request != nil &&
 			strings.EqualFold(c.Request.Header.Get("X-Forwarded-Proto"), "https") &&
 			peerTrusted(c) {
 			https = true

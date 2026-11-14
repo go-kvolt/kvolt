@@ -56,6 +56,12 @@ func Tenant(cfg TenantConfig) func(c *context.Context) error {
 	}
 
 	return func(c *context.Context) error {
+		if c == nil || c.Request == nil {
+			if c != nil {
+				c.Next()
+			}
+			return nil
+		}
 		id := ""
 		var err error
 		if cfg.Extractor != nil {

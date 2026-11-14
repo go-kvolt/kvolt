@@ -82,16 +82,25 @@ func New(w http.ResponseWriter, r *http.Request) *Context {
 // HeaderWritten reports whether the response headers have been sent.
 // Used by middleware (e.g. Recovery) to avoid writing after response started.
 func (c *Context) HeaderWritten() bool {
+	if c == nil {
+		return false
+	}
 	return c.headerWritten
 }
 
 // SetHeaderWritten marks that response headers have been written.
 func (c *Context) SetHeaderWritten() {
+	if c == nil {
+		return
+	}
 	c.headerWritten = true
 }
 
 // StatusCode returns the status that will be / was written. 0 if nothing was set yet.
 func (c *Context) StatusCode() int {
+	if c == nil {
+		return 0
+	}
 	if c.status != 0 {
 		return c.status
 	}

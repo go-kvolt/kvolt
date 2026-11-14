@@ -10,7 +10,7 @@ import (
 // (skipping trusted hops) so a client-spoofed left-most value is ignored when
 // proxies append. Falls back to X-Real-IP, then the peer address.
 func (c *Context) ClientIP() string {
-	if c.Request == nil {
+	if c == nil || c.Request == nil {
 		return ""
 	}
 	remote := c.Request.RemoteAddr

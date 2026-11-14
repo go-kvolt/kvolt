@@ -2,6 +2,7 @@ package context
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/bytedance/sonic/encoder"
@@ -26,11 +27,17 @@ var jsonOutPool = sync.Pool{
 // encoding/json is used here so tiny API bodies (invoice, ping-sized) stay
 // allocation-light and match net/http apps; sonic still encodes responses.
 func (c *Context) BindJSON(obj interface{}) error {
+	if c == nil || c.Request == nil || c.Request.Body == nil {
+		return fmt.Errorf("nil request body")
+	}
 	return json.NewDecoder(c.Request.Body).Decode(obj)
 }
 
 // JSON sends a JSON response with sonic's fastest encoder into a pooled buffer.
 func (c *Context) JSON(code int, obj interface{}) error {
+	if c == nil || c.Writer == nil {
+		return fmt.Errorf("nil writer")
+	}
 	c.Writer.Header().Set("Content-Type", contentTypeJSON)
 	c.writeHeader(code)
 	bp := jsonOutPool.Get().(*[]byte)
@@ -49,6 +56,9 @@ func (c *Context) JSON(code int, obj interface{}) error {
 }
 
 func (c *Context) writeJSONBytes(code int, body []byte) {
+	if c == nil || c.Writer == nil {
+		return
+	}
 	c.Writer.Header().Set("Content-Type", contentTypeJSON)
 	c.writeHeader(code)
 	_, _ = c.Writer.Write(body)
@@ -56,7 +66,8 @@ func (c *Context) writeJSONBytes(code int, body []byte) {
 
 // InternalError writes a generic 500 JSON body if headers are not already sent.
 func (c *Context) InternalError() {
-	if !c.headerWritten {
-		c.writeJSONBytes(500, errInternalJSON)
+	if c == nil || c.headerWritten {
+		return
 	}
+	c.writeJSONBytes(500, errInternalJSON)
 }
