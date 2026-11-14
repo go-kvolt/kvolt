@@ -119,7 +119,7 @@ func CSRFWithConfig(cfg CSRFConfig) func(c *context.Context) error {
 		if cookie, err := c.Request.Cookie(cfg.CookieName); err == nil {
 			token = cookie.Value
 		}
-		if token != "" && !csrfTokenValidTTL(secret, token, cfg.TokenTTL, now) {
+		if token != "" && !csrfTokenValid(secret, token, cfg.TokenTTL, now) {
 			token = ""
 		}
 
@@ -145,7 +145,7 @@ func CSRFWithConfig(cfg CSRFConfig) func(c *context.Context) error {
 		if got == "" {
 			got = c.Request.FormValue("csrf_token")
 		}
-		if !csrfTokenValidTTL(secret, token, cfg.TokenTTL, now) || !csrfTokenMatch(token, got) {
+		if !csrfTokenValid(secret, token, cfg.TokenTTL, now) || !csrfTokenMatch(token, got) {
 			return httperr.Forbidden("csrf_mismatch", "csrf token mismatch")
 		}
 		c.Next()
@@ -201,11 +201,7 @@ func newCSRFTokenAt(secret []byte, now time.Time) string {
 	return payload + "." + hex.EncodeToString(mac.Sum(nil))
 }
 
-func csrfTokenValid(secret []byte, token string) bool {
-	return csrfTokenValidTTL(secret, token, 24*time.Hour, time.Now())
-}
-
-func csrfTokenValidTTL(secret []byte, token string, ttl time.Duration, now time.Time) bool {
+func csrfTokenValid(secret []byte, token string, ttl time.Duration, now time.Time) bool {
 	parts := strings.Split(token, ".")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return false

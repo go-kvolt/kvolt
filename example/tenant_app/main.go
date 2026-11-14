@@ -21,6 +21,7 @@ func main() {
 	app.Use(middleware.Logger())
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
+		// #nosec G101 -- demo fallback key for local demo when JWT_SECRET is unset
 		secret = "dev-insecure-secret-key-change-in-production-32b"
 		log.Println("JWT_SECRET not set: using demo secret with secure JWT claim tenant extraction")
 	}
