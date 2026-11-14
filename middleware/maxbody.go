@@ -21,7 +21,13 @@ func MaxBodySize(maxBytes int) func(c *context.Context) error {
 	}
 }
 
-// MaxBodySizeBytes is like MaxBodySize but accepts an int64 (e.g. for 10*1024*1024).
+// MaxBodySizeBytes is like MaxBodySize but accepts an int64 (e.g. for large multi-gigabyte uploads).
 func MaxBodySizeBytes(maxBytes int64) func(c *context.Context) error {
-	return MaxBodySize(int(maxBytes))
+	return func(c *context.Context) error {
+		if maxBytes > 0 {
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBytes)
+		}
+		c.Next()
+		return nil
+	}
 }
