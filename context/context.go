@@ -441,7 +441,7 @@ func (c *Context) FormFileAllowed(name string, maxMemory int64, allowedExts ...s
 // SaveUploadedFile uploads the form file to dst.
 // dst must be a local path (filepath.IsLocal); ".." escapes are rejected.
 // Prefer SafeUploadPath(dir, file.Filename) when using the client-provided name.
-func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) error {
+func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) (err error) {
 	if file == nil {
 		return httperr.BadRequest("invalid_file", "nil file header")
 	}
@@ -449,15 +449,15 @@ func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) error
 	if !filepath.IsAbs(dst) && (dst == "." || !filepath.IsLocal(dst)) {
 		return httperr.BadRequest("invalid_path", "upload destination must be a local non-escaping path")
 	}
-	src, err := file.Open()
-	if err != nil {
-		return err
+	src, openErr := file.Open()
+	if openErr != nil {
+		return openErr
 	}
 	defer src.Close()
 
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
+	out, createErr := os.Create(dst)
+	if createErr != nil {
+		return createErr
 	}
 	defer func() {
 		_ = out.Close()
@@ -469,7 +469,8 @@ func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) error
 	if _, err = io.Copy(out, src); err != nil {
 		return err
 	}
-	return out.Close()
+	err = out.Close()
+	return err
 }
 
 // SafeUploadPath joins dir with the base name of filename (blocks path traversal).

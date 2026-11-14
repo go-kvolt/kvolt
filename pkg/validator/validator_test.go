@@ -117,3 +117,49 @@ func TestValidate_NilAndNilPointer(t *testing.T) {
 		t.Fatalf("expected nil error for nil interface, got: %v", err)
 	}
 }
+
+type OrderLine struct {
+	SKU string `validate:"required"`
+	Qty int    `validate:"min=1"`
+}
+
+type CustomerInfo struct {
+	Email string `validate:"required,email"`
+}
+
+type OrderPayload struct {
+	Customer CustomerInfo
+	Lines    []OrderLine
+}
+
+func TestValidate_NestedStructAndSlice(t *testing.T) {
+	badOrder := OrderPayload{
+		Customer: CustomerInfo{Email: "invalid-email"},
+		Lines: []OrderLine{
+			{SKU: "PROD-1", Qty: 2},
+		},
+	}
+	if err := Validate(&badOrder); err == nil {
+		t.Fatal("expected error on invalid customer email")
+	}
+
+	badLineOrder := OrderPayload{
+		Customer: CustomerInfo{Email: "test@example.com"},
+		Lines: []OrderLine{
+			{SKU: "", Qty: 2},
+		},
+	}
+	if err := Validate(&badLineOrder); err == nil {
+		t.Fatal("expected error on empty line SKU")
+	}
+
+	validOrder := OrderPayload{
+		Customer: CustomerInfo{Email: "test@example.com"},
+		Lines: []OrderLine{
+			{SKU: "PROD-1", Qty: 2},
+		},
+	}
+	if err := Validate(&validOrder); err != nil {
+		t.Fatalf("unexpected error on valid order: %v", err)
+	}
+}

@@ -125,7 +125,7 @@ func CSRFWithConfig(cfg CSRFConfig) func(c *context.Context) error {
 		now := time.Now()
 		token := ""
 		if cookie, err := c.Request.Cookie(cfg.CookieName); err == nil {
-			token = cookie.Value
+			token = strings.TrimSpace(cookie.Value)
 		}
 		if token != "" && !csrfTokenValid(secret, token, cfg.TokenTTL, now) {
 			token = ""
@@ -146,12 +146,12 @@ func CSRFWithConfig(cfg CSRFConfig) func(c *context.Context) error {
 			return nil
 		}
 
-		got := c.Request.Header.Get(cfg.HeaderName)
+		got := strings.TrimSpace(c.Request.Header.Get(cfg.HeaderName))
 		if got == "" {
-			got = c.Request.FormValue("_csrf")
+			got = strings.TrimSpace(c.Request.FormValue("_csrf"))
 		}
 		if got == "" {
-			got = c.Request.FormValue("csrf_token")
+			got = strings.TrimSpace(c.Request.FormValue("csrf_token"))
 		}
 		if !csrfTokenValid(secret, token, cfg.TokenTTL, now) || !csrfTokenMatch(token, got) {
 			return httperr.Forbidden("csrf_mismatch", "csrf token mismatch")

@@ -39,23 +39,41 @@ func Validate(s interface{}) error {
 	for i := 0; i < v.NumField(); i++ {
 		field := t.Field(i)
 
-		// Recursively validate embedded anonymous struct fields
-		if field.Anonymous {
-			anonVal := v.Field(i)
-			for anonVal.Kind() == reflect.Ptr || anonVal.Kind() == reflect.Interface {
-				if anonVal.IsNil() {
+		tag := field.Tag.Get("validate")
+
+		// Recursively validate nested struct fields and slices of structs (unless unexported or tagged with "-")
+		if field.PkgPath == "" && tag != "-" {
+			nestedVal := v.Field(i)
+			for nestedVal.Kind() == reflect.Ptr || nestedVal.Kind() == reflect.Interface {
+				if nestedVal.IsNil() {
 					break
 				}
-				anonVal = anonVal.Elem()
+				nestedVal = nestedVal.Elem()
 			}
-			if anonVal.IsValid() && anonVal.Kind() == reflect.Struct && anonVal.CanInterface() {
-				if err := Validate(anonVal.Interface()); err != nil {
-					return err
+			if nestedVal.IsValid() {
+				if nestedVal.Kind() == reflect.Struct && nestedVal.CanInterface() && nestedVal.Type().PkgPath() != "time" {
+					if err := Validate(nestedVal.Interface()); err != nil {
+						return err
+					}
+				} else if nestedVal.Kind() == reflect.Slice || nestedVal.Kind() == reflect.Array {
+					for j := 0; j < nestedVal.Len(); j++ {
+						elem := nestedVal.Index(j)
+						for elem.Kind() == reflect.Ptr || elem.Kind() == reflect.Interface {
+							if elem.IsNil() {
+								break
+							}
+							elem = elem.Elem()
+						}
+						if elem.IsValid() && elem.Kind() == reflect.Struct && elem.CanInterface() && elem.Type().PkgPath() != "time" {
+							if err := Validate(elem.Interface()); err != nil {
+								return err
+							}
+						}
+					}
 				}
 			}
 		}
 
-		tag := field.Tag.Get("validate")
 		if tag == "" {
 			continue
 		}
