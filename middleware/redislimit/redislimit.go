@@ -97,7 +97,20 @@ func NewWithConfig(cfg Config) func(c *kvctx.Context) error {
 				retrySec = 1
 			}
 			c.Writer.Header().Set("Retry-After", strconv.Itoa(retrySec))
-			return cfg.ErrorHandler(c)
+			var err error
+			if cfg.ErrorHandler != nil {
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							err = httperr.TooManyRequests("Too Many Requests")
+						}
+					}()
+					err = cfg.ErrorHandler(c)
+				}()
+			} else {
+				err = httperr.TooManyRequests("Too Many Requests")
+			}
+			return err
 		}
 		c.Next()
 		return nil

@@ -89,8 +89,15 @@ func LoggerWithConfig(cfg LoggerConfig) func(c *context.Context) error {
 		}
 		start := time.Now()
 		c.Next()
-		if cfg.Skipper != nil && cfg.Skipper(c) {
-			return nil
+		if cfg.Skipper != nil {
+			skip := false
+			func() {
+				defer func() { _ = recover() }()
+				skip = cfg.Skipper(c)
+			}()
+			if skip {
+				return nil
+			}
 		}
 		latency := time.Since(start)
 

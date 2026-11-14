@@ -61,7 +61,7 @@ func extractToken(c *context.Context, lookup string) string {
 	case "cookie":
 		cookie, err := c.Request.Cookie(key)
 		if err == nil {
-			return cookie.Value
+			return strings.TrimSpace(cookie.Value)
 		}
 	case "header":
 		val := strings.TrimSpace(c.Request.Header.Get(key))
@@ -74,7 +74,7 @@ func extractToken(c *context.Context, lookup string) string {
 		if c.Request.URL == nil {
 			return ""
 		}
-		return c.Request.URL.Query().Get(key)
+		return strings.TrimSpace(c.Request.URL.Query().Get(key))
 	}
 	return ""
 }

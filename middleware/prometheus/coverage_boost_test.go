@@ -21,3 +21,14 @@ func TestMiddleware_StatusZeroDefaults200(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 }
+
+func TestHandler_NilGuards(t *testing.T) {
+	h := Handler()
+	if err := h(nil); err != nil {
+		t.Fatalf("expected nil on nil context, got %v", err)
+	}
+	c := context.New(nil, nil)
+	if err := h(c); err != nil {
+		t.Fatalf("expected nil on empty context, got %v", err)
+	}
+}

@@ -59,3 +59,12 @@ func TestFindEx_PatternStable(t *testing.T) {
 		t.Fatalf("pattern=%q", res.Pattern)
 	}
 }
+
+func TestRouter_Uninitialized(t *testing.T) {
+	r := &Router{}
+	r.AddRoute("GET", "/ping", func(c any) error { return nil })
+	h, _, found := r.Find("GET", "/ping")
+	if !found || h == nil {
+		t.Fatal("expected /ping route to be found on uninitialized router")
+	}
+}

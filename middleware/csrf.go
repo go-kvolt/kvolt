@@ -103,9 +103,16 @@ func CSRFWithConfig(cfg CSRFConfig) func(c *context.Context) error {
 			}
 			return nil
 		}
-		if cfg.Skipper != nil && cfg.Skipper(c) {
-			c.Next()
-			return nil
+		if cfg.Skipper != nil {
+			skip := false
+			func() {
+				defer func() { _ = recover() }()
+				skip = cfg.Skipper(c)
+			}()
+			if skip {
+				c.Next()
+				return nil
+			}
 		}
 		path := ""
 		if c.Request != nil && c.Request.URL != nil {

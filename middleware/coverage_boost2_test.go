@@ -518,6 +518,16 @@ func TestSession_ExtractTokenHeaderQueryInvalid(t *testing.T) {
 		t.Fatal("invalid/missing extract")
 	}
 
+	reqWs := httptest.NewRequest("GET", "/?token=%20%20tok123%20%20", nil)
+	reqWs.AddCookie(&http.Cookie{Name: "session_id", Value: "  ck123  "})
+	cWs := context.New(httptest.NewRecorder(), reqWs)
+	if extractToken(cWs, "cookie:session_id") != "ck123" {
+		t.Fatalf("expected trimmed cookie, got %q", extractToken(cWs, "cookie:session_id"))
+	}
+	if extractToken(cWs, "query:token") != "tok123" {
+		t.Fatalf("expected trimmed query, got %q", extractToken(cWs, "query:token"))
+	}
+
 	mwBad := Session(SessionConfig{Manager: mgr, Lookup: "nope"})
 	w3 := httptest.NewRecorder()
 	c3 := context.New(w3, httptest.NewRequest("GET", "/", nil))

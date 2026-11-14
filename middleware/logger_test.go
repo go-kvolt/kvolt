@@ -46,3 +46,25 @@ func TestLogger_TextPathQuotedNoNewline(t *testing.T) {
 		t.Fatalf("path newline forged log content: %q", logged)
 	}
 }
+
+func TestLogger_SkipperPanic(t *testing.T) {
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/test", nil)
+	c := context.New(w, r)
+	executed := false
+	c.Handlers = []context.HandlerFunc{
+		LoggerWithConfig(LoggerConfig{
+			Skipper: func(c *context.Context) bool {
+				panic("boom in skipper")
+			},
+		}),
+		func(c *context.Context) error {
+			executed = true
+			return c.String(200, "ok")
+		},
+	}
+	c.Next()
+	if !executed {
+		t.Fatal("expected handler to execute despite skipper panic")
+	}
+}

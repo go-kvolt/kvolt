@@ -115,3 +115,25 @@ func TestCSRF_TokenExpiry(t *testing.T) {
 		t.Fatalf("expired token want 403, got %d", rec.Code)
 	}
 }
+
+func TestCSRF_SkipperPanic(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := context.New(rec, req)
+	executed := false
+	c.Handlers = []context.HandlerFunc{
+		CSRFWithConfig(CSRFConfig{
+			Skipper: func(c *context.Context) bool {
+				panic("boom in csrf skipper")
+			},
+		}),
+		func(c *context.Context) error {
+			executed = true
+			return c.String(200, "ok")
+		},
+	}
+	c.Next()
+	if !executed {
+		t.Fatal("expected handler to execute despite csrf skipper panic")
+	}
+}

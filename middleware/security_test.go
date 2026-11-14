@@ -77,6 +77,16 @@ func TestBasicAuth_AcceptsValidRejectsInvalid(t *testing.T) {
 		t.Fatalf("want 200, got %d", wok.Code)
 	}
 
+	spReq := httptest.NewRequest("GET", "/", nil)
+	spReq.Header.Set("Authorization", "  Basic "+base64.StdEncoding.EncodeToString([]byte("alice:s3cret"))+"  ")
+	wsp := httptest.NewRecorder()
+	csp := context.New(wsp, spReq)
+	csp.Handlers = []context.HandlerFunc{mw, func(c *context.Context) error { return c.String(200, "ok") }}
+	csp.Next()
+	if wsp.Code != 200 {
+		t.Fatalf("want 200 with leading space, got %d", wsp.Code)
+	}
+
 	badReq := httptest.NewRequest("GET", "/", nil)
 	badReq.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("alice:wrong")))
 	wbad := httptest.NewRecorder()

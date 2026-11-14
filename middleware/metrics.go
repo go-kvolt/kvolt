@@ -82,15 +82,18 @@ func MetricsWithConfig(cfg MetricsConfig) func(c *context.Context) error {
 				cfg.Store.errors4xx.Add(1)
 			}
 			if cfg.OnRequest != nil {
-				path := c.RoutePath
-				if path == "" && c.Request != nil && c.Request.URL != nil {
-					path = c.Request.URL.Path
-				}
-				method := ""
-				if c.Request != nil {
-					method = c.Request.Method
-				}
-				cfg.OnRequest(method, path, status, d)
+				func() {
+					defer func() { _ = recover() }()
+					path := c.RoutePath
+					if path == "" && c.Request != nil && c.Request.URL != nil {
+						path = c.Request.URL.Path
+					}
+					method := ""
+					if c.Request != nil {
+						method = c.Request.Method
+					}
+					cfg.OnRequest(method, path, status, d)
+				}()
 			}
 		}()
 		c.Next()

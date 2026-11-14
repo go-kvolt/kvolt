@@ -79,7 +79,11 @@ func Middleware() func(c *context.Context) error {
 func Handler() func(c *context.Context) error {
 	h := promhttp.Handler()
 	return func(c *context.Context) error {
+		if c == nil || c.Writer == nil || c.Request == nil {
+			return nil
+		}
 		h.ServeHTTP(c.Writer, c.Request)
+		c.SetHeaderWritten()
 		return nil
 	}
 }

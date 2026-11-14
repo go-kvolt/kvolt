@@ -58,7 +58,7 @@ func BasicAuthWithConfig(cfg BasicAuthConfig) func(c *context.Context) error {
 		if c == nil || c.Request == nil {
 			return unauthorizedBasic(c, cfg.Realm)
 		}
-		auth := c.Request.Header.Get("Authorization")
+		auth := strings.TrimSpace(c.Request.Header.Get("Authorization"))
 		const basic = "Basic "
 		if len(auth) <= len(basic) || !strings.EqualFold(auth[:len(basic)-1], "Basic") || auth[len(basic)-1] != ' ' {
 			return unauthorizedBasic(c, cfg.Realm)

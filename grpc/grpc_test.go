@@ -263,3 +263,48 @@ func TestInterceptors_NilSafety(t *testing.T) {
 		t.Fatalf("auth nil validate want ok, got %v", resp)
 	}
 }
+
+func TestAuthInterceptor_Panic(t *testing.T) {
+	interceptor := AuthInterceptor(func(ctx context.Context, token string) error {
+		panic("auth validate panic")
+	})
+
+	md := metadata.Pairs("authorization", "Bearer some-token")
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+	info := &grpc.UnaryServerInfo{FullMethod: "/test/PanicAuth"}
+
+	resp, err := interceptor(ctx, nil, info, func(ctx context.Context, req interface{}) (interface{}, error) {
+		return "should not be reached", nil
+	})
+	if resp != nil {
+		t.Errorf("want nil resp on auth panic, got %v", resp)
+	}
+	if err == nil {
+		t.Fatal("want error on auth panic, got nil")
+	}
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.Unauthenticated {
+		t.Errorf("want codes.Unauthenticated, got %v", err)
+	}
+}
+
+func TestStreamAuthInterceptor_Panic(t *testing.T) {
+	interceptor := StreamAuthInterceptor(func(ctx context.Context, token string) error {
+		panic("stream auth panic")
+	})
+
+	md := metadata.Pairs("authorization", "Bearer some-token")
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+	info := &grpc.StreamServerInfo{FullMethod: "/test/PanicStreamAuth"}
+
+	err := interceptor(nil, &mockServerStream{ctx: ctx}, info, func(srv interface{}, ss grpc.ServerStream) error {
+		return nil
+	})
+	if err == nil {
+		t.Fatal("want error on stream auth panic, got nil")
+	}
+	st, ok := status.FromError(err)
+	if !ok || st.Code() != codes.Unauthenticated {
+		t.Errorf("want codes.Unauthenticated, got %v", err)
+	}
+}

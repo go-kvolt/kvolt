@@ -30,6 +30,9 @@ func (r *Router) AddRoute(method, path string, handle Handler) {
 	if r == nil {
 		return
 	}
+	if r.trees == nil {
+		r.trees = make(map[string]*Node)
+	}
 	root := r.trees[method]
 	if root == nil {
 		root = &Node{}
