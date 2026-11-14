@@ -108,6 +108,7 @@ func Handler(cfg Config) func(c *context.Context) error {
 		path := c.Param("any")
 
 		if strings.HasSuffix(path, "doc.json") {
+			c.SetHeaderWritten()
 			c.Writer.Header().Set("Content-Type", "application/json")
 			c.Writer.WriteHeader(200)
 
@@ -128,7 +129,8 @@ func Handler(cfg Config) func(c *context.Context) error {
 				return err
 			}
 
-			return c.String(200, "{}")
+			_, err := c.Writer.Write([]byte("{}"))
+			return err
 		}
 
 		c.Writer.Header().Set("Content-Type", "text/html")

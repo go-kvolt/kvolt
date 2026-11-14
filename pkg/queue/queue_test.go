@@ -121,3 +121,46 @@ func TestMemoryQueue_MultipleStop(t *testing.T) {
 		t.Fatal("expected error pushing to stopped queue")
 	}
 }
+
+func TestMemoryQueue_HandlerPanicRecovery(t *testing.T) {
+	var dead Job
+	var deadErr error
+	done := make(chan struct{})
+
+	q := NewMemoryQueue(10, 1,
+		WithDeadLetter(func(job Job, err error) {
+			dead = job
+			deadErr = err
+			close(done)
+		}),
+		WithRetryWait(5*time.Millisecond),
+	)
+	q.Register("panic-job", func(job Job) error {
+		panic("boom in queue handler")
+	})
+	q.Start()
+	defer q.Stop()
+
+	if err := q.PushWithOptions("panic-job", "val", PushOptions{MaxRetries: 0}); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("dead letter not called on panicking handler")
+	}
+	if deadErr == nil || dead.Name != "panic-job" {
+		t.Fatalf("dead letter want panic-job, got %+v %v", dead, deadErr)
+	}
+}
+
+func TestMemoryQueue_NilGuards(t *testing.T) {
+	var q *MemoryQueue
+	if err := q.Push("a", "b"); err == nil {
+		t.Fatal("expected error on nil queue Push")
+	}
+	q.Register("a", nil)
+	q.Start()
+	q.Stop()
+}

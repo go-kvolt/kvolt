@@ -54,6 +54,7 @@ func schemaFromType(t reflect.Type, v reflect.Value, seen map[reflect.Type]bool)
 			return map[string]interface{}{"type": "object"}
 		}
 		seen[t] = true
+		defer delete(seen, t)
 		props := map[string]interface{}{}
 		required := []string{}
 		for i := 0; i < t.NumField(); i++ {

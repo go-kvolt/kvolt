@@ -68,6 +68,14 @@ func Validate(s interface{}) error {
 						if val.Len() < limit {
 							return fmt.Errorf("field %s must contain at least %d items", field.Name, limit)
 						}
+					} else if val.Kind() >= reflect.Int && val.Kind() <= reflect.Int64 {
+						if val.Int() < int64(limit) {
+							return fmt.Errorf("field %s must be at least %d", field.Name, limit)
+						}
+					} else if val.Kind() >= reflect.Uint && val.Kind() <= reflect.Uint64 {
+						if val.Uint() < uint64(limit) {
+							return fmt.Errorf("field %s must be at least %d", field.Name, limit)
+						}
 					}
 				}
 			}
@@ -83,6 +91,14 @@ func Validate(s interface{}) error {
 						if val.Len() > limit {
 							return fmt.Errorf("field %s must contain at most %d items", field.Name, limit)
 						}
+					} else if val.Kind() >= reflect.Int && val.Kind() <= reflect.Int64 {
+						if val.Int() > int64(limit) {
+							return fmt.Errorf("field %s must be at most %d", field.Name, limit)
+						}
+					} else if val.Kind() >= reflect.Uint && val.Kind() <= reflect.Uint64 {
+						if val.Uint() > uint64(limit) {
+							return fmt.Errorf("field %s must be at most %d", field.Name, limit)
+						}
 					}
 				}
 			}
@@ -92,6 +108,9 @@ func Validate(s interface{}) error {
 }
 
 func isEmpty(v reflect.Value) bool {
+	if !v.IsValid() {
+		return true
+	}
 	switch v.Kind() {
 	case reflect.String:
 		return v.Len() == 0

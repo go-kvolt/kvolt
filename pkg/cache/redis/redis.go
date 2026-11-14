@@ -39,6 +39,9 @@ func (s *Store) key(k string) string { return s.prefix + k }
 
 // Get retrieves and JSON-decodes a value.
 func (s *Store) Get(key string) (interface{}, error) {
+	if s == nil || s.client == nil {
+		return nil, fmt.Errorf("cache redis: client is nil")
+	}
 	data, err := s.client.Get(context.Background(), s.key(key)).Bytes()
 	if err == goredis.Nil {
 		return nil, cache.ErrKeyNotFound
@@ -55,6 +58,9 @@ func (s *Store) Get(key string) (interface{}, error) {
 
 // Set JSON-encodes and stores a value with optional TTL (0 = no expiry).
 func (s *Store) Set(key string, value interface{}, ttl time.Duration) error {
+	if s == nil || s.client == nil {
+		return fmt.Errorf("cache redis: client is nil")
+	}
 	data, err := sonic.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("cache redis marshal: %w", err)
@@ -64,11 +70,17 @@ func (s *Store) Set(key string, value interface{}, ttl time.Duration) error {
 
 // Delete removes a key.
 func (s *Store) Delete(key string) error {
+	if s == nil || s.client == nil {
+		return fmt.Errorf("cache redis: client is nil")
+	}
 	return s.client.Del(context.Background(), s.key(key)).Err()
 }
 
 // Touch extends TTL only if the key still exists (does not create/resurrect).
 func (s *Store) Touch(key string, ttl time.Duration) error {
+	if s == nil || s.client == nil {
+		return fmt.Errorf("cache redis: client is nil")
+	}
 	if ttl <= 0 {
 		ok, err := s.client.Persist(context.Background(), s.key(key)).Result()
 		if err != nil {
@@ -91,6 +103,9 @@ func (s *Store) Touch(key string, ttl time.Duration) error {
 
 // Flush deletes all keys with this store's prefix. Empty prefix is rejected.
 func (s *Store) Flush() error {
+	if s == nil || s.client == nil {
+		return fmt.Errorf("cache redis: client is nil")
+	}
 	if s.prefix == "" {
 		return fmt.Errorf("cache redis: Flush requires a key prefix to avoid wiping the whole DB")
 	}

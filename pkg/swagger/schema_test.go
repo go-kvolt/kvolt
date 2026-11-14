@@ -60,3 +60,48 @@ func TestGenerateOpenAPI_WithSchemas(t *testing.T) {
 		t.Fatal(tags)
 	}
 }
+
+type nestedAddress struct {
+	City string `json:"city"`
+}
+
+type profileWithSiblings struct {
+	HomeAddress nestedAddress `json:"home_address"`
+	WorkAddress nestedAddress `json:"work_address"`
+}
+
+type recursiveNode struct {
+	Value string         `json:"value"`
+	Next  *recursiveNode `json:"next"`
+}
+
+func TestSchemaFromSample_SiblingStructReuse(t *testing.T) {
+	s := SchemaFromSample(profileWithSiblings{})
+	props := s["properties"].(map[string]interface{})
+	home := props["home_address"].(map[string]interface{})
+	work := props["work_address"].(map[string]interface{})
+
+	if home["type"] != "object" || work["type"] != "object" {
+		t.Fatalf("expected objects, got %v and %v", home, work)
+	}
+	homeProps, okHome := home["properties"].(map[string]interface{})
+	workProps, okWork := work["properties"].(map[string]interface{})
+	if !okHome || homeProps["city"] == nil {
+		t.Fatal("home address properties missing")
+	}
+	if !okWork || workProps["city"] == nil {
+		t.Fatal("work address properties missing due to premature seen map retention")
+	}
+}
+
+func TestSchemaFromSample_RecursiveStruct(t *testing.T) {
+	s := SchemaFromSample(recursiveNode{})
+	props := s["properties"].(map[string]interface{})
+	if props["value"] == nil {
+		t.Fatal("value property missing")
+	}
+	next := props["next"].(map[string]interface{})
+	if next["type"] != "object" {
+		t.Fatalf("next type want object, got %v", next["type"])
+	}
+}

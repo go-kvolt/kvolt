@@ -224,7 +224,7 @@ func Idempotency(cfg IdempotencyConfig) func(c *context.Context) error {
 		cw := &captureResponseWriter{ResponseWriter: origWriter, status: http.StatusOK}
 		c.Writer = cw
 		c.Next()
-		if c.StatusCode() != 0 {
+		if !cw.wroteHeader && c.StatusCode() != 0 {
 			cw.status = c.StatusCode()
 		}
 		c.Writer = origWriter
@@ -338,6 +338,9 @@ func sanitizeIdempotencyHeaders(h http.Header) http.Header {
 }
 
 func replayIdempotency(c *context.Context, rec IdempotencyRecord) {
+	if c == nil || c.Writer == nil {
+		return
+	}
 	dst := c.Writer.Header()
 	for k, vv := range rec.Headers {
 		if strings.EqualFold(k, "Content-Length") || strings.EqualFold(k, "Set-Cookie") {

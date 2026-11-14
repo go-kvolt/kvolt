@@ -234,3 +234,12 @@ func TestGracefulStop(t *testing.T) {
 		t.Fatal("GracefulStop did not complete in time")
 	}
 }
+
+func TestRun_NilEngine(t *testing.T) {
+	if err := Run(nil, ":0"); err == nil {
+		t.Fatal("Run(nil) want error, got nil")
+	}
+	if err := RunDual(nil, ":0", ":0"); err == nil {
+		t.Fatal("RunDual(nil) want error, got nil")
+	}
+}

@@ -63,6 +63,9 @@ func (q *MemoryQueue) Push(name string, payload interface{}) error {
 
 // PushWithOptions adds a job with retry settings.
 func (q *MemoryQueue) PushWithOptions(name string, payload interface{}, opts PushOptions) error {
+	if q == nil {
+		return fmt.Errorf("queue is nil")
+	}
 	job := Job{
 		ID:         uuid.New().String(),
 		Name:       name,
@@ -75,6 +78,9 @@ func (q *MemoryQueue) PushWithOptions(name string, payload interface{}, opts Pus
 }
 
 func (q *MemoryQueue) enqueue(job Job) error {
+	if q == nil {
+		return fmt.Errorf("queue is nil")
+	}
 	select {
 	case <-q.quit:
 		return fmt.Errorf("queue is stopped")
@@ -92,6 +98,9 @@ func (q *MemoryQueue) enqueue(job Job) error {
 
 // Register adds a handler.
 func (q *MemoryQueue) Register(name string, handler HandlerFunc) {
+	if q == nil {
+		return
+	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.handlers[name] = handler
@@ -99,6 +108,9 @@ func (q *MemoryQueue) Register(name string, handler HandlerFunc) {
 
 // Start spawns the workers.
 func (q *MemoryQueue) Start() {
+	if q == nil {
+		return
+	}
 	for i := 0; i < q.workerCount; i++ {
 		q.wg.Add(1)
 		go q.workerLoop(i)
@@ -108,6 +120,9 @@ func (q *MemoryQueue) Start() {
 
 // Stop gracefully shuts down workers.
 func (q *MemoryQueue) Stop() {
+	if q == nil {
+		return
+	}
 	q.stopOnce.Do(func() {
 		close(q.quit)
 		q.wg.Wait()
@@ -137,7 +152,17 @@ func (q *MemoryQueue) process(job Job) {
 		return
 	}
 
-	if err := handler(job); err != nil {
+	var err error
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panic in queue handler: %v", r)
+			}
+		}()
+		err = handler(job)
+	}()
+
+	if err != nil {
 		log.Printf("❌ Job %s attempt %d failed: %v\n", job.ID, job.Attempt, err)
 		if job.Attempt <= job.MaxRetries {
 			next := job
@@ -146,6 +171,11 @@ func (q *MemoryQueue) process(job Job) {
 				if e := q.enqueue(next); e != nil {
 					log.Printf("❌ Job %s requeue failed: %v\n", job.ID, e)
 					if q.onDead != nil {
+						defer func() {
+							if r := recover(); r != nil {
+								log.Printf("❌ onDead panic: %v\n", r)
+							}
+						}()
 						q.onDead(job, err)
 					}
 				}
@@ -153,6 +183,11 @@ func (q *MemoryQueue) process(job Job) {
 			return
 		}
 		if q.onDead != nil {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("❌ onDead panic: %v\n", r)
+				}
+			}()
 			q.onDead(job, err)
 		}
 		return

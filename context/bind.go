@@ -11,7 +11,7 @@ import (
 
 // BindQuery binds URL query parameters into obj using `form` or `query` tags (fallback: field name).
 func (c *Context) BindQuery(obj interface{}) error {
-	if c.Request == nil || c.Request.URL == nil {
+	if c == nil || c.Request == nil || c.Request.URL == nil {
 		return fmt.Errorf("nil request")
 	}
 	return bindMap(obj, c.Request.URL.Query(), "query", "form")
@@ -19,7 +19,7 @@ func (c *Context) BindQuery(obj interface{}) error {
 
 // BindForm binds application/x-www-form-urlencoded or multipart form fields.
 func (c *Context) BindForm(obj interface{}) error {
-	if c.Request == nil {
+	if c == nil || c.Request == nil {
 		return fmt.Errorf("nil request")
 	}
 	ct := c.Request.Header.Get("Content-Type")
@@ -35,6 +35,9 @@ func (c *Context) BindForm(obj interface{}) error {
 
 // BindURI binds path params into obj using `uri` or `param` tags.
 func (c *Context) BindURI(obj interface{}) error {
+	if c == nil {
+		return fmt.Errorf("nil context")
+	}
 	values := make(url.Values)
 	for _, p := range c.Params {
 		values.Set(p.Key, p.Value)
@@ -210,7 +213,7 @@ func setFieldSlice(fv reflect.Value, rawSlice []string) error {
 
 // FormValue is a short-hand for Request.FormValue.
 func (c *Context) FormValue(key string) string {
-	if c.Request == nil {
+	if c == nil || c.Request == nil {
 		return ""
 	}
 	return c.Request.FormValue(key)
@@ -218,6 +221,9 @@ func (c *Context) FormValue(key string) string {
 
 // DefaultQuery returns query key or def when empty.
 func (c *Context) DefaultQuery(key, def string) string {
+	if c == nil {
+		return def
+	}
 	if v := c.Query(key); v != "" {
 		return v
 	}
@@ -226,7 +232,7 @@ func (c *Context) DefaultQuery(key, def string) string {
 
 // GetHeader returns a request header.
 func (c *Context) GetHeader(key string) string {
-	if c.Request == nil {
+	if c == nil || c.Request == nil {
 		return ""
 	}
 	return c.Request.Header.Get(key)
@@ -234,7 +240,7 @@ func (c *Context) GetHeader(key string) string {
 
 // GetCookie returns a cookie value or empty string.
 func (c *Context) GetCookie(name string) string {
-	if c.Request == nil {
+	if c == nil || c.Request == nil {
 		return ""
 	}
 	ck, err := c.Request.Cookie(name)

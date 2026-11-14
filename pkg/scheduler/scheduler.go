@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/robfig/cron/v3"
@@ -23,6 +24,12 @@ func New() *Scheduler {
 // - Standard: "0 0 * * *" (Daily at midnight)
 // - Interval: "@every 1h30m"
 func (s *Scheduler) Add(spec string, job func()) (int, error) {
+	if s == nil || s.c == nil {
+		return 0, fmt.Errorf("scheduler: not initialized")
+	}
+	if job == nil {
+		return 0, fmt.Errorf("scheduler: job cannot be nil")
+	}
 	safeJob := func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -40,17 +47,26 @@ func (s *Scheduler) Add(spec string, job func()) (int, error) {
 
 // Remove removes a scheduled job by its ID.
 func (s *Scheduler) Remove(id int) {
+	if s == nil || s.c == nil {
+		return
+	}
 	s.c.Remove(cron.EntryID(id))
 }
 
 // Start starts the scheduler in a background goroutine.
 func (s *Scheduler) Start() {
+	if s == nil || s.c == nil {
+		return
+	}
 	s.c.Start()
 	log.Println("⏰ Scheduler started")
 }
 
 // Stop stops the scheduler.
 func (s *Scheduler) Stop() {
+	if s == nil || s.c == nil {
+		return
+	}
 	s.c.Stop()
 	log.Println("🛑 Scheduler stopped")
 }

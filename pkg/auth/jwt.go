@@ -62,7 +62,11 @@ func GenerateToken(claims Claims, expiry time.Duration) (string, error) {
 	for k, v := range claims {
 		mapClaims[k] = v
 	}
-	mapClaims["exp"] = time.Now().Add(expiry).Unix()
+	if expiry > 0 {
+		mapClaims["exp"] = time.Now().Add(expiry).Unix()
+	} else if _, ok := mapClaims["exp"]; !ok {
+		mapClaims["exp"] = time.Now().Unix()
+	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, mapClaims)
 	return token.SignedString(secret)
 }

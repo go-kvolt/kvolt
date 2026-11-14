@@ -45,6 +45,9 @@ var signalNotify = signal.Notify
 
 // Run starts the attached gRPC server with graceful shutdown.
 func Run(e *kvolt.Engine, addr string) error {
+	if e == nil {
+		return fmt.Errorf("grpc: nil engine")
+	}
 	s, ok := FromEngine(e)
 	if !ok || s == nil {
 		return fmt.Errorf("grpc: server not attached; call grpc.Attach(engine) first")
@@ -81,6 +84,9 @@ func shutdownRun(s *Server, sig os.Signal) error {
 
 // RunDual starts HTTP (via Engine) and gRPC concurrently with unified shutdown.
 func RunDual(e *kvolt.Engine, httpAddr, grpcAddr string) error {
+	if e == nil {
+		return fmt.Errorf("grpc: nil engine")
+	}
 	s, ok := FromEngine(e)
 	if !ok || s == nil {
 		return fmt.Errorf("grpc: server not attached; call grpc.Attach(engine) first")
@@ -108,12 +114,14 @@ func RunDual(e *kvolt.Engine, httpAddr, grpcAddr string) error {
 	signalNotify(quit, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(quit)
 
+	var startErr error
 	select {
 	case sig := <-quit:
 		fmt.Printf("\nReceived %v, shutting down...\n", sig)
 	case <-testRunQuit:
 		fmt.Println("\nReceived test quit, shutting down...")
 	case err := <-errCh:
+		startErr = err
 		fmt.Printf("Server error: %v — shutting down...\n", err)
 	}
 
@@ -126,5 +134,8 @@ func RunDual(e *kvolt.Engine, httpAddr, grpcAddr string) error {
 	}
 	s.GracefulStop()
 	fmt.Println("All servers exited")
+	if startErr != nil {
+		return startErr
+	}
 	return shutdownErr
 }

@@ -82,3 +82,25 @@ func TestValidate_NoTags(t *testing.T) {
 		t.Errorf("no validate tags: %v", err)
 	}
 }
+
+func TestValidate_IntMinMax(t *testing.T) {
+	type S struct {
+		Age int  `validate:"min=18,max=65"`
+		Qty uint `validate:"min=1,max=100"`
+	}
+	if err := Validate(&S{Age: 16, Qty: 5}); err == nil {
+		t.Fatal("age 16 < 18: want error")
+	}
+	if err := Validate(&S{Age: 70, Qty: 5}); err == nil {
+		t.Fatal("age 70 > 65: want error")
+	}
+	if err := Validate(&S{Age: 25, Qty: 0}); err == nil {
+		t.Fatal("qty 0 < 1: want error")
+	}
+	if err := Validate(&S{Age: 25, Qty: 150}); err == nil {
+		t.Fatal("qty 150 > 100: want error")
+	}
+	if err := Validate(&S{Age: 25, Qty: 50}); err != nil {
+		t.Fatalf("valid int range: %v", err)
+	}
+}

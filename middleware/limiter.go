@@ -154,7 +154,9 @@ func LimiterWithConfig(cfg LimiterConfig) func(c *context.Context) error {
 			return nil
 		}
 
-		c.Writer.Header().Set("Retry-After", "1")
+		if c.Writer != nil {
+			c.Writer.Header().Set("Retry-After", "1")
+		}
 		err := cfg.ErrorHandler(c)
 		if err != nil && !c.HeaderWritten() {
 			if he, ok := httperr.As(err); ok {

@@ -340,7 +340,15 @@ func (q *Queue) processAndAck(ctx context.Context, data string) {
 		return
 	}
 
-	err := handler(job)
+	var err error
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panic in queue redis handler: %v", r)
+			}
+		}()
+		err = handler(job)
+	}()
 	q.ack(ctx, data) // always ack processing slot; retry uses delayed/ready
 
 	if err != nil {
@@ -350,12 +358,22 @@ func (q *Queue) processAndAck(ctx context.Context, data string) {
 			if e := q.enqueueDelayed(wire, q.retryWait); e != nil {
 				log.Printf("Job %s requeue failed: %v\n", job.ID, e)
 				if q.onDead != nil {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Printf("queue redis onDead panic: %v\n", r)
+						}
+					}()
 					q.onDead(job, err)
 				}
 			}
 			return
 		}
 		if q.onDead != nil {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("queue redis onDead panic: %v\n", r)
+				}
+			}()
 			q.onDead(job, err)
 		}
 	}
