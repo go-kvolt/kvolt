@@ -45,7 +45,13 @@ func CORSWithConfig(cfg CORSConfig) func(c *context.Context) error {
 	methods := strings.Join(cfg.AllowMethods, ", ")
 	headers := strings.Join(cfg.AllowHeaders, ", ")
 	expose := strings.Join(cfg.ExposeHeaders, ", ")
-	wildcard := len(cfg.AllowOrigins) == 1 && cfg.AllowOrigins[0] == "*"
+	wildcard := false
+	for _, o := range cfg.AllowOrigins {
+		if strings.TrimSpace(o) == "*" {
+			wildcard = true
+			break
+		}
+	}
 	if wildcard && cfg.AllowCredentials {
 		// Browsers reject * + credentials; force credentials off.
 		cfg.AllowCredentials = false

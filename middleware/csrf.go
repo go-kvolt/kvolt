@@ -7,8 +7,10 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-kvolt/kvolt/v2/context"
 	"github.com/go-kvolt/kvolt/v2/pkg/httperr"
@@ -18,10 +20,13 @@ import (
 type CSRFConfig struct {
 	// Secret signs tokens so a planted cookie without the secret cannot pass.
 	// When empty, a process-local random secret is used (fine for single-instance).
+	// In multi-instance deployments, set Secret explicitly so tokens validate across replicas.
 	Secret     string
 	CookieName string
 	HeaderName string
 	CookiePath string
+	// TokenTTL is the token expiration duration (default: 24h).
+	TokenTTL time.Duration
 	// SameSite cookie attribute. Default: Lax.
 	SameSite http.SameSite
 	// Secure forces the Secure cookie flag. Ignored when ManualSecure is false (default):
@@ -76,6 +81,9 @@ func CSRFWithConfig(cfg CSRFConfig) func(c *context.Context) error {
 	if cfg.CookiePath == "" {
 		cfg.CookiePath = "/"
 	}
+	if cfg.TokenTTL <= 0 {
+		cfg.TokenTTL = 24 * time.Hour
+	}
 	if cfg.SameSite == 0 {
 		cfg.SameSite = http.SameSiteLaxMode
 	}
@@ -106,20 +114,21 @@ func CSRFWithConfig(cfg CSRFConfig) func(c *context.Context) error {
 			}
 		}
 
+		now := time.Now()
 		token := ""
 		if cookie, err := c.Request.Cookie(cfg.CookieName); err == nil {
 			token = cookie.Value
 		}
-		if token != "" && !csrfTokenValid(secret, token) {
+		if token != "" && !csrfTokenValidTTL(secret, token, cfg.TokenTTL, now) {
 			token = ""
 		}
 
 		if safe[c.Request.Method] {
 			if token == "" {
-				token = newCSRFToken(secret)
+				token = newCSRFTokenAt(secret, now)
 				c.SetCookieWith(cfg.CookieName, token, context.CookieOptions{
 					Path:     cfg.CookiePath,
-					MaxAge:   86400,
+					MaxAge:   int(cfg.TokenTTL.Seconds()),
 					Secure:   csrfSecureFlag(c, cfg),
 					HTTPOnly: false, // must be readable by JS for double-submit
 					SameSite: cfg.SameSite,
@@ -136,7 +145,7 @@ func CSRFWithConfig(cfg CSRFConfig) func(c *context.Context) error {
 		if got == "" {
 			got = c.Request.FormValue("csrf_token")
 		}
-		if !csrfTokenValid(secret, token) || !csrfTokenMatch(token, got) {
+		if !csrfTokenValidTTL(secret, token, cfg.TokenTTL, now) || !csrfTokenMatch(token, got) {
 			return httperr.Forbidden("csrf_mismatch", "csrf token mismatch")
 		}
 		c.Next()
@@ -179,15 +188,24 @@ func csrfTokenMatch(a, b string) bool {
 }
 
 func newCSRFToken(secret []byte) string {
+	return newCSRFTokenAt(secret, time.Now())
+}
+
+func newCSRFTokenAt(secret []byte, now time.Time) string {
 	nonce := make([]byte, 32)
 	mustCSRFRand(nonce)
 	n := hex.EncodeToString(nonce)
+	payload := n + ":" + strconv.FormatInt(now.Unix(), 10)
 	mac := hmac.New(sha256.New, secret)
-	_, _ = mac.Write([]byte(n))
-	return n + "." + hex.EncodeToString(mac.Sum(nil))
+	_, _ = mac.Write([]byte(payload))
+	return payload + "." + hex.EncodeToString(mac.Sum(nil))
 }
 
 func csrfTokenValid(secret []byte, token string) bool {
+	return csrfTokenValidTTL(secret, token, 24*time.Hour, time.Now())
+}
+
+func csrfTokenValidTTL(secret []byte, token string, ttl time.Duration, now time.Time) bool {
 	parts := strings.Split(token, ".")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return false
@@ -195,5 +213,23 @@ func csrfTokenValid(secret []byte, token string) bool {
 	mac := hmac.New(sha256.New, secret)
 	_, _ = mac.Write([]byte(parts[0]))
 	expected := hex.EncodeToString(mac.Sum(nil))
-	return subtle.ConstantTimeCompare([]byte(expected), []byte(parts[1])) == 1
+	if subtle.ConstantTimeCompare([]byte(expected), []byte(parts[1])) != 1 {
+		return false
+	}
+	if ttl <= 0 {
+		ttl = 24 * time.Hour
+	}
+	// Verify timestamp if present: payload format is <nonce>:<unix_secs>
+	subparts := strings.Split(parts[0], ":")
+	if len(subparts) == 2 {
+		ts, err := strconv.ParseInt(subparts[1], 10, 64)
+		if err != nil {
+			return false
+		}
+		tokenTime := time.Unix(ts, 0)
+		if now.Sub(tokenTime) > ttl || tokenTime.After(now.Add(5*time.Minute)) {
+			return false
+		}
+	}
+	return true
 }

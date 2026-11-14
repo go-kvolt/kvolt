@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"container/list"
 	"net"
 	"net/http"
 	"sync"
@@ -11,21 +12,36 @@ import (
 )
 
 type client struct {
+	key        string
 	tokens     int
 	lastRefill time.Time
+	elem       *list.Element
+}
+
+func maskIP(ipStr string) string {
+	parsed := net.ParseIP(ipStr)
+	if parsed == nil {
+		return ipStr
+	}
+	if ip4 := parsed.To4(); ip4 != nil {
+		return ip4.String()
+	}
+	// IPv6: group by /64 subnet to prevent address rotation bypass
+	mask := net.CIDRMask(64, 128)
+	return parsed.Mask(mask).String()
 }
 
 func clientIP(remoteAddr string) string {
 	host, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {
-		return remoteAddr
+		return maskIP(remoteAddr)
 	}
-	return host
+	return maskIP(host)
 }
 
 const defaultLimiterMaxKeys = 10_000
 
-// limiterNow is time.Now; tests swap it to exercise stale-bucket eviction.
+// limiterNow is time.Now; tests swap it to exercise time-based tests.
 var limiterNow = time.Now
 
 // LimiterConfig configures a token-bucket rate limiter.
@@ -34,12 +50,12 @@ type LimiterConfig struct {
 	RPS int
 	// Burst is the maximum bucket size.
 	Burst int
-	// KeyFunc derives the rate-limit bucket key. Default: client IP host.
+	// KeyFunc derives the rate-limit bucket key. Default: client IP host (IPv6 /64 masked).
 	KeyFunc func(c *context.Context) string
 	// ErrorHandler overrides the default 429 JSON response.
 	ErrorHandler func(c *context.Context) error
-	// MaxKeys caps distinct bucket keys (default 10000). When full, expired then
-	// one arbitrary oldest-ish entry is evicted (no background goroutine).
+	// MaxKeys caps distinct bucket keys (default 10000). When full, the least recently
+	// used entry is evicted in O(1) time without scanning.
 	MaxKeys int
 }
 
@@ -62,7 +78,7 @@ func LimiterWithConfig(cfg LimiterConfig) func(c *context.Context) error {
 	if cfg.KeyFunc == nil {
 		cfg.KeyFunc = func(c *context.Context) string {
 			if ip := c.ClientIP(); ip != "" {
-				return ip
+				return maskIP(ip)
 			}
 			return clientIP(c.Request.RemoteAddr)
 		}
@@ -75,21 +91,7 @@ func LimiterWithConfig(cfg LimiterConfig) func(c *context.Context) error {
 
 	var mu sync.Mutex
 	clients := make(map[string]*client)
-
-	evictOne := func(now time.Time) {
-		// Prefer stale buckets (>1m idle).
-		for key, cl := range clients {
-			if now.Sub(cl.lastRefill) > time.Minute {
-				delete(clients, key)
-				return
-			}
-		}
-		// Otherwise drop one arbitrary key (map iteration) — O(1) amortised.
-		for key := range clients {
-			delete(clients, key)
-			return
-		}
-	}
+	lru := list.New()
 
 	return func(c *context.Context) error {
 		key := cfg.KeyFunc(c)
@@ -102,20 +104,31 @@ func LimiterWithConfig(cfg LimiterConfig) func(c *context.Context) error {
 		now := limiterNow()
 		if !exists {
 			for len(clients) >= cfg.MaxKeys {
-				evictOne(now)
+				oldest := lru.Back()
+				if oldest == nil {
+					break
+				}
+				lru.Remove(oldest)
+				cOld := oldest.Value.(*client)
+				delete(clients, cOld.key)
 			}
-			lim = &client{tokens: cfg.Burst, lastRefill: now}
+			lim = &client{key: key, tokens: cfg.Burst, lastRefill: now}
+			lim.elem = lru.PushFront(lim)
 			clients[key] = lim
+		} else {
+			lru.MoveToFront(lim.elem)
 		}
 
-		elapsed := now.Sub(lim.lastRefill).Seconds()
-		refill := int(elapsed * float64(cfg.RPS))
+		elapsed := now.Sub(lim.lastRefill)
+		refill := int(elapsed.Seconds() * float64(cfg.RPS))
 		if refill > 0 {
 			lim.tokens += refill
 			if lim.tokens > cfg.Burst {
 				lim.tokens = cfg.Burst
+				lim.lastRefill = now
+			} else {
+				lim.lastRefill = lim.lastRefill.Add(time.Duration(float64(refill) * float64(time.Second) / float64(cfg.RPS)))
 			}
-			lim.lastRefill = now
 		}
 
 		allowed := lim.tokens > 0

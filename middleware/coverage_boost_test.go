@@ -509,6 +509,20 @@ func TestCORS_CredentialsWildcardAndPreflight(t *testing.T) {
 	if w2.Header().Get("Access-Control-Allow-Credentials") != "true" {
 		t.Fatal("want credentials")
 	}
+
+	mw3 := CORSWithConfig(CORSConfig{AllowOrigins: []string{"https://other.com", "*"}, AllowCredentials: true})
+	w3 := httptest.NewRecorder()
+	r3 := httptest.NewRequest("GET", "/", nil)
+	r3.Header.Set("Origin", "https://any.com")
+	c3 := context.New(w3, r3)
+	c3.Handlers = []context.HandlerFunc{mw3, func(c *context.Context) error { return c.String(200, "x") }}
+	c3.Next()
+	if w3.Header().Get("Access-Control-Allow-Origin") != "*" {
+		t.Fatalf("want * got %q", w3.Header().Get("Access-Control-Allow-Origin"))
+	}
+	if w3.Header().Get("Access-Control-Allow-Credentials") != "" {
+		t.Fatal("credentials should be disabled when * is present")
+	}
 }
 
 func TestJWT_RequireExpFalseAndHeaderNoScheme(t *testing.T) {

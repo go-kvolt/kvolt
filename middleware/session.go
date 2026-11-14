@@ -17,6 +17,9 @@ type SessionConfig struct {
 
 // Session returns a middleware that validates sessions.
 func Session(config SessionConfig) func(c *context.Context) error {
+	if config.Manager == nil {
+		panic("middleware: session Manager is required")
+	}
 	if config.Lookup == "" {
 		config.Lookup = "cookie:session_id"
 	}

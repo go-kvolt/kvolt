@@ -537,6 +537,13 @@ func TestSession_ExtractTokenHeaderQueryInvalid(t *testing.T) {
 	if w4.Code != 401 {
 		t.Fatalf("invalid session want 401 got %d", w4.Code)
 	}
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic on nil Manager")
+		}
+	}()
+	_ = Session(SessionConfig{})
 }
 
 func TestTenantFromClaim_MapAndNonString(t *testing.T) {

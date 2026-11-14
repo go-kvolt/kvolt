@@ -137,6 +137,25 @@ func TestLimiter_SameHostDifferentPorts(t *testing.T) {
 	}
 }
 
+func TestLimiter_IPv6SubnetMask(t *testing.T) {
+	lim := Limiter(1, 1)
+	hit429 := false
+	for _, addr := range []string{"[2001:db8:abcd:0012::1]:1234", "[2001:db8:abcd:0012:ffff::2]:5678"} {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", "/", nil)
+		r.RemoteAddr = addr
+		c := context.New(w, r)
+		c.Handlers = []context.HandlerFunc{func(c *context.Context) error { return c.String(200, "OK") }}
+		lim(c)
+		if w.Code == 429 {
+			hit429 = true
+		}
+	}
+	if !hit429 {
+		t.Fatal("Limiter should key on IPv6 /64 subnet, not individual addresses")
+	}
+}
+
 func TestLimiter_MaxKeysEvictsOldest(t *testing.T) {
 	n := 0
 	lim := LimiterWithConfig(LimiterConfig{

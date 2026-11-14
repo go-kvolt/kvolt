@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-kvolt/kvolt/v2/context"
 )
@@ -91,5 +92,26 @@ func TestCSRF_EmptySkipPathIgnored(t *testing.T) {
 	c.Next()
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("empty SkipPaths must not disable CSRF; got %d", rec.Code)
+	}
+}
+
+func TestCSRF_TokenExpiry(t *testing.T) {
+	secret := []byte("test-csrf-secret")
+	// Token from 2 days ago
+	oldTime := time.Now().Add(-48 * time.Hour)
+	expiredToken := newCSRFTokenAt(secret, oldTime)
+
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	req.AddCookie(&http.Cookie{Name: "csrf_token", Value: expiredToken})
+	req.Header.Set("X-CSRF-Token", expiredToken)
+	rec := httptest.NewRecorder()
+	c := context.New(rec, req)
+	c.Handlers = []context.HandlerFunc{
+		CSRFWithConfig(CSRFConfig{Secret: "test-csrf-secret", TokenTTL: 24 * time.Hour}),
+		func(c *context.Context) error { return c.String(200, "ok") },
+	}
+	c.Next()
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expired token want 403, got %d", rec.Code)
 	}
 }

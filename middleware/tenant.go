@@ -22,9 +22,10 @@ type TenantConfig struct {
 	// If both header and claim are present and differ, the request is rejected with 403.
 	Header string
 	// Param is an optional route param name (e.g. "tenant").
+	// When Claim is set, route param must match claim if both are present (otherwise 403).
 	Param string
 	// Claim is an optional JWT claim name read from ContextKey (default "user") MapClaims.
-	// When set, claim is preferred over Header; a conflicting header yields 403.
+	// When set, claim is preferred over Header and Param; a conflicting header or param yields 403.
 	Claim string
 	// ContextKey is the JWT claims context key (default "user").
 	ContextKey string
@@ -38,8 +39,8 @@ type TenantConfig struct {
 
 // Tenant resolves a tenant id into c.Keys[TenantIDKey].
 // Resolution when Extractor is nil:
-//   - Param (if set)
-//   - If Claim is set: Claim only (header ignored as source); header≠claim → 403
+//   - If Claim is set and claim present: Claim only (header/param ignored as source); header≠claim or param≠claim → 403
+//   - Else if Param is set and param present: Param
 //   - Else: Header
 func Tenant(cfg TenantConfig) func(c *context.Context) error {
 	if cfg.Header == "" {
@@ -63,8 +64,9 @@ func Tenant(cfg TenantConfig) func(c *context.Context) error {
 				return httperr.BadRequest("tenant_invalid", err.Error())
 			}
 		} else {
+			paramID := ""
 			if cfg.Param != "" {
-				id = strings.TrimSpace(c.Param(cfg.Param))
+				paramID = strings.TrimSpace(c.Param(cfg.Param))
 			}
 			headerID := ""
 			if cfg.Header != "" {
@@ -79,10 +81,17 @@ func Tenant(cfg TenantConfig) func(c *context.Context) error {
 				if claimID != "" && headerID != "" && claimID != headerID {
 					return writeMiddlewareError(c, httperr.Forbidden("tenant_mismatch", "tenant header does not match token claim"))
 				}
-				if id == "" {
-					id = claimID
+				if claimID != "" && paramID != "" && claimID != paramID {
+					return writeMiddlewareError(c, httperr.Forbidden("tenant_mismatch", "tenant param does not match token claim"))
 				}
-			} else if id == "" {
+				if claimID != "" {
+					id = claimID
+				} else if paramID != "" {
+					id = paramID
+				}
+			} else if paramID != "" {
+				id = paramID
+			} else {
 				id = headerID
 			}
 		}

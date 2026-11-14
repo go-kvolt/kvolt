@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/go-kvolt/kvolt/v2/context"
+	"github.com/go-kvolt/kvolt/v2/router"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -67,6 +68,39 @@ func TestTenant_HeaderClaimMismatch(t *testing.T) {
 	_ = mw(c)
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("want 403 got %d", w.Code)
+	}
+}
+
+func TestTenant_ParamClaimMismatch(t *testing.T) {
+	mw := Tenant(TenantConfig{Param: "tenant", Claim: "tid", Required: true})
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/tenants/tenant-B", nil)
+	c := context.New(w, r)
+	c.Params = router.Params{{Key: "tenant", Value: "tenant-B"}}
+	c.Set("user", jwt.MapClaims{"tid": "tenant-A"})
+	c.Handlers = []context.HandlerFunc{func(c *context.Context) error { return c.String(200, "ok") }}
+	_ = mw(c)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("want 403 got %d", w.Code)
+	}
+}
+
+func TestTenant_ParamClaimMatch(t *testing.T) {
+	mw := Tenant(TenantConfig{Param: "tenant", Claim: "tid", Required: true})
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/tenants/tenant-A", nil)
+	c := context.New(w, r)
+	c.Params = router.Params{{Key: "tenant", Value: "tenant-A"}}
+	c.Set("user", jwt.MapClaims{"tid": "tenant-A"})
+	c.Handlers = []context.HandlerFunc{func(c *context.Context) error {
+		if TenantID(c) != "tenant-A" {
+			t.Fatalf("want tenant-A got %q", TenantID(c))
+		}
+		return c.String(200, "ok")
+	}}
+	_ = mw(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200 got %d", w.Code)
 	}
 }
 
