@@ -52,4 +52,13 @@ func TestClientIP_TrustedProxyPaths(t *testing.T) {
 	_ = clientIPFromXFF("1.1.1.1:80", nil)
 	_ = isTrustedProxy("nope", []string{"1.1.1.1"})
 	_ = isTrustedProxy("1.1.1.1", nil)
+
+	rIPv6 := httptest.NewRequest("GET", "/", nil)
+	rIPv6.RemoteAddr = "[::1]" // bracketed IPv6 without port
+	rIPv6.Header.Set("X-Forwarded-For", "2001:db8::1, [::1]")
+	cIPv6 := New(httptest.NewRecorder(), rIPv6)
+	cIPv6.TrustedProxies = []string{"::1"}
+	if ip := cIPv6.ClientIP(); ip != "2001:db8::1" {
+		t.Fatalf("bracketed IPv6 want 2001:db8::1, got %s", ip)
+	}
 }

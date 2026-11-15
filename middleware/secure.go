@@ -98,6 +98,7 @@ func peerTrusted(c *context.Context) bool {
 	if err != nil {
 		host = c.Request.RemoteAddr
 	}
+	host = strings.Trim(host, "[]")
 	ip := net.ParseIP(host)
 	if ip == nil {
 		return false

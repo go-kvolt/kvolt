@@ -18,6 +18,7 @@ func (c *Context) ClientIP() string {
 	if err != nil {
 		host = remote
 	}
+	host = strings.Trim(host, "[]")
 	if !isTrustedProxy(host, c.TrustedProxies) {
 		return host
 	}
@@ -33,6 +34,7 @@ func (c *Context) ClientIP() string {
 		if h, _, err := net.SplitHostPort(xri); err == nil {
 			xri = h
 		}
+		xri = strings.Trim(xri, "[]")
 		if net.ParseIP(xri) != nil && !isTrustedProxy(xri, c.TrustedProxies) {
 			return xri
 		}
@@ -51,6 +53,7 @@ func clientIPFromXFF(xff string, trusted []string) string {
 		if h, _, err := net.SplitHostPort(ip); err == nil {
 			ip = h
 		}
+		ip = strings.Trim(ip, "[]")
 		if net.ParseIP(ip) == nil {
 			continue
 		}
@@ -66,6 +69,7 @@ func isTrustedProxy(host string, trusted []string) bool {
 	if len(trusted) == 0 {
 		return false
 	}
+	host = strings.Trim(host, "[]")
 	ip := net.ParseIP(host)
 	if ip == nil {
 		return false
