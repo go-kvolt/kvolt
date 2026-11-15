@@ -196,7 +196,7 @@ func csrfTokenMatch(a, b string) bool {
 		return false
 	}
 	if len(a) != len(b) {
-		subtle.ConstantTimeCompare([]byte(a), []byte(a))
+		subtle.ConstantTimeCompare([]byte(a), []byte(b))
 		return false
 	}
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
