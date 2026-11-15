@@ -107,3 +107,11 @@ func (r *Response) ExpectJSON(expected interface{}) *Response {
 	}
 	return r
 }
+
+// Unmarshal decodes the response body JSON into v.
+func (r *Response) Unmarshal(v interface{}) error {
+	if r == nil || r.Recorder == nil {
+		return nil
+	}
+	return json.Unmarshal(r.Recorder.Body.Bytes(), v)
+}

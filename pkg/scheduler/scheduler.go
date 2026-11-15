@@ -3,6 +3,7 @@ package scheduler
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/robfig/cron/v3"
 )
@@ -33,6 +34,7 @@ func (s *Scheduler) Add(spec string, job func()) (int, error) {
 	if s == nil {
 		return 0, fmt.Errorf("scheduler: not initialized")
 	}
+	spec = strings.TrimSpace(spec)
 	s.ensureCron()
 	if job == nil {
 		return 0, fmt.Errorf("scheduler: job cannot be nil")

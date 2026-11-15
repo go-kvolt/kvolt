@@ -50,7 +50,7 @@ func (c *Container) Invoke(target interface{}) bool {
 	defer c.mu.RUnlock()
 
 	val := reflect.ValueOf(target)
-	if val.Kind() != reflect.Ptr || val.IsNil() {
+	if val.Kind() != reflect.Ptr || val.IsNil() || !val.Elem().CanSet() {
 		return false
 	}
 

@@ -82,3 +82,13 @@ func TestScheduler_Uninitialized(t *testing.T) {
 	nilS.Remove(1)
 	nilS.Stop()
 }
+
+func TestScheduler_TrimmedSpec(t *testing.T) {
+	s := New()
+	// spec with leading and trailing whitespace
+	id, err := s.Add("   @every 1m   ", func() {})
+	if err != nil {
+		t.Fatalf("Add with whitespace failed: %v", err)
+	}
+	s.Remove(id)
+}

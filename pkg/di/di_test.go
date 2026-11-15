@@ -132,3 +132,16 @@ func TestContainer_NilSafety(t *testing.T) {
 	}
 	c.MustProvideFunc(func() string { return "x" })
 }
+
+func TestContainer_NonSettableTarget(t *testing.T) {
+	c := NewContainer()
+	c.Provide("hello")
+	// Passing a non-pointer or nil pointer
+	if c.Invoke("not-a-ptr") {
+		t.Fatal("expected false on non-pointer target")
+	}
+	var nilPtr *string
+	if c.Invoke(nilPtr) {
+		t.Fatal("expected false on nil pointer target")
+	}
+}
