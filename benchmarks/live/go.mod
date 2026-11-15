@@ -8,7 +8,7 @@ require (
 	github.com/gin-gonic/gin v1.11.0
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/go-kvolt/kvolt/v2 v2.1.0
-	github.com/gofiber/fiber/v2 v2.52.9
+	github.com/gofiber/fiber/v2 v2.52.16
 	github.com/labstack/echo/v4 v4.13.4
 )
 
