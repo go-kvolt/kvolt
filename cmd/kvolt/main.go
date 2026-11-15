@@ -317,7 +317,7 @@ EXPOSE 8080
 CMD ["./server"]
 `
 	// #nosec G306 -- Dockerfile is intended to be world-readable
-	if err := os.WriteFile("Dockerfile", []byte(dockerfile), 0644); err != nil {
+	if err := writeFileFn("Dockerfile", []byte(dockerfile), 0644); err != nil {
 		fmt.Printf("❌ %v\n", err)
 		exitFunc(1)
 	}
@@ -337,7 +337,7 @@ func createProject(name string) {
 	for _, d := range dirs {
 		path := filepath.Join(name, d)
 		// #nosec G301 -- scaffolded directories use standard user permissions
-		if err := os.MkdirAll(path, 0755); err != nil {
+		if err := mkdirAllFn(path, 0755); err != nil {
 			fmt.Printf("Error creating directory %s: %v\n", path, err)
 			return
 		}
