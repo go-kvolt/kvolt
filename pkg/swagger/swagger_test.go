@@ -40,6 +40,18 @@ func TestHandler_DocJSON(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "openapi") {
 		t.Errorf("doc.json: body should contain openapi, got %s", w.Body.String())
 	}
+
+	// Doc JSON with trailing slash
+	w2 := httptest.NewRecorder()
+	r2 := httptest.NewRequest("GET", "/swagger/doc.json/", nil)
+	c2 := context.New(w2, r2)
+	c2.Params = router.Params{{Key: "any", Value: "doc.json/"}}
+	if err := handler(c2); err != nil {
+		t.Fatalf("handler trailing slash: %v", err)
+	}
+	if w2.Code != 200 {
+		t.Errorf("doc.json/: want 200, got %d", w2.Code)
+	}
 }
 
 func TestHandler_IndexHTML(t *testing.T) {

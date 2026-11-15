@@ -55,3 +55,32 @@ func TestConfig_MapstructureOptionsAndDash(t *testing.T) {
 		t.Fatalf("expected Ignored to remain empty, got %s", cfg.Ignored)
 	}
 }
+
+type NestedBase struct {
+	Cluster string `mapstructure:"cluster" env:"CLUSTER_NAME" default:"prod-cluster"`
+}
+
+type ContainerConfig struct {
+	*NestedBase
+	Replicas int `mapstructure:"replicas" default:"3"`
+}
+
+func TestConfig_EmbeddedNilPointerStruct(t *testing.T) {
+	_ = os.Setenv("CLUSTER_NAME", "k8s-us-east")
+	defer func() { _ = os.Unsetenv("CLUSTER_NAME") }()
+
+	var cfg ContainerConfig
+	// cfg.NestedBase is initially nil
+	if err := Load(&cfg); err != nil {
+		t.Fatalf("unexpected Load error: %v", err)
+	}
+	if cfg.NestedBase == nil {
+		t.Fatal("expected NestedBase to be allocated by viper unmarshaling")
+	}
+	if cfg.Cluster != "k8s-us-east" {
+		t.Fatalf("expected Cluster=k8s-us-east, got %s", cfg.Cluster)
+	}
+	if cfg.Replicas != 3 {
+		t.Fatalf("expected Replicas=3, got %d", cfg.Replicas)
+	}
+}

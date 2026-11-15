@@ -58,8 +58,13 @@ func bindViperTags(v *viper.Viper, elem reflect.Value) {
 		}
 		if field.Anonymous {
 			fieldVal := elem.Field(i)
-			if fieldVal.Kind() == reflect.Ptr && !fieldVal.IsNil() {
-				fieldVal = fieldVal.Elem()
+			if fieldVal.Kind() == reflect.Ptr {
+				if fieldVal.IsNil() && fieldVal.CanSet() {
+					fieldVal.Set(reflect.New(fieldVal.Type().Elem()))
+				}
+				if !fieldVal.IsNil() {
+					fieldVal = fieldVal.Elem()
+				}
 			}
 			if fieldVal.Kind() == reflect.Struct {
 				bindViperTags(v, fieldVal)

@@ -112,7 +112,7 @@ func Handler(cfg Config) func(c *context.Context) error {
 			return c.Status(404).String(404, "Not Found")
 		}
 
-		path := c.Param("any")
+		path := strings.TrimSuffix(c.Param("any"), "/")
 
 		if strings.HasSuffix(path, "doc.json") {
 			c.SetHeaderWritten()

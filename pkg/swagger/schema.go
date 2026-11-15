@@ -111,7 +111,7 @@ func jsonFieldName(f reflect.StructField) (name string, skip bool, required bool
 			name = parts[0]
 		}
 		for _, p := range parts[1:] {
-			if p == "omitempty" {
+			if strings.TrimSpace(p) == "omitempty" {
 				required = false
 			}
 		}
