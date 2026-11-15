@@ -4,6 +4,29 @@ All notable changes to KVolt will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v2.4.0] - 2026-11-15
+
+Enterprise hardening and reliability release: adds typed header binding, full HTTP verb testkit suites, RFC-compliant content negotiation, atomic queue retries, and defensive resilience across all 30 packages.
+
+### Added
+
+- **`context.Context.BindHeader`**: Added typed request header binding into structs (`header` tags) with case-insensitive and canonical header key fallback.
+- **`pkg/testkit`**: Added `Put()`, `Delete()`, and `Patch()` methods on `TestServer`, and added `(*Response).Unmarshal(v interface{}) error` for direct response JSON decoding.
+- **`pkg/test`**: Added `(*Response).Unmarshal(v interface{}) error` to decode response JSON into target structs directly.
+- **`pkg/validator`**: Added support for multi-byte UTF-8 character length checks via `utf8.RuneCountInString` on string `min=` / `max=` rules; added automatic whitespace trimming on multi-rule struct tags (e.g. `validate:"required, min=5"`).
+
+### Fixed
+
+- **`middleware.Compress`**: Standardized Gzip content negotiation via `acceptsGzip` parsing quality parameters; clients sending `Accept-Encoding: gzip;q=0` or `q=0.0` explicitly refuse gzip without receiving compressed bytes; added support for wildcard `*` and fractional quality values.
+- **`pkg/queue/redis`**: In `processAndAck`, reordered failed job retries to ensure `enqueueDelayed` executes *before* acknowledging the previous processing slot, guaranteeing at-least-once message durability without lost tasks on worker process crashes.
+- **`pkg/cache`**: In `GetInto`, raw `[]byte` and `string` payloads are unmarshaled directly into destinations without double-marshaling through `sonic.Marshal`, preventing base64 string corruption.
+- **`pkg/config`**: In `bindViperTags`, allocated initially-nil embedded pointer structs via `fieldVal.Set(reflect.New(...))` so Viper tags, environment variables, and defaults are properly discovered and mapped.
+- **`pkg/swagger`**: Normalized trailing slashes in documentation endpoints (`/swagger/doc.json/` -> `doc.json`), and trimmed spaces around struct tag options (`json:", omitempty"`).
+- **`context.ClientIP` & `middleware.Secure`**: Normalized IPv6 bracketed hosts (`[::1]`) when inspecting trusted proxies and peer addresses without ports.
+- **`Engine.ServeHTTP`**: Trailing slash redirects (`RedirectTrailingSlash`) now issue `301 Moved Permanently` on safe `HEAD` requests matching `GET` behavior, rather than `308 Permanent Redirect`.
+- **`pkg/di`**: Added `!val.Elem().CanSet()` reflection guard in `Invoke` to safely reject non-settable pointer targets without panicking.
+- **`pkg/scheduler`**: Added `strings.TrimSpace(spec)` on cron schedules to prevent syntax errors caused by leading or trailing whitespace.
+
 ## [v2.3.1] - 2026-11-14
 
 Hardening patch release for production enterprise deployment: resolves concurrency traps, background worker resilience, dual server error handling, and nil-pointer edge cases.

@@ -16,8 +16,8 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// Version is set at build time: go build -ldflags "-X main.Version=v2.3.1"
-var Version = "2.3.1"
+// Version is set at build time: go build -ldflags "-X main.Version=v2.4.0"
+var Version = "2.4.0"
 
 // Test seams (production defaults).
 var (
