@@ -53,3 +53,12 @@ func TestCSRFSecretBytes_RandPanic(t *testing.T) {
 	}()
 	_ = csrfSecretBytes(CSRFConfig{}) // empty secret → process rand
 }
+
+func TestCSRFTokenMatchDifferentContentSameLength(t *testing.T) {
+	if csrfTokenMatch("aabb", "aacc") {
+		t.Error("csrfTokenMatch returned true for different tokens of equal length")
+	}
+	if csrfTokenMatch("x", "y") {
+		t.Error("csrfTokenMatch returned true for different tokens of equal length")
+	}
+}
