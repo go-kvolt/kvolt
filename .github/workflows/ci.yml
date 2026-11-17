@@ -50,7 +50,16 @@ jobs:
 
       - name: Test
         if: runner.os != 'Windows'
-        run: go test -race -count=1 ./...
+        run: go test -race -count=1 -covermode=atomic -coverprofile=coverage.all.out ./...
+
+      # Library code only: examples, benchmarks and the CLI are not part of the gate.
+      - name: Coverage gate (90%)
+        if: runner.os != 'Windows'
+        run: |
+          grep -v -E '/example/|/benchmarks/|/cmd/' coverage.all.out > coverage.lib.out
+          total=$(go tool cover -func=coverage.lib.out | awk '/^total:/ { sub("%", "", $3); print $3 }')
+          echo "library coverage: ${total}%"
+          awk -v t="$total" 'BEGIN { if (t + 0 < 90) { print "coverage " t "% is below the 90% gate"; exit 1 } }'
 
       - name: Test
         if: runner.os == 'Windows'

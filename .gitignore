@@ -64,3 +64,6 @@ example/load_test
 
 # Fuzz working cache (seeds stay in source)
 **/testdata/fuzz/
+
+# Output of scripts/full_check.ps1
+test-results/

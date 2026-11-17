@@ -1,0 +1,4 @@
+# Go sources are always LF, so gofmt and golangci-lint give the same result on every platform.
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
