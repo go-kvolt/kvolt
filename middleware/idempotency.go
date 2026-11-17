@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +24,8 @@ const (
 	IdempotencyKeyHeader      = "Idempotency-Key"
 	maxIdempotencyKeyLen      = 128
 	defaultIdempotencyMaxKeys = 10_000
+	// defaultIdempotencyMaxResponseBytes caps the response body kept for replay.
+	defaultIdempotencyMaxResponseBytes = 1 << 20
 )
 
 // IdempotencyRecord is a cached response for a key (2xx/4xx only; 5xx are not stored).
@@ -147,6 +150,10 @@ type IdempotencyConfig struct {
 	KeyFunc func(c *context.Context, rawKey string) string
 	// Skipper skips idempotency when true.
 	Skipper func(c *context.Context) bool
+	// MaxResponseBytes caps the response body kept for replay (default 1MB).
+	// Larger responses are sent normally but not stored, so a retry re-executes.
+	// Negative means no limit.
+	MaxResponseBytes int64
 }
 
 func idempotencyIncludeBody(cfg IdempotencyConfig) bool {
@@ -168,6 +175,9 @@ func Idempotency(cfg IdempotencyConfig) func(c *context.Context) error {
 	}
 	if len(cfg.Methods) == 0 {
 		cfg.Methods = []string{http.MethodPost, http.MethodPut, http.MethodPatch}
+	}
+	if cfg.MaxResponseBytes == 0 {
+		cfg.MaxResponseBytes = defaultIdempotencyMaxResponseBytes
 	}
 	allowed := make(map[string]bool, len(cfg.Methods))
 	for _, m := range cfg.Methods {
@@ -249,10 +259,26 @@ func Idempotency(cfg IdempotencyConfig) func(c *context.Context) error {
 				close(ch)
 				inflight.Delete(storeKey)
 			}()
+			// We are the leader, but an earlier leader may have finished between our
+			// store lookup above and taking the gate: it stores its result before it
+			// releases the gate, so look again before running the handler a second time.
+			if rec, ok, err := cfg.Store.Get(storeKey); err != nil {
+				return httperr.Internal("idempotency store unavailable")
+			} else if ok {
+				replayIdempotency(c, rec)
+				return nil
+			}
 		}
 
 		origWriter := c.Writer
-		cw := &captureResponseWriter{ResponseWriter: origWriter, status: http.StatusOK}
+		// Headers already set by earlier middleware (CORS, RequestID, Secure, ...) are not
+		// part of the handler's response: they are set again on every request, so storing
+		// them would duplicate them on replay.
+		var preHeaders http.Header
+		if origWriter != nil {
+			preHeaders = origWriter.Header().Clone()
+		}
+		cw := &captureResponseWriter{ResponseWriter: origWriter, status: http.StatusOK, maxBody: cfg.MaxResponseBytes}
 		c.Writer = cw
 		defer func() {
 			c.Writer = origWriter
@@ -262,17 +288,43 @@ func Idempotency(cfg IdempotencyConfig) func(c *context.Context) error {
 			cw.status = c.StatusCode()
 		}
 
-		// Do not cache 5xx — retries should re-execute after transient failures.
-		if cw.status > 0 && cw.status < 500 {
+		// Do not cache 5xx or transient 4xx — retries should re-execute after such failures.
+		// Responses over MaxResponseBytes are not cached either.
+		if idempotencyCacheableStatus(cw.status) && !cw.overflow {
 			rec := IdempotencyRecord{
 				Status:  cw.status,
-				Headers: sanitizeIdempotencyHeaders(cw.Header()),
+				Headers: sanitizeIdempotencyHeaders(idempotencyHeaderDiff(preHeaders, cw.Header())),
 				Body:    append([]byte(nil), cw.body.Bytes()...),
 			}
 			_ = cfg.Store.Set(storeKey, rec, cfg.TTL)
 		}
 		return nil
 	}
+}
+
+// idempotencyCacheableStatus reports whether a response status is a final outcome.
+// 5xx and the transient 408 / 425 / 429 are not: a retry should run the handler again.
+func idempotencyCacheableStatus(status int) bool {
+	if status <= 0 || status >= 500 {
+		return false
+	}
+	switch status {
+	case http.StatusRequestTimeout, http.StatusTooEarly, http.StatusTooManyRequests:
+		return false
+	}
+	return true
+}
+
+// idempotencyHeaderDiff returns the headers in after that were added or changed since before.
+func idempotencyHeaderDiff(before, after http.Header) http.Header {
+	out := make(http.Header, len(after))
+	for k, vv := range after {
+		if prev, ok := before[k]; ok && slices.Equal(prev, vv) {
+			continue
+		}
+		out[k] = vv
+	}
+	return out
 }
 
 func defaultIdempotencyKey(c *context.Context, rawKey string, includeBody bool) string {
@@ -382,9 +434,8 @@ func replayIdempotency(c *context.Context, rec IdempotencyRecord) {
 		if strings.EqualFold(k, "Content-Length") || strings.EqualFold(k, "Set-Cookie") {
 			continue
 		}
-		for _, v := range vv {
-			dst.Add(k, v)
-		}
+		// Replace, do not append: appending would duplicate single-value headers.
+		dst[k] = append([]string(nil), vv...)
 	}
 	dst.Set("Idempotent-Replayed", "true")
 	_ = c.Data(rec.Status, "", rec.Body)
@@ -395,6 +446,8 @@ type captureResponseWriter struct {
 	status      int
 	body        bytes.Buffer
 	wroteHeader bool
+	maxBody     int64 // <= 0 means no limit
+	overflow    bool  // body exceeded maxBody; it is no longer captured
 }
 
 func (w *captureResponseWriter) WriteHeader(code int) {
@@ -410,7 +463,14 @@ func (w *captureResponseWriter) Write(b []byte) (int, error) {
 	if !w.wroteHeader {
 		w.WriteHeader(http.StatusOK)
 	}
-	_, _ = w.body.Write(b)
+	if !w.overflow {
+		if w.maxBody > 0 && int64(w.body.Len())+int64(len(b)) > w.maxBody {
+			w.overflow = true
+			w.body = bytes.Buffer{} // release what was captured so far
+		} else {
+			_, _ = w.body.Write(b)
+		}
+	}
 	return w.ResponseWriter.Write(b)
 }
 

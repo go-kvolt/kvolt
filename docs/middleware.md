@@ -11,6 +11,16 @@ Asynchronous, zero-blocking console logger.
 
 ```go
 app.Use(middleware.Logger())
+
+// JSON lines to a writer of your choice (default: standard output)
+app.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{Format: "json", Output: os.Stderr}))
+```
+
+The framework's own status lines ("KVolt is running on ...", "Shutting down server...",
+queue and gRPC notices) are separate from the access log. Route them into your logger with:
+
+```go
+kvolt.SetLogFunc(func(msg string) { slog.Info(msg, "component", "kvolt") })
 ```
 
 ### 2. Recovery
@@ -81,6 +91,10 @@ import "github.com/go-kvolt/kvolt/v2/middleware/redislimit"
 app.Use(redislimit.New(rdb, 100, time.Second))
 ```
 
+If Redis is unreachable the limiter answers 500, so nothing gets past it. Set
+`redislimit.Config{FailOpen: true}` to let requests through instead; keep the default
+on login and other abuse-sensitive routes.
+
 ### 5b. Metrics
 In-process request counters (optional `OnRequest` hook for OTel):
 
@@ -140,6 +154,8 @@ store := middleware.NewMemoryIdempotencyStore()
 // store := redisidem.New(rdb)
 app.Use(middleware.Idempotency(middleware.IdempotencyConfig{Store: store, Required: true}))
 ```
+
+Only final outcomes are stored: `5xx`, `408`, `425` and `429` responses are not, so a retry runs the handler again. Responses larger than `MaxResponseBytes` (default 1MB) are sent normally but not stored. Register `Idempotency` after `CORS` / `RequestID`; headers those set are not part of the stored response.
 
 ### 5g. Audit hook
 Emits a structured event after each request (you persist/ship it):
@@ -207,6 +223,15 @@ Puts a deadline on `c.Request.Context()`. Slow invoice/DB handlers should honor 
 ```go
 app.Use(middleware.Timeout(15 * time.Second))
 ```
+
+When the deadline passes the client gets a `504` and the handler keeps running until it
+returns. Go cannot stop a goroutine from outside, so a handler that ignores
+`c.Request.Context()` keeps using CPU and connections; it just can no longer affect the
+response. Pass the request context to database and HTTP calls so the work actually stops.
+
+The handler runs on its own copy of the `Context`. If it finishes in time, the status and
+any values it stored with `c.Set` are visible to the middleware outside `Timeout`. If it
+does not, nothing it does afterwards reaches the response or the outer middleware.
 
 ### 10. JWT Authentication
 ```go

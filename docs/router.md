@@ -20,6 +20,18 @@ app.GET("/users/:id", func(c *context.Context) error {
 })
 ```
 
+A parameter always holds a non-empty segment: `/users//posts` does not match
+`/users/:id/posts`.
+
+## Matching rules
+
+- **Static beats parameter.** With `/users/new` and `/users/:id` registered, `/users/new`
+  goes to the static route and everything else (`/users/next`, `/users/42`) to `:id`.
+- **`HEAD` uses the `GET` route.** A `GET` route also answers `HEAD` with the same headers
+  and no body, unless you register a `HEAD` route for that path.
+- **405 and `Allow`.** A path registered for other methods answers 405 with an `Allow`
+  header listing them.
+
 ## Real-World Pattern: RESTful API
 
 Here is how you might structure a typical API resource.

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/go-kvolt/kvolt/v2/context"
+	"github.com/go-kvolt/kvolt/v2/internal/logx"
 	"github.com/go-kvolt/kvolt/v2/middleware"
 	"github.com/go-kvolt/kvolt/v2/router"
 )
@@ -172,6 +173,13 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := e.router.FindEx(r.Method, r.URL.Path, c.Params)
+	if !res.Found && r.Method == http.MethodHead {
+		// HEAD is GET without a body (RFC 9110): a GET route answers it unless a HEAD
+		// route was registered explicitly. net/http discards the body for HEAD.
+		if get := e.router.FindEx(http.MethodGet, r.URL.Path, res.Params); get.Found || (get.TSR && !res.TSR) {
+			res = get
+		}
+	}
 	c.Params = res.Params
 	switch {
 	case res.Found:
@@ -194,10 +202,13 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		})
 	case e.HandleMethodNotAllowed:
 		if allowed := e.router.AllowedMethods(r.URL.Path); len(allowed) > 0 {
+			if slices.Contains(allowed, http.MethodGet) && !slices.Contains(allowed, http.MethodHead) {
+				allowed = append(allowed, http.MethodHead) // GET routes answer HEAD
+			}
 			if !slices.Contains(allowed, http.MethodOptions) {
 				allowed = append(allowed, http.MethodOptions)
-				slices.Sort(allowed)
 			}
+			slices.Sort(allowed)
 			w.Header().Set("Allow", strings.Join(allowed, ", "))
 			if r.Method == http.MethodOptions {
 				c.Handlers = append(append([]context.HandlerFunc{}, e.RouterGroup.middleware...), func(c *context.Context) error {
@@ -357,8 +368,8 @@ func (e *Engine) serveAndWait(srv *http.Server, certFile, keyFile string) error 
 	if certFile != "" && keyFile != "" {
 		scheme = "https"
 	}
-	fmt.Println("⚡ KVolt is running on " + formatListenURL(scheme, srv.Addr))
-	fmt.Println("Press Ctrl+C to stop")
+	logx.Println("⚡ KVolt is running on " + formatListenURL(scheme, srv.Addr))
+	logx.Println("Press Ctrl+C to stop")
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -389,15 +400,15 @@ func (e *Engine) serveAndWait(srv *http.Server, certFile, keyFile string) error 
 	case <-testServeQuit:
 	}
 
-	fmt.Println("\nShutting down server...")
+	logx.Println("\nShutting down server...")
 	ctx, cancel := stdContext.WithTimeout(stdContext.Background(), e.shutdownTimeout())
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		fmt.Println("Server Shutdown Error:", err)
+		logx.Println("Server Shutdown Error:", err)
 		return err
 	}
-	fmt.Println("Server exiting")
+	logx.Println("Server exiting")
 	return nil
 }
 
@@ -417,7 +428,7 @@ func (e *Engine) ListenAndServe(addr string) error {
 	if testListenHook != nil {
 		testListenHook(ln)
 	}
-	fmt.Println("⚡ KVolt is running on " + formatListenURL("http", addr))
+	logx.Println("⚡ KVolt is running on " + formatListenURL("http", addr))
 	// #nosec G114 -- ListenAndServe provides bare net/http behavior; use Run() for production timeouts
 	return http.Serve(ln, e)
 }

@@ -16,8 +16,8 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// Version is set at build time: go build -ldflags "-X main.Version=v2.4.0"
-var Version = "2.4.0"
+// Version is set at build time: go build -ldflags "-X main.Version=v2.5.0"
+var Version = "2.5.0"
 
 // Test seams (production defaults).
 var (
@@ -303,16 +303,18 @@ func runDocker() {
 	const dockerfile = `# Build stage
 FROM golang:1.27-alpine AS builder
 WORKDIR /app
-COPY go.mod ./
+COPY go.mod go.sum* ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -o /app/bin/server ./cmd/api
 
 # Run stage
-FROM alpine:3.19
-RUN apk --no-cache add ca-certificates
+FROM alpine:3.22
+RUN apk --no-cache add ca-certificates && adduser -D -u 10001 app
 WORKDIR /app
 COPY --from=builder /app/bin/server .
+# Do not run the server as root.
+USER app
 EXPOSE 8080
 CMD ["./server"]
 `
@@ -354,6 +356,9 @@ DEBUG=true
 TENANT_REQUIRED=false
 `
 	writeFile(filepath.Join(name, ".env"), envContent)
+
+	// .env holds local settings and secrets (JWT_SECRET): keep it out of version control.
+	writeFile(filepath.Join(name, ".gitignore"), ".env\n")
 
 	configContent := `app_name: "My KVolt App"
 port: 8080
@@ -413,15 +418,20 @@ func main() {
 		})
 	}).Desc("Root").Tags("meta")
 
+	// API docs are served only when DEBUG=true; in production the route answers 404.
 	app.GET("/swagger/*any", swagger.Handler(swagger.Config{
 		Title:          cfg.AppName,
 		RoutesProvider: swagger.Adapter(app),
 		Host:           fmt.Sprintf("localhost:%d", cfg.Port),
+		Disabled:       !cfg.Debug,
 	}))
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	fmt.Printf("%s running on %s  (docs /swagger/index.html, livez /livez)\n", cfg.AppName, addr)
-	log.Fatal(app.Run(addr))
+	// Run returns nil after a graceful shutdown; only a real error should exit non-zero.
+	if err := app.Run(addr); err != nil {
+		log.Fatal(err)
+	}
 }
 `
 	writeFile(filepath.Join(name, "cmd/api/main.go"), mainContent)

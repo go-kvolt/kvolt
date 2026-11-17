@@ -52,6 +52,12 @@ if err := c.Bind(&u); err != nil {
 // Use 'u' safely here...
 ```
 
+You can also just return the error: `return c.Bind(&u)`. Bad input comes back as a
+`*context.BindError`, which KVolt answers with `400 invalid_request` (malformed JSON,
+wrong value type, unparseable query / form / path value) or `422 validation_failed`
+with `field` / `rule` details (failed `validate` rule). The same applies to `BindQuery`,
+`BindForm`, `BindURI` and `BindHeader`. Use `errors.As` to reach the original error.
+
 ## Raw body (webhooks)
 
 Read bytes for signature checks without breaking later `Bind`/`BindJSON`:

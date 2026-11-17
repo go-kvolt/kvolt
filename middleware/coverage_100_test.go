@@ -17,14 +17,14 @@ func TestCoverage100_MiddlewareGaps(t *testing.T) {
 		logMu.Lock()
 		old := logChan
 		// Empty channel the worker is not draining → immediate empty return.
-		logChan = make(chan string, 2)
+		logChan = make(chan logEntry, 2)
 		logMu.Unlock()
 
 		FlushLogger()
 
 		// Non-empty → sleep-until-deadline path.
 		logMu.Lock()
-		logChan <- "stuck"
+		logChan <- logEntry{msg: "stuck"}
 		logMu.Unlock()
 
 		FlushLogger()
@@ -318,8 +318,8 @@ func TestCoverage100_MiddlewareGaps(t *testing.T) {
 
 	t.Run("logger_sync_fallback_and_empty_ip", func(t *testing.T) {
 		old := logChan
-		logChan = make(chan string, 1)
-		logChan <- "fill"
+		logChan = make(chan logEntry, 1)
+		logChan <- logEntry{msg: "fill"}
 		enqueueLog("sync-fallback")
 		logChan = old
 
@@ -394,18 +394,20 @@ func TestCoverage100_MiddlewareGaps(t *testing.T) {
 		c.Handlers = []context.HandlerFunc{
 			Timeout(time.Second),
 			func(c *context.Context) error {
-				tw, ok := c.Writer.(*timeoutWriter)
-				if !ok {
+				if _, ok := c.Writer.(*timeoutWriter); !ok {
 					t.Fatal("want *timeoutWriter")
 				}
-				tw.status = 201
-				tw.wroteHeader = false
+				// A status and a header with no body: both are still pending when the
+				// handler returns and must survive the hand-back to the request context.
+				c.Writer.Header().Set("X-Created", "yes")
+				c.Status(201)
 				return nil
 			},
 		}
 		c.Next()
-		if w.Code != 201 {
-			t.Fatalf("want 201 got %d", w.Code)
+		c.FlushHeaders() // what the Engine does after the chain
+		if w.Code != 201 || w.Header().Get("X-Created") != "yes" {
+			t.Fatalf("want 201 with X-Created, got %d %v", w.Code, w.Header())
 		}
 	})
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -58,6 +59,11 @@ func (w *gzipResponseWriter) WriteHeader(code int) {
 }
 
 func (w *gzipResponseWriter) skipContentType() bool {
+	// The handler already encoded the body (br, zstd, pre-gzipped file): compressing
+	// again would send a double-encoded body under a single Content-Encoding.
+	if w.Header().Get("Content-Encoding") != "" {
+		return true
+	}
 	ct := w.Header().Get("Content-Type")
 	for _, prefix := range w.cfg.SkipContentTypes {
 		if prefix != "" && strings.HasPrefix(ct, prefix) {
@@ -150,6 +156,11 @@ func (w *gzipResponseWriter) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
+// touched reports whether the handler produced any part of a response.
+func (w *gzipResponseWriter) touched() bool {
+	return w.wroteHeader || w.usingGzip || w.skipped || w.status != 0 || len(w.buf) > 0
+}
+
 func (w *gzipResponseWriter) Close() {
 	if w.usingGzip {
 		if w.gz != nil {
@@ -165,7 +176,11 @@ func (w *gzipResponseWriter) Close() {
 func (w *gzipResponseWriter) Flush() {
 	if w.usingGzip && w.gz != nil {
 		_ = w.gz.Flush()
-	} else if len(w.buf) > 0 {
+	} else if !w.skipped {
+		// A flush before the gzip threshold sends the headers without Content-Encoding
+		// (a streamed response: SSE, chunked progress). From here on the body must stay
+		// uncompressed; switching to gzip later would corrupt the stream.
+		w.skipped = true
 		_ = w.flushPlain()
 	}
 	rw := w.ResponseWriter
@@ -205,22 +220,37 @@ func acceptsGzip(header string) bool {
 	if header == "" {
 		return false
 	}
+	// An explicit gzip entry decides; "*" applies only when gzip is not listed.
+	wildcard := false
 	for _, part := range strings.Split(header, ",") {
-		part = strings.TrimSpace(part)
-		if strings.HasPrefix(part, "gzip") {
-			if idx := strings.Index(part, "q="); idx != -1 {
-				qVal := strings.TrimSpace(part[idx+2:])
-				if qVal == "0" || strings.HasPrefix(qVal, "0.0") || qVal == "0." {
-					return false
-				}
-			}
-			return true
+		coding, params, _ := strings.Cut(part, ";")
+		coding = strings.ToLower(strings.TrimSpace(coding))
+		if coding != "gzip" && coding != "x-gzip" && coding != "*" {
+			continue
 		}
-		if part == "*" {
-			return true
+		ok := encodingQuality(params) > 0
+		if coding != "*" {
+			return ok
 		}
+		wildcard = wildcard || ok
 	}
-	return false
+	return wildcard
+}
+
+// encodingQuality returns the q value from Accept-Encoding parameters (1 when absent or malformed).
+func encodingQuality(params string) float64 {
+	for _, p := range strings.Split(params, ";") {
+		k, v, found := strings.Cut(p, "=")
+		if !found || !strings.EqualFold(strings.TrimSpace(k), "q") {
+			continue
+		}
+		q, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+		if err != nil {
+			return 1
+		}
+		return q
+	}
+	return 1
 }
 
 // Gzip compresses large non-JSON responses when the client sends Accept-Encoding: gzip.
@@ -253,11 +283,20 @@ func GzipWithConfig(cfg GzipConfig) func(c *context.Context) error {
 		gw := &gzipResponseWriter{ResponseWriter: orig, cfg: cfg, status: 0}
 		c.Writer = gw
 		defer func() {
+			c.Writer = orig
+			if !gw.touched() {
+				// Nothing was written: on a panic Recovery must be free to answer 500,
+				// and otherwise a pending c.Status() is flushed by the Engine. Committing
+				// headers here would turn both into a 200.
+				return
+			}
 			if gw.status == 0 && c.StatusCode() != 0 {
 				gw.status = c.StatusCode()
 			}
 			gw.Close()
-			c.Writer = orig
+			if gw.wroteHeader {
+				c.SetHeaderWritten()
+			}
 		}()
 		c.Next()
 		return nil

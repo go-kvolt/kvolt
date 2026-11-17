@@ -4,6 +4,68 @@ All notable changes to KVolt will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v2.5.0] - 2026-11-17
+
+Production-readiness release: a full security and reliability review plus load testing with the race detector (about 17 million requests, 2 hours). Fixes about 25 bugs, including routes returning 404 for valid paths, an open redirect, a data race in `Timeout`, and lost jobs in the Redis queue. Adds `SetLogFunc`, `BindError`, and a CI coverage gate. Contains behaviour changes listed under "Changed (breaking)".
+
+### Changed (breaking)
+
+- **`pkg/validator`**: `required` now rejects the zero value of numbers, booleans, structs (`time.Time`) and arrays, not only empty strings, slices and maps. An omitted JSON field decodes to the zero value and used to pass. A non-nil pointer counts as present, so use `*int` / `*bool` where `0` or `false` is a valid value that must still be sent.
+- **Router**: An empty path segment no longer matches a parameter. `/users//posts` and `/items/` no longer reach `/users/:id/posts` and `/items/:id` with `id == ""`; they answer 404.
+- **`HEAD` requests**: A `GET` route now answers `HEAD` (same handler, body discarded by `net/http`) unless a `HEAD` route is registered for the path. These previously answered 405, which broke load-balancer health checks that use `HEAD`. The `Allow` header lists `HEAD` wherever `GET` exists.
+- **`pkg/swagger`**: The docs page loads a pinned Scalar release (`@scalar/api-reference@1.78.1`) with a Subresource Integrity hash instead of the latest version from the CDN, so a change on the CDN cannot alter the page. `Config.ScriptURL` / `Config.ScriptIntegrity` override it.
+- **`pkg/test`**: `Request.Do` fails the test when the `Tester` has no engine. It used to return `nil`, which turned every following `Expect*` into a no-op and let the test pass without sending a request.
+
+### Security
+
+- **`context.Context.Redirect`**: Rejects every ASCII control character in the location. Browsers strip tab / CR / LF while parsing a URL, so `/<tab>/evil.example` was followed as the protocol-relative `//evil.example` (open redirect). The location is now trimmed before validation and the trimmed value is what is sent. `RedirectURL` rejects control characters too.
+
+### Added
+
+- **`context.BindError`**: Marks an error caused by request content. `Bind`, `BindJSON`, `BindQuery`, `BindForm`, `BindURI` and `BindHeader` return it for bad input. `Error()` returns the original text and the original error stays reachable through `errors.As` / `errors.Is`; a direct type assertion on the returned error (`err.(*json.SyntaxError)`) no longer matches and should use `errors.As`.
+- **`context.Context.Fork` / `Join`**: For middleware that runs the rest of the chain on another goroutine and may stop waiting for it. `Fork` returns an independent, never-pooled copy of the Context; `Join` copies its outcome back once it has finished.
+- **`kvolt.SetLogFunc`**: Sends the framework's own status messages (server started / shutting down, gRPC server and interceptors, queue workers, API docs notice) to a function of your choice instead of standard output, so they can go through `slog`, `zap` or any structured logger. Default output is unchanged.
+- **`middleware.LoggerConfig.Output`**: Writes the access log to any `io.Writer` instead of standard output.
+- **`redislimit.Config.FailOpen`**: Lets requests through when Redis cannot be reached. The default still answers 500.
+- **`swagger.Config.ScriptURL` / `ScriptIntegrity`**: Override the Scalar script loaded by the docs page, to use another version or a self-hosted copy.
+- **CI coverage gate**: The Linux test job fails when library coverage (examples, benchmarks and the CLI excluded) drops below 90%. It is 93.3% at the time of writing.
+- **`pkg/test`, `pkg/testkit`**: Assertion failures are reported at the calling test's line (`t.Helper`), and `testkit` fails the test when a request body cannot be encoded.
+- **`.gitattributes`**: Go sources are checked out with LF on every platform, so `gofmt` and `golangci-lint` no longer flag every file on Windows checkouts with `core.autocrlf=true`. Existing Windows checkouts pick this up on a fresh clone or `git add --renormalize .`.
+- **`middleware.IdempotencyConfig.MaxResponseBytes`**: Caps the response body kept for replay (default 1MB, negative for no limit). Larger responses are sent normally but not stored.
+
+### Fixed
+
+Found by running a real server under concurrent load with the race detector (about 350,000 requests per run):
+
+- **`middleware.Timeout`**: A handler that ignored the deadline kept sharing the request `Context` with the middleware unwinding on the request goroutine. That was a data race on the Context, and with any writer-wrapping middleware outside `Timeout` (`Gzip`, `Idempotency`) the late handler wrote to the real `ResponseWriter` after the request had been answered. The rest of the chain now runs on a private copy of the Context (`Context.Fork`) with a writer that discards late output; the outcome is copied back (`Context.Join`) only when the handler finishes in time. The request Context is no longer marked detached on timeout, since nothing else holds it.
+- **`middleware.Timeout`**: Headers set by a handler that wrote no body (`c.Status(204)`) are no longer lost, and upstream middleware sees the request's own context after `Timeout` returns rather than the cancelled timeout context.
+- **`middleware.Gzip`**: A panic was answered `200` instead of `500` whenever `Gzip` was in the chain: it committed the headers while the panic unwound, before `Recovery` could respond. `Gzip` no longer commits anything when the handler wrote nothing.
+- **`middleware.Gzip`**: A streamed response (SSE) was corrupted when a chunk larger than the gzip threshold followed an earlier flush: the stream switched to gzip after the headers had gone out uncompressed. A flush before the threshold now keeps the whole response uncompressed. A pending `c.Status()` is also no longer written twice.
+- **`middleware.Idempotency`**: Under concurrent requests with the same key the handler could run twice. A request that missed the store, then took the gate just after the first request had stored its result and released it, ran the handler again. The gate holder now checks the store once more before running.
+
+Found by review:
+
+- **Router**: A static route no longer hides a param or catch-all route that shares a prefix with the request. With `/user/new` and `/user/:id` registered, `/user/next`, `/user/n` and `/user/new/posts` returned 404; so did `/a/b/c` with `/a/b/d` and `/a/:x/c`. Lookup now falls back to the wildcard when the static branch does not lead to a handler. Static routes still win when both match.
+- **`context.Bind` and the other `Bind*` methods**: A handler that returns the bind error now answers `400 invalid_request` for malformed JSON, an empty body, a wrong value type or an unparseable parameter, and `422 validation_failed` (with `field` / `rule` details) for a failed `validate` rule. These previously answered `500` and were logged as handler errors. An oversized body is still `413`.
+- **`pkg/session`**: `MaxAge` is now enforced across restarts and across instances sharing a store. The creation time was kept only in process memory, so after a restart (or on another instance) a session lived for as long as it stayed active. It is now stored beside the session under `<token>:created`, with a TTL of `MaxAge` that activity does not extend. Sessions that have no marker — created before this change with `MaxAge` set, or while `MaxAge` was 0 — are rejected once `MaxAge` is on, so those users sign in again once after upgrading.
+- **`middleware/redislimit`**: The default key groups IPv6 clients by /64, matching `middleware.Limiter`. Limiting per IPv6 address let a client get a fresh bucket for every address it rotated through.
+- **`kvolt new` / `kvolt docker`**: The scaffolded `main.go` exits 0 after a graceful shutdown; `log.Fatal(app.Run(addr))` exited 1 on every SIGTERM because `Run` returns `nil`. The scaffold now also writes a `.gitignore` for `.env` and serves API docs only when `DEBUG=true`. The generated Dockerfile runs as a non-root user, copies `go.sum` before downloading modules, and uses `alpine:3.22`.
+- **`pkg/cache/redis`**: `Touch` with no TTL on a key that already has no expiry returned `ErrKeyNotFound`, so a session created with a zero TTL could never be read back from Redis.
+- **`middleware/prometheus`**: The `method` label is limited to the standard HTTP methods; anything else is recorded as `OTHER`. A client could previously create an unlimited number of time series by sending made-up methods.
+- **`middleware.Idempotency`**: A replay no longer duplicates headers set by middleware that runs before it (`CORS`, `RequestID`, `Secure`). Only headers the handler added or changed are stored, and they replace rather than append on replay. Previously a replayed response carried two `Access-Control-Allow-Origin` values, which browsers reject.
+- **`middleware.Idempotency`**: `408`, `425` and `429` responses are no longer cached, so a retry with the same key runs the handler again.
+- **`pkg/queue/redis`**: Promoting delayed jobs, reclaiming expired jobs and reclaiming orphans now run as atomic Lua scripts, and acknowledgement runs in one transaction. A crash between the individual commands could previously lose a retrying job or redeliver a finished one. Backlogs are moved in batches of 100.
+- **`middleware.Logger`**: The `json` format now emits valid JSON for any request path. Control bytes and invalid UTF-8 were written with Go escapes (`\x01`) that JSON parsers reject.
+- **`middleware.Timeout`**: A handler panic after the deadline is now logged. It cannot reach `Recovery` once the 504 has been sent and was previously dropped silently.
+- **`middleware.CORS`**: `Vary: Origin` is set on every response when an allow-list is configured, including responses to refused origins, so shared caches do not serve one origin's response to another.
+- **`middleware.Gzip`**: Responses that already carry a `Content-Encoding` are no longer compressed a second time. `Accept-Encoding` parsing now reads `q` values numerically (`gzip;q=0.05` is accepted), matches the `gzip` coding exactly, and lets an explicit `gzip;q=0` override `*`.
+
+### Docs
+
+- **README**: Replaced the "100% test coverage gates" claim with what CI actually runs, including the new 90% gate.
+- **README and examples**: The quick start and the `full_app` / `tenant_app` examples no longer wrap `app.Run` in `log.Fatal`, which exited 1 after a graceful shutdown.
+- **SECURITY.md**: Supported versions updated to 2.4.x / 2.3.x; added hardening notes for redirects and session `MaxAge`.
+
 ## [v2.4.0] - 2026-11-15
 
 Enterprise hardening and reliability release: adds typed header binding, full HTTP verb testkit suites, RFC-compliant content negotiation, atomic queue retries, and defensive resilience across all 30 packages.

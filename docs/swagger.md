@@ -60,3 +60,17 @@ Visit `http://localhost:8080/swagger/index.html`.
 -   **Scalar UI**
 
 Limits: exotic Go types become generic `object`; prefer JSON-friendly samples.
+
+## Docs page script
+
+The page loads a pinned Scalar release from jsDelivr and the browser verifies it against
+a Subresource Integrity hash (`swagger.DefaultScriptURL`, `swagger.DefaultScriptIntegrity`).
+To use another version, or to serve the script yourself with no CDN at all:
+
+```go
+swagger.Handler(swagger.Config{
+    RoutesProvider:  swagger.Adapter(app),
+    ScriptURL:       "/assets/scalar.js", // or a CDN URL for another version
+    ScriptIntegrity: "",                  // "sha384-..." for a CDN URL
+})
+```

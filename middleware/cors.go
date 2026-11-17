@@ -80,13 +80,16 @@ func CORSWithConfig(cfg CORSConfig) func(c *context.Context) error {
 			return nil
 		}
 		origin := c.Request.Header.Get("Origin")
+		// The response depends on Origin whenever the allow-list is not "*", including
+		// when this origin is refused: without Vary a shared cache could serve a
+		// response made for one origin to another.
+		if !wildcard {
+			c.Writer.Header().Add("Vary", "Origin")
+		}
 		if allow, ok := originAllowed(origin); ok {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", allow)
 			if cfg.AllowCredentials {
 				c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-			}
-			if !wildcard {
-				c.Writer.Header().Add("Vary", "Origin")
 			}
 		}
 		c.Writer.Header().Set("Access-Control-Allow-Methods", methods)

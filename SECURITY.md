@@ -4,9 +4,9 @@
 
 | Version | Supported |
 | ------- | --------- |
+| 2.4.x   | Yes |
 | 2.3.x   | Yes |
-| 2.2.x   | Yes |
-| < 2.2   | Best-effort patches only |
+| < 2.3   | Best-effort patches only |
 
 ## Reporting a vulnerability
 
@@ -22,4 +22,6 @@ We aim to acknowledge reports within a few days and ship fixes in a patch releas
 - Prefer JWT `Claim`-based tenant resolution over trusting `X-Tenant-ID` alone.
 - Use a strong `JWT` / CSRF `Secret` in production; rotate on compromise.
 - Bound idempotency and rate-limit stores (`MaxKeys`); use Redis stores for multi-instance.
+- `Context.Redirect` only follows same-origin paths. Pass user-supplied "next" URLs to it, never to `RedirectURL`.
+- Set `session.Manager.MaxAge` for an absolute session lifetime. It is stored next to the session, so it holds across restarts and instances. Sessions created before `MaxAge` was set are rejected once it is on.
 - Keep dependencies updated (Dependabot / `govulncheck`).

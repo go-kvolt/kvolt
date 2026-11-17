@@ -4,9 +4,11 @@ import (
 	"bufio"
 	stdctx "context"
 	"errors"
+	"log"
 	"net"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-kvolt/kvolt/v2/context"
@@ -15,6 +17,12 @@ import (
 // Timeout attaches a deadline to the request context and bounds the response wait.
 // After d, if nothing was written, a 504 is sent and further handler writes are dropped.
 // Handlers should still check c.Request.Context().Done() to stop work early.
+//
+// The rest of the chain runs on its own goroutine with its own Context (see
+// Context.Fork). A handler that ignores the deadline keeps running after the 504 has
+// been sent, but everything it does goes to that private Context and a writer that
+// discards late output: it cannot touch the response, the pooled Context, or the
+// middleware that is unwinding on the request goroutine.
 func Timeout(d time.Duration) func(c *context.Context) error {
 	return func(c *context.Context) error {
 		if c == nil || c.Request == nil || c.Writer == nil {
@@ -29,7 +37,6 @@ func Timeout(d time.Duration) func(c *context.Context) error {
 		}
 		ctx, cancel := stdctx.WithTimeout(c.Request.Context(), d)
 		defer cancel()
-		c.Request = c.Request.WithContext(ctx)
 
 		origWriter := c.Writer
 		preH := make(http.Header)
@@ -38,76 +45,93 @@ func Timeout(d time.Duration) func(c *context.Context) error {
 			tw.h[k] = append([]string(nil), vv...)
 			preH[k] = append([]string(nil), vv...)
 		}
-		c.Writer = tw
+		fork := c.Fork(tw, c.Request.WithContext(ctx))
 
 		var panicVal interface{}
+		var timedOut atomic.Bool
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
 			defer func() {
 				if r := recover(); r != nil {
 					panicVal = r
+					// After the deadline nobody is waiting to re-panic this value, so
+					// Recovery never sees it. Log it here or it is lost.
+					if timedOut.Load() {
+						log.Printf("[KVolt Timeout] panic in handler after timeout: %v", r)
+					}
 				}
 			}()
-			c.Next()
+			fork.Next()
 		}()
 
 		select {
 		case <-done:
-			c.Writer = origWriter
+			// The handler goroutine is finished, so the fork is ours again.
+			tw.mu.Lock()
+			if !tw.wroteHeader {
+				// Headers set without a body (c.Status(204), or a panic before any
+				// write) are still pending in the private map: hand them over.
+				replaceHeader(origWriter.Header(), tw.h)
+			}
+			tw.mu.Unlock()
+			c.Join(fork)
 			if panicVal != nil {
 				panic(panicVal)
 			}
-			tw.mu.Lock()
-			defer tw.mu.Unlock()
-			if !tw.wroteHeader && tw.status != 0 {
-				tw.writeHeaderLocked(tw.status)
-			}
 			return nil
 		case <-ctx.Done():
-			c.SetDetached()
+			timedOut.Store(true)
 			tw.mu.Lock()
+			defer tw.mu.Unlock()
+			tw.timedOut = true
 			if tw.wroteHeader {
-				tw.timedOut = true
-				tw.mu.Unlock()
+				// The handler had already started the response; it stays as sent.
+				c.Status(tw.status)
+				c.SetHeaderWritten()
 				return nil
 			}
-			tw.timedOut = true
-			for k, vv := range preH {
-				dst := tw.ResponseWriter.Header()
-				dst.Del(k)
-				for _, v := range vv {
-					dst.Add(k, v)
-				}
-			}
-			tw.ResponseWriter.Header().Set("Content-Type", "application/json; charset=utf-8")
-			tw.ResponseWriter.WriteHeader(http.StatusGatewayTimeout)
-			_, _ = tw.ResponseWriter.Write([]byte(`{"error":"Gateway Timeout"}`))
+			replaceHeader(origWriter.Header(), preH)
+			origWriter.Header().Set("Content-Type", "application/json; charset=utf-8")
+			origWriter.WriteHeader(http.StatusGatewayTimeout)
+			_, _ = origWriter.Write([]byte(`{"error":"Gateway Timeout"}`))
 			tw.wroteHeader = true
 			tw.status = http.StatusGatewayTimeout
 			c.Status(http.StatusGatewayTimeout)
 			c.SetHeaderWritten()
-			tw.mu.Unlock()
 			return nil
 		}
 	}
 }
 
+// replaceHeader makes dst hold exactly the entries of src.
+func replaceHeader(dst, src http.Header) {
+	for k := range dst {
+		if _, ok := src[k]; !ok {
+			delete(dst, k)
+		}
+	}
+	for k, vv := range src {
+		dst[k] = append([]string(nil), vv...)
+	}
+}
+
+// timeoutWriter is the ResponseWriter the handler goroutine sees. Every method is
+// serialized with the timeout decision by mu; once timedOut is set nothing reaches the
+// real writer any more, because the request goroutine may already have returned it to
+// net/http.
 type timeoutWriter struct {
 	http.ResponseWriter
-	h           http.Header
+	h           http.Header // the handler's view of the headers; copied out on WriteHeader
 	mu          sync.Mutex
 	wroteHeader bool
 	timedOut    bool
 	status      int
 }
 
+// Header always returns the private map: handing out the real one would let the
+// handler goroutine mutate it after the request goroutine has moved on.
 func (w *timeoutWriter) Header() http.Header {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.wroteHeader {
-		return w.ResponseWriter.Header()
-	}
 	return w.h
 }
 
@@ -122,13 +146,7 @@ func (w *timeoutWriter) WriteHeader(code int) {
 
 func (w *timeoutWriter) writeHeaderLocked(code int) {
 	w.status = code
-	for k, vv := range w.h {
-		dst := w.ResponseWriter.Header()
-		dst.Del(k)
-		for _, v := range vv {
-			dst.Add(k, v)
-		}
-	}
+	replaceHeader(w.ResponseWriter.Header(), w.h)
 	w.ResponseWriter.WriteHeader(code)
 	w.wroteHeader = true
 }
@@ -151,6 +169,10 @@ func (w *timeoutWriter) Flush() {
 	if w.timedOut {
 		return
 	}
+	if !w.wroteHeader {
+		// Flushing commits the headers (net/http sends an implicit 200): commit ours.
+		w.writeHeaderLocked(http.StatusOK)
+	}
 	rw := w.ResponseWriter
 	for rw != nil {
 		if f, ok := rw.(http.Flusher); ok {
@@ -166,10 +188,21 @@ func (w *timeoutWriter) Flush() {
 }
 
 func (w *timeoutWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.timedOut {
+		return nil, nil, errors.New("timeout: the request has already been answered")
+	}
 	rw := w.ResponseWriter
 	for rw != nil {
 		if h, ok := rw.(http.Hijacker); ok {
-			return h.Hijack()
+			conn, buf, err := h.Hijack()
+			if err == nil {
+				// The connection now belongs to the handler: never write a 504 to it.
+				w.wroteHeader = true
+				w.status = http.StatusSwitchingProtocols
+			}
+			return conn, buf, err
 		}
 		if u, ok := rw.(interface{ Unwrap() http.ResponseWriter }); ok {
 			rw = u.Unwrap()

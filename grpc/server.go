@@ -5,6 +5,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/go-kvolt/kvolt/v2/internal/logx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
@@ -98,7 +99,7 @@ func (s *Server) Serve(lis net.Listener) error {
 	s.listener = lis
 	s.mu.Unlock()
 
-	fmt.Printf("⚡ KVolt gRPC server listening on %s\n", lis.Addr().String())
+	logx.Printf("⚡ KVolt gRPC server listening on %s\n", lis.Addr().String())
 	return s.srv.Serve(lis)
 }
 

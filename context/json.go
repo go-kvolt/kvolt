@@ -30,7 +30,7 @@ func (c *Context) BindJSON(obj interface{}) error {
 	if c == nil || c.Request == nil || c.Request.Body == nil {
 		return fmt.Errorf("nil request body")
 	}
-	return json.NewDecoder(c.Request.Body).Decode(obj)
+	return bindErr(json.NewDecoder(c.Request.Body).Decode(obj))
 }
 
 // JSON sends a JSON response with sonic's fastest encoder into a pooled buffer.

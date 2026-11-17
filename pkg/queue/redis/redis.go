@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bytedance/sonic"
+	"github.com/go-kvolt/kvolt/v2/internal/logx"
 	"github.com/go-kvolt/kvolt/v2/pkg/queue"
 	"github.com/google/uuid"
 	goredis "github.com/redis/go-redis/v9"
@@ -24,6 +25,45 @@ const (
 
 // Overridable in tests to exercise wire marshal failure paths.
 var wireMarshal = sonic.Marshal
+
+// moveBatch bounds how many jobs one script call moves, so a large backlog
+// cannot block Redis for long.
+const moveBatch = 100
+
+// moveDueScript atomically moves members of a sorted set whose score is due
+// back to the ready list. A job is never in neither place, so a crash between
+// the steps cannot lose it.
+//
+//	KEYS[1] sorted set (delayed or inflight)   ARGV[1] now (ms)
+//	KEYS[2] ready list                         ARGV[2] max members to move
+//	KEYS[3] processing list (optional)
+var moveDueScript = goredis.NewScript(`
+local due = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', ARGV[1], 'LIMIT', 0, ARGV[2])
+for _, m in ipairs(due) do
+  redis.call('ZREM', KEYS[1], m)
+  if KEYS[3] then
+    redis.call('LREM', KEYS[3], 1, m)
+  end
+  redis.call('LPUSH', KEYS[2], m)
+end
+return #due
+`)
+
+// reclaimOrphanScript atomically moves one processing entry that has no inflight
+// deadline back to ready.
+//
+//	KEYS[1] processing list   KEYS[2] inflight sorted set   KEYS[3] ready list
+//	ARGV[1] job payload
+var reclaimOrphanScript = goredis.NewScript(`
+if redis.call('ZSCORE', KEYS[2], ARGV[1]) then
+  return 0
+end
+if redis.call('LREM', KEYS[1], 1, ARGV[1]) == 0 then
+  return 0
+end
+redis.call('LPUSH', KEYS[3], ARGV[1])
+return 1
+`)
 
 type jobWire struct {
 	ID         string                 `json:"id"`
@@ -195,7 +235,7 @@ func (q *Queue) Start() {
 		q.wg.Add(1)
 		go q.workerLoop(i)
 	}
-	fmt.Printf("Queue (redis) started with %d workers (visibility=%s)\n", q.workerCount, q.visibility)
+	logx.Printf("Queue (redis) started with %d workers (visibility=%s)\n", q.workerCount, q.visibility)
 }
 
 // Stop implements queue.Worker.
@@ -208,7 +248,7 @@ func (q *Queue) Stop() {
 			close(q.quit)
 		}
 		q.wg.Wait()
-		fmt.Println("Queue (redis) stopped")
+		logx.Println("Queue (redis) stopped")
 	})
 }
 
@@ -223,6 +263,14 @@ func (q *Queue) workerLoop(id int) {
 		}
 
 		q.promoteDelayed(ctx)
+
+		// Stop may have been called while delayed jobs were being promoted: do not
+		// start a blocking pop (up to the BRPOP timeout) that Stop would then wait for.
+		select {
+		case <-q.quit:
+			return
+		default:
+		}
 
 		data, err := q.client.BRPopLPush(ctx, q.readyKey(), q.processingKey(), q.brpopWait).Result()
 		if err == goredis.Nil {
@@ -274,21 +322,11 @@ func (q *Queue) reclaimExpired(ctx context.Context) {
 	if q == nil || q.client == nil {
 		return
 	}
-	now := float64(time.Now().UnixMilli())
-	members, err := q.client.ZRangeByScore(ctx, q.inflightKey(), &goredis.ZRangeBy{
-		Min: "-inf",
-		Max: fmt.Sprintf("%f", now),
-	}).Result()
-	if err == nil {
-		for _, m := range members {
-			n, err := q.client.ZRem(ctx, q.inflightKey(), m).Result()
-			if err != nil || n == 0 {
-				continue
-			}
-			_ = q.client.LRem(ctx, q.processingKey(), 1, m).Err()
-			_ = q.client.LPush(ctx, q.readyKey(), m).Err()
-			log.Printf("queue redis: reclaimed expired job\n")
-		}
+	n, err := q.moveDue(ctx, q.inflightKey(), q.processingKey())
+	if err != nil {
+		log.Printf("queue redis: reclaim expired: %v\n", err)
+	} else if n > 0 {
+		log.Printf("queue redis: reclaimed %d expired job(s)\n", n)
 	}
 	// Jobs stuck in processing without an inflight deadline (crash between
 	// BRPOPLPUSH and ZADD) would never be reaped — recover them here.
@@ -305,18 +343,33 @@ func (q *Queue) reclaimOrphans(ctx context.Context) {
 		return
 	}
 	for _, m := range items {
-		_, err := q.client.ZScore(ctx, q.inflightKey(), m).Result()
-		if err == nil {
-			continue // has a deadline — leave for score-based reclaim
+		moved, err := reclaimOrphanScript.Run(ctx, q.client,
+			[]string{q.processingKey(), q.inflightKey(), q.readyKey()}, m).Int()
+		if err != nil || moved == 0 {
+			continue // has a deadline (left for score-based reclaim), already gone, or Redis error
 		}
-		if err != goredis.Nil {
-			continue
-		}
-		if n, err := q.client.LRem(ctx, q.processingKey(), 1, m).Result(); err != nil || n == 0 {
-			continue
-		}
-		_ = q.client.LPush(ctx, q.readyKey(), m).Err()
 		log.Printf("queue redis: reclaimed orphan processing job\n")
+	}
+}
+
+// moveDue moves every due member of zsetKey to the ready list, in batches.
+// processingKey is optional: when set, each member is also removed from that list.
+func (q *Queue) moveDue(ctx context.Context, zsetKey, processingKey string) (int, error) {
+	keys := []string{zsetKey, q.readyKey()}
+	if processingKey != "" {
+		keys = append(keys, processingKey)
+	}
+	total := 0
+	for {
+		now := time.Now().UnixMilli()
+		n, err := moveDueScript.Run(ctx, q.client, keys, now, moveBatch).Int()
+		if err != nil {
+			return total, err
+		}
+		total += n
+		if n < moveBatch {
+			return total, nil
+		}
 	}
 }
 
@@ -324,20 +377,12 @@ func (q *Queue) promoteDelayed(ctx context.Context) {
 	if q == nil || q.client == nil {
 		return
 	}
-	now := float64(time.Now().UnixMilli())
-	members, err := q.client.ZRangeByScore(ctx, q.delayedKey(), &goredis.ZRangeBy{
-		Min: "-inf",
-		Max: fmt.Sprintf("%f", now),
-	}).Result()
-	if err != nil || len(members) == 0 {
-		return
-	}
-	for _, m := range members {
-		n, err := q.client.ZRem(ctx, q.delayedKey(), m).Result()
-		if err != nil || n == 0 {
-			continue
+	if _, err := q.moveDue(ctx, q.delayedKey(), ""); err != nil {
+		select {
+		case <-q.quit:
+		default:
+			log.Printf("queue redis: promote delayed: %v\n", err)
 		}
-		_ = q.client.LPush(ctx, q.readyKey(), m).Err()
 	}
 }
 
@@ -345,8 +390,14 @@ func (q *Queue) ack(ctx context.Context, data string) {
 	if q == nil || q.client == nil {
 		return
 	}
-	_ = q.client.LRem(ctx, q.processingKey(), 1, data).Err()
-	_ = q.client.ZRem(ctx, q.inflightKey(), data).Err()
+	// One transaction: a job must not be left in only one of the two structures,
+	// or the reaper would deliver it again after it already succeeded.
+	pipe := q.client.TxPipeline()
+	pipe.LRem(ctx, q.processingKey(), 1, data)
+	pipe.ZRem(ctx, q.inflightKey(), data)
+	if _, err := pipe.Exec(ctx); err != nil {
+		log.Printf("queue redis: ack failed (job may be redelivered): %v\n", err)
+	}
 }
 
 func (q *Queue) processAndAck(ctx context.Context, data string) {

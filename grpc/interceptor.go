@@ -2,11 +2,11 @@ package grpc
 
 import (
 	"context"
-	"fmt"
 	"runtime/debug"
 	"strings"
 	"time"
 
+	"github.com/go-kvolt/kvolt/v2/internal/logx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -37,7 +37,7 @@ func LoggingInterceptor() grpc.UnaryServerInterceptor {
 		if info != nil {
 			method = info.FullMethod
 		}
-		fmt.Printf("[gRPC] %s | %s | %s\n", method, code, dur)
+		logx.Printf("[gRPC] %s | %s | %s\n", method, code, dur)
 		return resp, err
 	}
 }
@@ -63,7 +63,7 @@ func StreamLoggingInterceptor() grpc.StreamServerInterceptor {
 		if info != nil {
 			method = info.FullMethod
 		}
-		fmt.Printf("[gRPC-Stream] %s | %s | %s\n", method, code, dur)
+		logx.Printf("[gRPC-Stream] %s | %s | %s\n", method, code, dur)
 		return err
 	}
 }
@@ -85,7 +85,7 @@ func RecoveryInterceptor() grpc.UnaryServerInterceptor {
 				if info != nil {
 					method = info.FullMethod
 				}
-				fmt.Printf("[gRPC-Recovery] panic in %s: %v\n%s\n", method, r, debug.Stack())
+				logx.Printf("[gRPC-Recovery] panic in %s: %v\n%s\n", method, r, debug.Stack())
 				err = status.Errorf(codes.Internal, "internal server error")
 			}
 		}()
@@ -108,7 +108,7 @@ func StreamRecoveryInterceptor() grpc.StreamServerInterceptor {
 				if info != nil {
 					method = info.FullMethod
 				}
-				fmt.Printf("[gRPC-Recovery] panic in stream %s: %v\n%s\n", method, r, debug.Stack())
+				logx.Printf("[gRPC-Recovery] panic in stream %s: %v\n%s\n", method, r, debug.Stack())
 				err = status.Errorf(codes.Internal, "internal server error")
 			}
 		}()
@@ -155,7 +155,7 @@ func AuthInterceptor(validate AuthFunc) grpc.UnaryServerInterceptor {
 			if info != nil {
 				method = info.FullMethod
 			}
-			fmt.Printf("[gRPC-Auth] %s: %v\n", method, valErr)
+			logx.Printf("[gRPC-Auth] %s: %v\n", method, valErr)
 			return nil, status.Error(codes.Unauthenticated, "unauthenticated")
 		}
 		return handler(ctx, req)
@@ -192,7 +192,7 @@ func StreamAuthInterceptor(validate AuthFunc) grpc.StreamServerInterceptor {
 			if info != nil {
 				method = info.FullMethod
 			}
-			fmt.Printf("[gRPC-Auth] %s: %v\n", method, valErr)
+			logx.Printf("[gRPC-Auth] %s: %v\n", method, valErr)
 			return status.Error(codes.Unauthenticated, "unauthenticated")
 		}
 		return handler(srv, ss)

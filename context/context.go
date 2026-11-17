@@ -206,7 +206,7 @@ func (c *Context) Bind(obj interface{}) error {
 	if err := c.BindJSON(obj); err != nil {
 		return err
 	}
-	return validate.Struct(obj)
+	return validationErr(validate.Struct(obj))
 }
 
 // Next executes the next middleware in the chain.
@@ -259,6 +259,13 @@ func (c *Context) WriteHandlerError(err error) {
 	var maxBytes *http.MaxBytesError
 	if errors.As(err, &maxBytes) || strings.Contains(err.Error(), "http: request body too large") {
 		_ = c.JSON(http.StatusRequestEntityTooLarge, httperr.PayloadTooLarge(""))
+		return
+	}
+	// Bad input is the client's error: answer 4xx and do not log it as a server fault.
+	var bindError *BindError
+	if errors.As(err, &bindError) {
+		he := bindError.httpError()
+		_ = c.JSON(he.Status, he)
 		return
 	}
 	log.Printf("[KVolt] handler error: %v", err)
@@ -594,6 +601,8 @@ func (c *Context) Redirect(code int, location string) error {
 	if c == nil || c.Writer == nil || c.Request == nil {
 		return fmt.Errorf("nil context, writer, or request")
 	}
+	// Validate and send the same trimmed value: surrounding whitespace is not part of the target.
+	location = strings.TrimSpace(location)
 	if !isSafeRelativeRedirect(location) {
 		return httperr.BadRequest("unsafe_redirect", "only relative redirects are allowed")
 	}
@@ -614,7 +623,7 @@ func (c *Context) RedirectURL(code int, location string) error {
 	if strings.TrimSpace(location) == "" {
 		return httperr.BadRequest("unsafe_redirect", "empty redirect location")
 	}
-	if strings.ContainsAny(location, "\r\n\x00") {
+	if hasControlChar(location) {
 		return httperr.BadRequest("unsafe_redirect", "invalid characters in redirect location")
 	}
 	if code < 300 || code > 308 {
@@ -626,6 +635,16 @@ func (c *Context) RedirectURL(code int, location string) error {
 	return nil
 }
 
+// hasControlChar reports whether s contains an ASCII control character (including DEL).
+func hasControlChar(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x20 || s[i] == 0x7f {
+			return true
+		}
+	}
+	return false
+}
+
 func isSafeRelativeRedirect(location string) bool {
 	location = strings.TrimSpace(location)
 	if location == "" {
@@ -635,8 +654,10 @@ func isSafeRelativeRedirect(location string) bool {
 	if !strings.HasPrefix(location, "/") || strings.HasPrefix(location, "//") {
 		return false
 	}
-	// Backslash / CRLF / NUL are strictly forbidden.
-	if strings.ContainsAny(location, "\\\r\n\x00") {
+	// Backslash is forbidden (browsers treat it as "/"), and so is every ASCII control
+	// character: browsers strip tab/CR/LF while parsing a URL, so "/\t/evil.com" would
+	// be followed as the protocol-relative "//evil.com".
+	if strings.IndexByte(location, '\\') != -1 || hasControlChar(location) {
 		return false
 	}
 	// Prevent userinfo host confusion at the start of path (e.g. /@evil.com).

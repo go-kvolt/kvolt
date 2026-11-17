@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-kvolt/kvolt/v2"
 	"github.com/go-kvolt/kvolt/v2/context"
+	"github.com/go-kvolt/kvolt/v2/internal/logx"
 	"github.com/swaggo/swag"
 )
 
@@ -68,7 +69,24 @@ type Config struct {
 	Disabled bool
 	// Host is the address where the server is running (e.g. "localhost:8080").
 	Host string
+	// ScriptURL is the Scalar API reference script loaded by the docs page.
+	// Default: DefaultScriptURL, a pinned release on the jsDelivr CDN checked against
+	// DefaultScriptIntegrity. Set it to use another version or a copy you host yourself.
+	ScriptURL string
+	// ScriptIntegrity is the Subresource Integrity value for ScriptURL
+	// (e.g. "sha384-..."). The browser refuses a script whose content does not match.
+	// Ignored when ScriptURL is empty; leave empty for a script you serve yourself.
+	ScriptIntegrity string
 }
+
+// The docs page loads a pinned Scalar release and checks its hash, so a change on the
+// CDN cannot alter what runs on the page. To upgrade, change both values together.
+const (
+	// DefaultScriptURL is the script used when Config.ScriptURL is empty.
+	DefaultScriptURL = "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.78.1/dist/browser/standalone.js"
+	// DefaultScriptIntegrity is the SHA-384 of the file at DefaultScriptURL.
+	DefaultScriptIntegrity = "sha384-HVpqul+lojb2wwVK554SYr5rD2XqgJZqkYKGl4MyZarBSg+rHR9F0x1LVgzgj7JZ"
+)
 
 // RouteInfo mirrors kvolt.RouteInfo for OpenAPI generation.
 type RouteInfo struct {
@@ -87,6 +105,14 @@ func Handler(cfg Config) func(c *context.Context) error {
 	if cfg.Title == "" {
 		cfg.Title = "KVolt API Docs"
 	}
+	if strings.TrimSpace(cfg.ScriptURL) == "" {
+		cfg.ScriptURL = DefaultScriptURL
+		cfg.ScriptIntegrity = DefaultScriptIntegrity
+	}
+	scriptAttrs := ""
+	if integrity := strings.TrimSpace(cfg.ScriptIntegrity); integrity != "" {
+		scriptAttrs = ` integrity="` + template.HTMLEscapeString(integrity) + `" crossorigin="anonymous"`
+	}
 
 	var (
 		cachedSpec []byte
@@ -101,7 +127,7 @@ func Handler(cfg Config) func(c *context.Context) error {
 		if !strings.HasPrefix(baseURL, "http") {
 			baseURL = "http://" + baseURL
 		}
-		fmt.Printf("API Documentation enabled: %s/swagger/index.html\n", baseURL)
+		logx.Printf("API Documentation enabled: %s/swagger/index.html\n", baseURL)
 	}
 
 	return func(c *context.Context) error {
@@ -141,7 +167,7 @@ func Handler(cfg Config) func(c *context.Context) error {
 		}
 
 		c.Writer.Header().Set("Content-Type", "text/html")
-		html := fmt.Sprintf(uiTemplate, template.HTMLEscapeString(cfg.Title))
+		html := fmt.Sprintf(uiTemplate, template.HTMLEscapeString(cfg.Title), template.HTMLEscapeString(cfg.ScriptURL), scriptAttrs)
 		return c.HTML(200, html)
 	}
 }
@@ -286,7 +312,7 @@ const uiTemplate = `<!doctype html>
     <script
       id="api-reference"
       data-url="doc.json"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+    <script src="%s"%s></script>
   </body>
 </html>
 `

@@ -30,3 +30,9 @@ app.POST("/register", func(c *context.Context) error {
 ## Common tags
 
 `required`, `email`, `min`, `max`, `len`, `oneof`, `uuid`, and many more — see playground docs.
+
+`required` rejects the zero value: an empty string, `0`, `false`, a zero `time.Time`, an
+empty slice or map. A field left out of the JSON body decodes to the zero value, so this
+is what makes "required" mean "the client sent it". When `0` or `false` is a real value
+the client may send, make the field a pointer (`*int`, `*bool`): `nil` is missing, a
+pointer to `0` is present. The built-in `pkg/validator` follows the same rule.

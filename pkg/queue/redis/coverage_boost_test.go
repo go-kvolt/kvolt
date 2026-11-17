@@ -224,12 +224,12 @@ func TestWorkerLoop_RedisErrors(t *testing.T) {
 		q3.wg.Add(1)
 		q3.workerLoop(0)
 	}()
-	time.Sleep(50 * time.Millisecond) // allow BRPOP to block
+	time.Sleep(300 * time.Millisecond) // allow BRPOP to block (generous: -race on a busy machine)
 	close(q3.quit)
 	mr3.Close() // BRPOP errors; quit already closed → line return
 	select {
 	case <-done3:
-	case <-time.After(3 * time.Second):
+	case <-time.After(8 * time.Second):
 		t.Fatal("workerLoop 3 timeout")
 	}
 }

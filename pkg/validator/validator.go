@@ -195,10 +195,12 @@ func isEmpty(v reflect.Value) bool {
 	if !v.IsValid() {
 		return true
 	}
+	viaPointer := false
 	for v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
 		if v.IsNil() {
 			return true
 		}
+		viaPointer = viaPointer || v.Kind() == reflect.Ptr
 		v = v.Elem()
 	}
 	switch v.Kind() {
@@ -207,6 +209,10 @@ func isEmpty(v reflect.Value) bool {
 	case reflect.Slice, reflect.Map:
 		return v.Len() == 0
 	default:
-		return false // zero value check for primitives?
+		// Numbers, booleans, structs (time.Time) and arrays: the zero value is "missing",
+		// the same rule go-playground/validator applies in Context.Bind. A non-nil
+		// pointer counts as present, so use *int / *bool when 0 or false is a legitimate
+		// value that must still be required.
+		return !viaPointer && v.IsZero()
 	}
 }

@@ -74,7 +74,16 @@ func (r *Request) WithJSON(obj interface{}) *Request {
 
 // Do executes the request and returns a Response tester.
 func (r *Request) Do() *Response {
-	if r == nil || r.engine == nil {
+	if r == nil {
+		return nil
+	}
+	if r.engine == nil {
+		// Returning nil here would turn every following Expect* into a no-op and the
+		// test would pass without sending a request.
+		if r.t != nil {
+			r.t.Helper()
+			r.t.Fatalf("test: %s %s has no engine; create the Tester with test.New(t, engine)", r.method, r.path)
+		}
 		return nil
 	}
 	req := httptest.NewRequest(r.method, r.path, r.body)

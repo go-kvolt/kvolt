@@ -265,111 +265,126 @@ func (n *Node) insertChild(path, fullPath string, handle Handler) {
 
 // getValue returns the handle registered with the given path (key). The values of
 // wildcards are saved to a slice. pattern is the registered route path when found.
+// tsr reports that the same path with a trailing slash added is registered.
 func (n *Node) getValue(path string, p Params) (handle Handler, outP Params, tsr bool, pattern string) {
-walk: // Outer loop for walking the tree
-	for {
-		prefix := n.path
-		if len(path) > len(prefix) {
-			if path[:len(prefix)] == prefix {
-				path = path[len(prefix):]
+	handle, outP, tsr, pattern = n.lookup(path, p)
+	if handle == nil {
+		// Hand back the caller's buffer, not a partial match's params.
+		return nil, p, tsr, ""
+	}
+	return handle, outP, false, pattern
+}
 
-				// Prefer static children (indices) over wildcard so
-				// /user/new wins over /user/:id.
-				idxc := path[0]
-				for i := 0; i < len(n.indices); i++ {
-					if n.indices[i] == idxc {
-						n = n.children[i]
-						continue walk
-					}
-				}
-				if !n.wildChild {
-					return nil, p, false, ""
-				}
-
-				// Wildcard child is always last.
-				n = n.children[len(n.children)-1]
-				switch n.nType {
-				case param:
-					var pathLeft string
-					var nextN *Node
-					var returnNow bool
-					handle, p, pathLeft, nextN, returnNow = n.getValueParam(path, p)
-					if returnNow {
-						if handle != nil {
-							return handle, p, false, n.fullPath
-						}
-						return nil, p, false, ""
-					}
-					path, n = pathLeft, nextN
-					continue walk
-				case catchAll:
-					handle, p = n.getValueCatchAll(path, p)
-					return handle, p, false, n.fullPath
-				default:
-					panic("invalid node type")
-				}
-			}
-		} else if path == prefix {
-			if handle = n.handle; handle != nil {
-				return handle, p, false, n.fullPath
-			}
-			// Catch-all child: path matches prefix exactly (e.g. /files/ for /files/*filepath)
-			if n.wildChild && len(n.children) > 0 {
-				child := n.children[len(n.children)-1]
-				if child.nType == catchAll && child.handle != nil {
-					handle, p = child.getValueCatchAll("", p)
-					return handle, p, false, child.fullPath
-				}
-			}
-			// Path matches a node without a handle — trailing slash redirect?
-			if path != "/" && len(path) > 0 && path[len(path)-1] != '/' {
-				for _, child := range n.children {
-					if child.path == "/" && child.handle != nil {
-						return nil, p, true, ""
-					}
-				}
-			}
-		} else if len(path)+1 == len(prefix) && prefix[len(path)] == '/' && path == prefix[:len(path)] {
-			// Request missing trailing slash that node has (or node has catch-all child with handle)
-			if n.handle != nil {
+// lookup matches path against the subtree rooted at n.
+//
+// Static children are tried before the wildcard child, so /user/new wins over
+// /user/:id. When the static branch does not lead to a handler the wildcard is
+// tried next: with both routes registered, /user/next shares the "n" prefix with
+// /user/new but must still match /user/:id.
+//
+// On a miss the returned Params are p unchanged. Params appended by a failed
+// branch are overwritten by the next one, so no allocation is needed to back out.
+func (n *Node) lookup(path string, p Params) (handle Handler, outP Params, tsr bool, pattern string) {
+	prefix := n.path
+	if len(path) < len(prefix) || path[:len(prefix)] != prefix {
+		// Request is this node's path minus its trailing slash.
+		if len(path)+1 == len(prefix) && prefix[len(path)] == '/' && path == prefix[:len(path)] {
+			if n.handle != nil || n.catchAllChild() != nil {
 				return nil, p, true, ""
 			}
-			if n.wildChild && len(n.children) > 0 {
-				child := n.children[len(n.children)-1]
-				if child.nType == catchAll && child.handle != nil {
+		}
+		return nil, p, false, ""
+	}
+
+	rest := path[len(prefix):]
+	if rest == "" {
+		if n.handle != nil {
+			return n.handle, p, false, n.fullPath
+		}
+		// Path ends exactly where a catch-all starts (e.g. /files/ for /files/*filepath).
+		if child := n.catchAllChild(); child != nil {
+			return child.handle, append(p, Param{Key: child.path[1:], Value: ""}), false, child.fullPath
+		}
+		// Node without a handle: a "/" child means the trailing-slash form is registered.
+		if path != "/" && len(path) > 0 && path[len(path)-1] != '/' {
+			for _, child := range n.children {
+				if child.path == "/" && child.handle != nil {
 					return nil, p, true, ""
 				}
 			}
 		}
 		return nil, p, false, ""
 	}
-}
 
-// getValueParam handles a param node: extracts segment, appends to p, and returns either
-// (handle, p, "", nil, true) to return, or ("", p, pathRest, nextNode, false) to continue.
-func (n *Node) getValueParam(path string, p Params) (handle Handler, outP Params, pathRest string, nextNode *Node, returnNow bool) {
-	end := 0
-	for end < len(path) && path[end] != '/' {
-		end++
-	}
-	p = append(p, Param{Key: n.path[1:], Value: path[:end]})
-
-	if end < len(path) {
-		if len(n.children) > 0 {
-			return nil, p, path[end:], n.children[0], false
+	// Static children first. Index bytes are unique, so at most one can match.
+	c := rest[0]
+	for i := 0; i < len(n.indices); i++ {
+		if n.indices[i] != c {
+			continue
 		}
-		return nil, nil, "", nil, true // no child to go to
+		var staticTSR bool
+		handle, outP, staticTSR, pattern = n.children[i].lookup(rest, p)
+		if handle != nil {
+			return handle, outP, false, pattern
+		}
+		tsr = staticTSR
+		break
 	}
-	if n.handle != nil {
-		return n.handle, p, "", nil, true
+
+	if !n.wildChild || len(n.children) == 0 {
+		return nil, p, tsr, ""
 	}
-	return nil, nil, "", nil, true // path consumed but no handle
+
+	// The wildcard child is always last.
+	wild := n.children[len(n.children)-1]
+	switch wild.nType {
+	case param:
+		end := 0
+		for end < len(rest) && rest[end] != '/' {
+			end++
+		}
+		if end == 0 {
+			// An empty segment ("/users//posts") is not a parameter value: a handler
+			// reading :id must never see "".
+			return nil, p, tsr, ""
+		}
+		withParam := append(p, Param{Key: wild.path[1:], Value: rest[:end]})
+		if end == len(rest) {
+			if wild.handle != nil {
+				return wild.handle, withParam, false, wild.fullPath
+			}
+			return nil, p, tsr, ""
+		}
+		// A param node has at most one child: the static continuation after it.
+		if len(wild.children) > 0 {
+			var contTSR bool
+			handle, outP, contTSR, pattern = wild.children[0].lookup(rest[end:], withParam)
+			if handle != nil {
+				return handle, outP, false, pattern
+			}
+			tsr = tsr || contTSR
+		}
+		return nil, p, tsr, ""
+	case catchAll:
+		if wild.handle == nil {
+			return nil, p, tsr, ""
+		}
+		return wild.handle, append(p, Param{Key: wild.path[1:], Value: rest}), false, wild.fullPath
+	default:
+		panic("invalid node type")
+	}
 }
 
-// getValueCatchAll handles a catchAll node: the rest of path is the param value.
-func (n *Node) getValueCatchAll(path string, p Params) (handle Handler, outP Params) {
-	p = append(p, Param{Key: n.path[1:], Value: path})
-	return n.handle, p
+// catchAllChild returns n's catch-all child when it has a handle, else nil.
+func (n *Node) catchAllChild() *Node {
+	if !n.wildChild || len(n.children) == 0 {
+		return nil
+	}
+	child := n.children[len(n.children)-1]
+	if child.nType == catchAll && child.handle != nil {
+		return child
+	}
+	return nil
 }
 
 // Helpers

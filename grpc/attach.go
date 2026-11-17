@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-kvolt/kvolt/v2"
+	"github.com/go-kvolt/kvolt/v2/internal/logx"
 )
 
 const engineAttachKey = "kvolt.grpc.server"
@@ -70,9 +71,9 @@ func Run(e *kvolt.Engine, addr string) error {
 	case sig := <-quit:
 		return shutdownRun(e, s, sig)
 	case <-testRunQuit:
-		fmt.Println("\nReceived test quit, shutting down gRPC server...")
+		logx.Println("\nReceived test quit, shutting down gRPC server...")
 		gracefulStopWithTimeout(s, e.ShutdownTimeout())
-		fmt.Println("gRPC server exited")
+		logx.Println("gRPC server exited")
 		return nil
 	case err := <-errCh:
 		return err
@@ -80,13 +81,13 @@ func Run(e *kvolt.Engine, addr string) error {
 }
 
 func shutdownRun(e *kvolt.Engine, s *Server, sig os.Signal) error {
-	fmt.Printf("\nReceived %v, shutting down gRPC server...\n", sig)
+	logx.Printf("\nReceived %v, shutting down gRPC server...\n", sig)
 	timeout := 5 * time.Second
 	if e != nil {
 		timeout = e.ShutdownTimeout()
 	}
 	gracefulStopWithTimeout(s, timeout)
-	fmt.Println("gRPC server exited")
+	logx.Println("gRPC server exited")
 	return nil
 }
 
@@ -123,9 +124,9 @@ func RunDual(e *kvolt.Engine, httpAddr, grpcAddr string) error {
 
 	httpSrv := e.HTTPServer(httpAddr)
 
-	fmt.Println("⚡ KVolt HTTP  server on " + httpAddr)
-	fmt.Println("⚡ KVolt gRPC  server on " + grpcAddr)
-	fmt.Println("Press Ctrl+C to stop")
+	logx.Println("⚡ KVolt HTTP  server on " + httpAddr)
+	logx.Println("⚡ KVolt gRPC  server on " + grpcAddr)
+	logx.Println("Press Ctrl+C to stop")
 
 	errCh := make(chan error, 2)
 	go func() {
@@ -146,12 +147,12 @@ func RunDual(e *kvolt.Engine, httpAddr, grpcAddr string) error {
 	var startErr error
 	select {
 	case sig := <-quit:
-		fmt.Printf("\nReceived %v, shutting down...\n", sig)
+		logx.Printf("\nReceived %v, shutting down...\n", sig)
 	case <-testRunQuit:
-		fmt.Println("\nReceived test quit, shutting down...")
+		logx.Println("\nReceived test quit, shutting down...")
 	case err := <-errCh:
 		startErr = err
-		fmt.Printf("Server error: %v — shutting down...\n", err)
+		logx.Printf("Server error: %v — shutting down...\n", err)
 	}
 
 	ctx, cancel := stdContext.WithTimeout(stdContext.Background(), e.ShutdownTimeout())
@@ -162,7 +163,7 @@ func RunDual(e *kvolt.Engine, httpAddr, grpcAddr string) error {
 		shutdownErr = fmt.Errorf("http shutdown: %w", err)
 	}
 	gracefulStopWithTimeout(s, e.ShutdownTimeout())
-	fmt.Println("All servers exited")
+	logx.Println("All servers exited")
 	if startErr != nil {
 		return startErr
 	}

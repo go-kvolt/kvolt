@@ -23,10 +23,16 @@ type Manager struct {
 	store cache.Store
 	ttl   time.Duration
 	// MaxAge is an absolute lifetime from Create (0 = sliding only, no absolute cap).
+	//
+	// The creation time is kept in the store next to the session, under a marker key
+	// that expires after MaxAge and is never refreshed. The cap therefore holds across
+	// restarts and across instances sharing a store. A session with no marker (created
+	// while MaxAge was 0, or by a version that kept the time only in memory) is treated
+	// as past its lifetime.
 	MaxAge time.Duration
 
 	mu        sync.Mutex
-	created   map[string]time.Time // token -> createdAt for absolute MaxAge
+	created   map[string]time.Time // token -> createdAt: local cache of the store marker
 	lastPrune time.Time
 }
 
@@ -58,16 +64,67 @@ func (m *Manager) Create(data interface{}) (string, error) {
 		return "", err
 	}
 	if m.MaxAge > 0 {
+		now := time.Now()
+		if err := m.store.Set(maxAgeKey(token), now.UnixMilli(), m.MaxAge); err != nil {
+			_ = m.store.Delete(token)
+			return "", err
+		}
 		m.mu.Lock()
 		if m.created == nil {
 			m.created = make(map[string]time.Time)
 		}
-		stale := m.pruneCreatedLocked(time.Now())
-		m.created[token] = time.Now()
+		stale := m.pruneCreatedLocked(now)
+		m.created[token] = now
 		m.mu.Unlock()
 		m.deleteStoreKeys(stale)
 	}
 	return token, nil
+}
+
+// maxAgeKey is the store key of a session's creation marker.
+func maxAgeKey(token string) string { return token + ":created" }
+
+// createdAt decodes a marker value (Unix milliseconds). Stores return it as written
+// (int64) or, after a JSON round trip, as float64.
+func createdAt(v interface{}) (time.Time, bool) {
+	switch n := v.(type) {
+	case int64:
+		return time.UnixMilli(n), true
+	case float64:
+		return time.UnixMilli(int64(n)), true
+	case int:
+		return time.UnixMilli(int64(n)), true
+	}
+	return time.Time{}, false
+}
+
+// checkMarker enforces MaxAge for a token this process has no creation time for
+// (created before a restart, or by another instance). The marker expires in the store
+// after MaxAge, so a missing marker means the absolute lifetime is over.
+func (m *Manager) checkMarker(token string) error {
+	v, err := m.store.Get(maxAgeKey(token))
+	if err != nil {
+		if errors.Is(err, cache.ErrKeyNotFound) || errors.Is(err, cache.ErrExpired) {
+			_ = m.store.Delete(token)
+			return ErrSessionNotFound
+		}
+		return err
+	}
+	created, ok := createdAt(v)
+	if !ok {
+		return nil // marker present but unreadable: the store TTL still bounds it
+	}
+	if time.Since(created) > m.MaxAge {
+		_ = m.Destroy(token)
+		return ErrSessionNotFound
+	}
+	m.mu.Lock()
+	if m.created == nil {
+		m.created = make(map[string]time.Time)
+	}
+	m.created[token] = created
+	m.mu.Unlock()
+	return nil
 }
 
 // Get retrieves session data and refreshes sliding TTL without resurrecting deleted keys.
@@ -85,6 +142,11 @@ func (m *Manager) Get(token string) (interface{}, error) {
 		if expired {
 			_ = m.Destroy(token)
 			return nil, ErrSessionNotFound
+		}
+		if !ok {
+			if err := m.checkMarker(token); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -116,6 +178,7 @@ func (m *Manager) Destroy(token string) error {
 	m.mu.Lock()
 	delete(m.created, token)
 	m.mu.Unlock()
+	_ = m.store.Delete(maxAgeKey(token))
 	return m.store.Delete(token)
 }
 
@@ -144,6 +207,7 @@ func (m *Manager) pruneCreatedLocked(now time.Time) []string {
 
 func (m *Manager) deleteStoreKeys(keys []string) {
 	for _, k := range keys {
+		_ = m.store.Delete(maxAgeKey(k))
 		_ = m.store.Delete(k)
 	}
 }

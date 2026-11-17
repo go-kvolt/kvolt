@@ -86,7 +86,16 @@ func (s *Store) Touch(key string, ttl time.Duration) error {
 		if err != nil {
 			return err
 		}
-		if !ok {
+		if ok {
+			return nil
+		}
+		// PERSIST reports false both for a missing key and for a key that already
+		// has no expiry. Only the first is "not found".
+		n, err := s.client.Exists(context.Background(), s.key(key)).Result()
+		if err != nil {
+			return err
+		}
+		if n == 0 {
 			return cache.ErrKeyNotFound
 		}
 		return nil

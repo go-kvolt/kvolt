@@ -27,6 +27,9 @@ func (r *Response) ExpectStatus(code int) *Response {
 	if r == nil || r.Recorder == nil {
 		return r
 	}
+	if r.t != nil {
+		r.t.Helper()
+	}
 	if r.t != nil && r.Recorder.Code != code {
 		r.t.Errorf("Expected status code %d, got %d", code, r.Recorder.Code)
 	}
@@ -37,6 +40,9 @@ func (r *Response) ExpectStatus(code int) *Response {
 func (r *Response) ExpectBody(expected string) *Response {
 	if r == nil || r.Recorder == nil {
 		return r
+	}
+	if r.t != nil {
+		r.t.Helper()
 	}
 	if r.t != nil && r.Recorder.Body.String() != expected {
 		r.t.Errorf("Expected body %q, got %q", expected, r.Recorder.Body.String())
@@ -49,6 +55,9 @@ func (r *Response) ExpectBodyContains(substring string) *Response {
 	if r == nil || r.Recorder == nil {
 		return r
 	}
+	if r.t != nil {
+		r.t.Helper()
+	}
 	if r.t != nil && !strings.Contains(r.Recorder.Body.String(), substring) {
 		r.t.Errorf("Expected body to contain %q, got %q", substring, r.Recorder.Body.String())
 	}
@@ -59,6 +68,9 @@ func (r *Response) ExpectBodyContains(substring string) *Response {
 func (r *Response) ExpectHeader(key, value string) *Response {
 	if r == nil || r.Recorder == nil {
 		return r
+	}
+	if r.t != nil {
+		r.t.Helper()
 	}
 	got := r.Recorder.Header().Get(key)
 	if r.t != nil && got != value {
@@ -73,6 +85,9 @@ func (r *Response) ExpectHeader(key, value string) *Response {
 func (r *Response) ExpectJSON(expected interface{}) *Response {
 	if r == nil || r.Recorder == nil {
 		return r
+	}
+	if r.t != nil {
+		r.t.Helper()
 	}
 	actualJSON := r.Recorder.Body.Bytes()
 

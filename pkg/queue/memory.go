@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-kvolt/kvolt/v2/internal/logx"
 	"github.com/google/uuid"
 )
 
@@ -131,7 +132,7 @@ func (q *MemoryQueue) Start() {
 		q.wg.Add(1)
 		go q.workerLoop(i)
 	}
-	fmt.Printf("🚀 Queue started with %d workers\n", q.workerCount)
+	logx.Printf("🚀 Queue started with %d workers\n", q.workerCount)
 }
 
 // Stop gracefully shuts down workers.
@@ -144,7 +145,7 @@ func (q *MemoryQueue) Stop() {
 			close(q.quit)
 		}
 		q.wg.Wait()
-		fmt.Println("🛑 Queue stopped")
+		logx.Println("🛑 Queue stopped")
 	})
 }
 

@@ -33,8 +33,9 @@ func TestTimeout_Returns504WhenHandlerIgnoresDeadline(t *testing.T) {
 	if w.Code != 504 {
 		t.Fatalf("want 504 got %d body=%s", w.Code, w.Body.String())
 	}
-	if !c.IsDetached() {
-		t.Fatal("expected context to be marked detached on timeout")
+	// The late handler runs on a private fork, so the request context stays poolable.
+	if c.IsDetached() {
+		t.Fatal("request context must not be detached: the handler holds a fork, not c")
 	}
 	if elapsed > 200*time.Millisecond {
 		t.Fatalf("timeout did not bound wait: elapsed=%v", elapsed)

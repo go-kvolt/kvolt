@@ -99,5 +99,8 @@ func main() {
 	}))
 
 	log.Println("tenant_app on :8080  (send X-Tenant-ID + Idempotency-Key on POST /orders)")
-	log.Fatal(app.Run(":8080"))
+	// Run returns nil after a graceful shutdown; only a real error should exit non-zero.
+	if err := app.Run(":8080"); err != nil {
+		log.Fatal(err)
+	}
 }

@@ -36,7 +36,11 @@ func (ts *TestServer) Post(t *testing.T, path string, body interface{}) *Respons
 	if ts == nil || ts.Handler == nil {
 		return &Response{Recorder: httptest.NewRecorder()}
 	}
-	jsonBody, _ := json.Marshal(body)
+	jsonBody, err := json.Marshal(body)
+	if err != nil && t != nil {
+		t.Helper()
+		t.Fatalf("testkit: cannot encode request body: %v", err)
+	}
 	req := httptest.NewRequest("POST", path, bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -51,7 +55,11 @@ func (ts *TestServer) Put(t *testing.T, path string, body interface{}) *Response
 	if ts == nil || ts.Handler == nil {
 		return &Response{Recorder: httptest.NewRecorder()}
 	}
-	jsonBody, _ := json.Marshal(body)
+	jsonBody, err := json.Marshal(body)
+	if err != nil && t != nil {
+		t.Helper()
+		t.Fatalf("testkit: cannot encode request body: %v", err)
+	}
 	req := httptest.NewRequest("PUT", path, bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -79,7 +87,11 @@ func (ts *TestServer) Patch(t *testing.T, path string, body interface{}) *Respon
 	if ts == nil || ts.Handler == nil {
 		return &Response{Recorder: httptest.NewRecorder()}
 	}
-	jsonBody, _ := json.Marshal(body)
+	jsonBody, err := json.Marshal(body)
+	if err != nil && t != nil {
+		t.Helper()
+		t.Fatalf("testkit: cannot encode request body: %v", err)
+	}
 	req := httptest.NewRequest("PATCH", path, bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -107,6 +119,9 @@ func (r *Response) AssertStatus(t *testing.T, code int) {
 	if r == nil || r.Recorder == nil {
 		return
 	}
+	if t != nil {
+		t.Helper()
+	}
 	if t != nil && r.Recorder.Code != code {
 		t.Errorf("Expected status %d, got %d", code, r.Recorder.Code)
 	}
@@ -116,6 +131,9 @@ func (r *Response) AssertStatus(t *testing.T, code int) {
 func (r *Response) AssertBody(t *testing.T, contains string) {
 	if r == nil || r.Recorder == nil {
 		return
+	}
+	if t != nil {
+		t.Helper()
 	}
 	if t != nil && !bytes.Contains(r.Recorder.Body.Bytes(), []byte(contains)) {
 		t.Errorf("Expected body to contain '%s'", contains)

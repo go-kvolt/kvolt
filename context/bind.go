@@ -26,10 +26,10 @@ func (c *Context) BindForm(obj interface{}) error {
 	ct := c.Request.Header.Get("Content-Type")
 	if strings.HasPrefix(ct, "multipart/form-data") {
 		if err := c.Request.ParseMultipartForm(32 << 20); err != nil {
-			return err
+			return bindErr(err)
 		}
 	} else if err := c.Request.ParseForm(); err != nil {
-		return err
+		return bindErr(err)
 	}
 	return bindMap(obj, c.Request.Form, "form")
 }
@@ -69,7 +69,8 @@ func bindMap(obj interface{}, values url.Values, tags ...string) error {
 	if v.Kind() != reflect.Struct {
 		return fmt.Errorf("bind target must be a struct pointer")
 	}
-	return bindStruct(v, values, tags...)
+	// From here on a failure is a value that does not fit its field: bad input.
+	return bindErr(bindStruct(v, values, tags...))
 }
 
 func bindStruct(v reflect.Value, values url.Values, tags ...string) error {

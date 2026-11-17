@@ -30,6 +30,17 @@ var (
 	}, []string{"method", "path"})
 )
 
+// metricMethod maps a request method to a bounded label value. net/http accepts any
+// token as a method, so labelling by the raw value would let a client create an
+// unlimited number of time series.
+func metricMethod(method string) string {
+	switch method {
+	case "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "CONNECT", "TRACE":
+		return method
+	}
+	return "OTHER"
+}
+
 // Middleware records request metrics in the default Prometheus registry.
 func Middleware() func(c *context.Context) error {
 	return func(c *context.Context) error {
@@ -47,7 +58,7 @@ func Middleware() func(c *context.Context) error {
 				}
 				method := ""
 				if c.Request != nil {
-					method = c.Request.Method
+					method = metricMethod(c.Request.Method)
 				}
 				promRequests.WithLabelValues(method, path, "500").Inc()
 				promLatency.WithLabelValues(method, path).Observe(time.Since(start).Seconds())
@@ -63,7 +74,7 @@ func Middleware() func(c *context.Context) error {
 		}
 		method := ""
 		if c.Request != nil {
-			method = c.Request.Method
+			method = metricMethod(c.Request.Method)
 		}
 		status := c.StatusCode()
 		if status == 0 {

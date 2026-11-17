@@ -4,6 +4,7 @@ package redislimit
 
 import (
 	"context"
+	"net"
 	"strconv"
 	"time"
 
@@ -20,14 +21,34 @@ end
 return current
 `)
 
+// rateLimitIPKey groups IPv6 clients by /64, the same as middleware.Limiter. One
+// customer is normally given a whole /64, so limiting per address would let a client
+// get a fresh bucket for every address it rotates through.
+func rateLimitIPKey(ip string) string {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return ip
+	}
+	if v4 := parsed.To4(); v4 != nil {
+		return v4.String()
+	}
+	return parsed.Mask(net.CIDRMask(64, 128)).String()
+}
+
 // Config configures a Redis fixed-window rate limiter.
 type Config struct {
-	Client       *redis.Client
-	Limit        int
-	Window       time.Duration
-	KeyPrefix    string
+	Client    *redis.Client
+	Limit     int
+	Window    time.Duration
+	KeyPrefix string
+	// KeyFunc derives the bucket key. Default: client IP, with IPv6 grouped by /64.
 	KeyFunc      func(c *kvctx.Context) string
 	ErrorHandler func(c *kvctx.Context) error
+	// FailOpen lets requests through, unlimited, when Redis cannot be reached.
+	// The default (false) answers 500 instead: nothing gets past the limiter, but a
+	// Redis outage takes the routes behind it down too. Choose per route: fail open for
+	// general traffic, stay closed for login or other abuse-sensitive endpoints.
+	FailOpen bool
 }
 
 // New rate-limits across instances using Redis INCR + EXPIRE.
@@ -50,7 +71,7 @@ func NewWithConfig(cfg Config) func(c *kvctx.Context) error {
 		cfg.KeyPrefix = "kvolt:rl:"
 	}
 	if cfg.KeyFunc == nil {
-		cfg.KeyFunc = func(c *kvctx.Context) string { return c.ClientIP() }
+		cfg.KeyFunc = func(c *kvctx.Context) string { return rateLimitIPKey(c.ClientIP()) }
 	}
 	if cfg.ErrorHandler == nil {
 		cfg.ErrorHandler = func(c *kvctx.Context) error {
@@ -83,6 +104,10 @@ func NewWithConfig(cfg Config) func(c *kvctx.Context) error {
 		}
 		n, err := incrExpireScript.Run(ctx, cfg.Client, []string{key}, windowMs).Int64()
 		if err != nil {
+			if cfg.FailOpen {
+				c.Next()
+				return nil
+			}
 			return httperr.Internal("rate limiter unavailable")
 		}
 		remaining := cfg.Limit - int(n)

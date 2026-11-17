@@ -22,8 +22,15 @@ func TestIsEmptyKinds(t *testing.T) {
 	if !isEmpty(reflect.ValueOf(p)) {
 		t.Fatal("nil ptr")
 	}
-	if isEmpty(reflect.ValueOf(0)) {
-		t.Fatal("int zero should not be empty via default")
+	if !isEmpty(reflect.ValueOf(0)) || !isEmpty(reflect.ValueOf(false)) || !isEmpty(reflect.ValueOf(0.0)) {
+		t.Fatal("zero number / false must be empty")
+	}
+	if isEmpty(reflect.ValueOf(7)) || isEmpty(reflect.ValueOf(true)) {
+		t.Fatal("non-zero number / true must not be empty")
+	}
+	zero, no := 0, false
+	if isEmpty(reflect.ValueOf(&zero)) || isEmpty(reflect.ValueOf(&no)) {
+		t.Fatal("a non-nil pointer to 0 / false is present")
 	}
 }
 

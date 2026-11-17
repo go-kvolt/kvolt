@@ -109,5 +109,8 @@ func main() {
 	}))
 
 	fmt.Println("listening on :8080  (docs /swagger/index.html, metrics /metrics)")
-	log.Fatal(app.Run(":8080"))
+	// Run returns nil after a graceful shutdown; only a real error should exit non-zero.
+	if err := app.Run(":8080"); err != nil {
+		log.Fatal(err)
+	}
 }

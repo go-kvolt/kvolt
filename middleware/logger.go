@@ -1,7 +1,9 @@
 package middleware
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -10,9 +12,23 @@ import (
 	"github.com/go-kvolt/kvolt/v2/context"
 )
 
+// logEntry is one access-log line and where it goes (nil means standard output).
+type logEntry struct {
+	out io.Writer
+	msg string
+}
+
+func (e logEntry) write() {
+	out := e.out
+	if out == nil {
+		out = os.Stdout
+	}
+	_, _ = io.WriteString(out, e.msg)
+}
+
 var (
 	logMu   sync.RWMutex
-	logChan = make(chan string, 10000)
+	logChan = make(chan logEntry, 10000)
 	logOnce sync.Once
 	logWg   sync.WaitGroup
 	emitLog = enqueueLog
@@ -27,26 +43,32 @@ func ensureLogWorker() {
 				logMu.RLock()
 				ch := logChan
 				logMu.RUnlock()
-				msg, ok := <-ch
+				entry, ok := <-ch
 				if !ok {
 					return
 				}
-				_, _ = fmt.Fprint(os.Stdout, msg)
+				entry.write()
 			}
 		}()
 	})
 }
 
 func enqueueLog(msg string) {
+	enqueueLogTo(nil, msg)
+}
+
+// enqueueLogTo queues msg for out (nil means standard output).
+func enqueueLogTo(out io.Writer, msg string) {
 	ensureLogWorker()
+	entry := logEntry{out: out, msg: msg}
 	logMu.RLock()
 	ch := logChan
 	logMu.RUnlock()
 	select {
-	case ch <- msg:
+	case ch <- entry:
 	default:
 		// Channel full: write synchronously so lines are not silently dropped.
-		_, _ = fmt.Fprint(os.Stdout, msg)
+		entry.write()
 	}
 }
 
@@ -73,6 +95,11 @@ type LoggerConfig struct {
 	Skipper func(c *context.Context) bool
 	// Format "text" (default) or "json".
 	Format string
+	// Output receives the log lines (default: standard output). It must be safe for
+	// concurrent use: lines are normally written by one background goroutine, but when
+	// the buffer is full a request writes its own line directly. Call FlushLogger before
+	// exit to drain the buffer.
+	Output io.Writer
 }
 
 // Logger returns a middleware that logs HTTP requests asynchronously.
@@ -127,8 +154,10 @@ func LoggerWithConfig(cfg LoggerConfig) func(c *context.Context) error {
 
 		var msg string
 		if strings.EqualFold(cfg.Format, "json") {
-			msg = fmt.Sprintf(`{"time":%q,"status":%d,"latency_ms":%.3f,"ip":%q,"method":%q,"path":%q,"request_id":%q}`+"\n",
-				time.Now().Format(time.RFC3339), status, float64(latency.Microseconds())/1000.0, ip, method, path, reqIDStr)
+			// jsonString rather than %q: Go string quoting emits hex escapes that are not valid JSON.
+			msg = fmt.Sprintf(`{"time":%s,"status":%d,"latency_ms":%.3f,"ip":%s,"method":%s,"path":%s,"request_id":%s}`+"\n",
+				jsonString(time.Now().Format(time.RFC3339)), status, float64(latency.Microseconds())/1000.0,
+				jsonString(ip), jsonString(method), jsonString(path), jsonString(reqIDStr))
 		} else {
 			prefix := ""
 			if reqIDStr != "" {
@@ -139,9 +168,22 @@ func LoggerWithConfig(cfg LoggerConfig) func(c *context.Context) error {
 			msg = fmt.Sprintf("[KVolt] %s | %s%3d | %13v | %15s | %-7s %q\n",
 				timestamp, prefix, status, latency, ip, method, path)
 		}
-		emitLog(msg)
+		if cfg.Output != nil {
+			enqueueLogTo(cfg.Output, msg)
+		} else {
+			emitLog(msg)
+		}
 		return nil
 	}
+}
+
+// jsonString encodes s as a JSON string literal (control bytes and invalid UTF-8 included).
+func jsonString(s string) string {
+	b, err := json.Marshal(s)
+	if err != nil {
+		return `""`
+	}
+	return string(b)
 }
 
 func sanitizeLogPath(path string) string {

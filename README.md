@@ -14,7 +14,7 @@
 
 **KVolt** is a Go web framework on `net/http`: a fast radix router, a familiar context API, and production middleware — with optional Redis, Prometheus, and gRPC as separate imports so the core stays lean.
 
-**v2.4.0** · Module: [`github.com/go-kvolt/kvolt/v2`](https://pkg.go.dev/github.com/go-kvolt/kvolt/v2) · Requires **Go 1.27+** · [Changelog](CHANGELOG.md)
+**v2.5.0** · Module: [`github.com/go-kvolt/kvolt/v2`](https://pkg.go.dev/github.com/go-kvolt/kvolt/v2) · Requires **Go 1.27+** · [Changelog](CHANGELOG.md)
 
 ---
 
@@ -39,12 +39,15 @@ func main() {
 		return c.JSON(200, map[string]string{"message": "pong"})
 	})
 
-	log.Fatal(app.Run(":8080"))
+	// Run returns nil after a graceful shutdown; only a real error should exit non-zero.
+	if err := app.Run(":8080"); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
 ```bash
-go get github.com/go-kvolt/kvolt/v2@v2.4.0
+go get github.com/go-kvolt/kvolt/v2@v2.5.0
 go run .
 # → http://localhost:8080/ping
 ```
@@ -56,13 +59,13 @@ go run .
 **Library**
 
 ```bash
-go get github.com/go-kvolt/kvolt/v2@v2.4.0
+go get github.com/go-kvolt/kvolt/v2@v2.5.0
 ```
 
 **CLI** (scaffold + hot reload)
 
 ```bash
-go install github.com/go-kvolt/kvolt/v2/cmd/kvolt@v2.4.0
+go install github.com/go-kvolt/kvolt/v2/cmd/kvolt@v2.5.0
 kvolt new my-app
 cd my-app && go mod tidy && go run ./cmd/api
 ```
@@ -199,7 +202,7 @@ KVolt strictly adheres to [Semantic Versioning (SemVer 2.0.0)](https://semver.or
 
 - **v2.x.y**: All minor (`v2.x.0`) and patch (`v2.x.y`) updates maintain complete backward compatibility. No public APIs will be removed or broken within `v2`.
 - **Breaking Changes**: Any breaking architectural change will only occur with a major version increment (`v3.0.0`) and an explicit deprecation timeline.
-- **Security & Quality**: Every release passes automated race detection, 100% test coverage gates, `govulncheck`, `gosec` static analysis, and fuzz tests.
+- **Security & Quality**: CI runs the test suite with the race detector, `govulncheck`, `gosec` static analysis, `golangci-lint`, and fuzz tests on every push and pull request, and fails when library test coverage drops below 90%. Run `./scripts/cover.ps1` for current coverage numbers.
 
 ---
 
