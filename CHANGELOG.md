@@ -4,6 +4,10 @@ All notable changes to KVolt will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [v2.5.1] - 2026-11-18
+
+Patch release with no library changes. CI on the v2.5.0 commit failed because `gosec` also scanned the new `scripts/loadtest` test tool (weak random numbers and subprocess launches that are intentional in a load-test harness), which skipped the Linux test job. CI now excludes `scripts/` from `gosec`. The framework code is identical to v2.5.0; use v2.5.1 so the released tag has a green CI run.
+
 ## [v2.5.0] - 2026-11-17
 
 Production-readiness release: a full security and reliability review plus load testing with the race detector (about 17 million requests, 2 hours). Fixes about 25 bugs, including routes returning 404 for valid paths, an open redirect, a data race in `Timeout`, and lost jobs in the Redis queue. Adds `SetLogFunc`, `BindError`, and a CI coverage gate. Contains behaviour changes listed under "Changed (breaking)".
